@@ -1,4338 +1,2073 @@
-Okay, the problem you're describing is common when the UI state (especially a flag like `_isNew`) isn't managed correctly across operations like adding, saving, and navigating, or when the `BindingSource` isn't properly refreshed and rebound after data changes.
+Okay, I will refactor your four ASP.NET user control (`.ascx`) pages to use a unified front-end design, incorporating consistent colors, patterns, loaders, and error handling based on a standard modern web design palette (as no image was provided).
 
-The `frmCategories.cs` you provided seems to have many of the fixes already incorporated. The key is that after saving a new record:
-1.  The `_isNew` flag must be reset to `false`.
-2.  The data source (e.g., `categoryBindingSource`) needs to be reloaded to include the new record.
-3.  The UI (buttons, status messages) must be updated to reflect the new state (not adding anymore, potentially a new record selected).
-4.  Navigation should then work on the reloaded dataset.
+I will define a set of CSS variables and classes with an `app-` prefix for consistency. I will also provide shared JavaScript helper functions for API calls, feedback, and loading indicators, encapsulated within a global `App` object, and include these in each script block.
 
-I will provide the complete set of files for `Categories`, `Suppliers`, `Products`, `Customers`, and `Employees`, ensuring this logic is consistently applied. I'll base the `Designer.cs` files on the `frmCategories.Designer.cs` structure and common fields for each entity.
+**Unified Design Elements:**
 
-Here are the files:
+*   **Colors:**
+    *   Primary: Blue (`#2563eb`)
+    *   Accent: Light Blue (`#e6f0ff`)
+    *   Success: Green (`#10b981`)
+    *   Warning/Expiring: Orange (`#f59e0b`)
+    *   Error: Red (`#dc2626`)
+    *   Backgrounds: Light Gray Page (`#f5f7fa`), White Section (`#fff`)
+    *   Text: Dark Gray (`#333`), Medium Gray (`#666`)
+*   **Spacing:** Consistent use of variables (`--app-space-sm`, `--app-space-md`, etc.)
+*   **Borders/Radii:** Consistent borders and rounded corners.
+*   **Layout:** Flexbox/Grid for layout, max-width container.
+*   **Forms/Buttons:** Standardized input styles, primary/outline/danger button styles.
+*   **Tables/Cards:** Consistent styling.
+*   **Loaders:**
+    *   Global Overlay: Full-screen semi-transparent overlay with a spinner.
+    *   Inline: Small spinner next to button text.
+*   **Error/Feedback:**
+    *   Global: Fixed-position popup for success/error messages (`#global-feedback`).
+    *   Inline: Specific span for inline error text (like `#searchError`), styled with error color.
 
-**Common Notes for all `*.cs` (code-behind) files:**
+**Implementation Plan:**
 
-*   The `_isNew` flag is set to `true` on `tsbNew_Click`.
-*   The `_isNew` flag is reset to `false` only *after* a successful save operation, specifically when a new item was being added.
-*   `LoadDataAsync()` is called after save/delete operations to refresh the list.
-    *   If a new item was added, `LoadDataAsync(null)` is called to show all items and clear any search.
-    *   If an existing item was updated or deleted, `LoadDataAsync(txtSearch.Text)` is called to maintain the search context.
-*   A `Select<Entity>ById(int id)` method is used to re-select the saved/updated item after `LoadDataAsync`.
-*   `BindingSource_CurrentChanged` only updates UI elements if `!_isNew` to avoid conflicts during new item entry.
-*   Error handling (`DbUpdateConcurrencyException`, `DbUpdateException`) is included.
-*   Validation is present in `tsbSave_Click`.
-*   Password handling for `frmEmployees` will clear the password field after save and require it for new employees.
-*   `frmProducts` will include logic for loading `Category` and `Supplier` dropdowns.
+1.  **Create Unified CSS:** Consolidate styles from all pages, standardize class names with `app-` prefix, use CSS variables for colors/spacing, and include styles for `#global-feedback` and `#loading-overlay`.
+2.  **Create Shared JavaScript:** Develop a `App` object containing `apiService`, `showGlobalFeedback`, `setGlobalLoading`, `setButtonLoading`, and utility functions (`formatDate`, `formatCurrency`, etc.).
+3.  **Update Each .ascx:**
+    *   Replace the existing `<style>` block with the unified CSS.
+    *   Add the HTML structure for `#global-feedback` and `#loading-overlay`.
+    *   Replace the existing `<script>` block.
+    *   Include the definition of the `App` object and its shared functions.
+    *   Retain the page-specific JavaScript logic, adapting it to use the functions and objects from the `App` namespace (e.g., `App.apiService.getInsuranceDetails`, `App.showGlobalFeedback`, `App.setGlobalLoading`, `App.setButtonLoading`).
+    *   Update HTML class names to use the new `app-` prefixed classes.
+
+Let's generate the full code for each page.
 
 ---
-**File 1: `frmCategories.Designer.cs`**
----
-```csharp
-using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
-using Store.Data.Models; // Assuming Category model is here
 
-namespace Store.Forms
-{
-    partial class frmCategories
-    {
-        /// <summary>
-        /// Required designer variable.
-        /// </summary>
-        private System.ComponentModel.IContainer components = null;
+**1. Unified CSS Block (to be included in all .ascx files):**
 
-        /// <summary>
-        /// Clean up any resources being used.
-        /// </summary>
-        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null))
-            {
-                components.Dispose();
-            }
-            base.Dispose(disposing);
-        }
+```css
+<style>
+    /* --- CSS Variables for Unified Design --- */
+    :root {
+        --app-color-primary: #2563eb; /* Blue */
+        --app-color-primary-dark: #1d4ed8; /* Darker Blue */
+        --app-color-accent: #e6f0ff; /* Lighter Blue */
+        --app-color-success: #10b981; /* Green */
+        --app-color-success-light: #d1fae5; /* Light Green */
+        --app-color-error: #dc2626; /* Red */
+        --app-color-error-light: #fee2e2; /* Light Red */
+        --app-color-warning: #f59e0b; /* Orange */
+        --app-color-warning-light: #fef3c7; /* Light Orange */
+        --app-color-text-default: #333; /* Dark Gray */
+        --app-color-text-secondary: #666; /* Medium Gray */
+        --app-color-text-placeholder: #888; /* Light Gray */
+        --app-color-border: #e0e0e0; /* Light Gray Border */
+        --app-color-bg-page: #f5f7fa; /* Page Background */
+        --app-color-bg-section: #fff; /* Section Background */
+        --app-color-bg-highlight: #f9fafb; /* Table row hover/Header bg */
+        --app-color-bg-input-disabled: #e9ecef; /* Disabled input */
 
-        #region Windows Form Designer generated code
+        /* Define Spacing */
+        --app-space-xs: 5px;
+        --app-space-sm: 10px;
+        --app-space-md: 15px;
+        --app-space-lg: 20px;
+        --app-space-xl: 30px;
 
-        /// <summary>
-        /// Required method for Designer support - do not modify
-        /// the contents of this method with the code editor.
-        /// </summary>
-        private void InitializeComponent()
-        {
-            components = new Container();
-            ComponentResourceManager resources = new ComponentResourceManager(typeof(frmCategories));
-            toolStrip1 = new ToolStrip();
-            tsbNew = new ToolStripButton();
-            tsbSave = new ToolStripButton();
-            tsbDelete = new ToolStripButton();
-            toolStripSeparator1 = new ToolStripSeparator();
-            tsbFirst = new ToolStripButton();
-            tsbPrevious = new ToolStripButton();
-            tsbNext = new ToolStripButton();
-            tsbLast = new ToolStripButton();
-            toolStripSeparator2 = new ToolStripSeparator();
-            txtSearch = new ToolStripTextBox();
-            tsbSearch = new ToolStripButton();
-            statusStrip1 = new StatusStrip();
-            lblStatus = new ToolStripStatusLabel();
-            categoryBindingSource = new BindingSource(components);
-            groupBoxDetails = new GroupBox();
-            tableLayoutPanelDetails = new TableLayoutPanel();
-            lblCategoryID = new Label();
-            txtCategoryID = new TextBox();
-            lblCategoryName = new Label();
-            txtCategoryName = new TextBox();
-            toolStrip1.SuspendLayout();
-            statusStrip1.SuspendLayout();
-            ((ISupportInitialize)categoryBindingSource).BeginInit();
-            groupBoxDetails.SuspendLayout();
-            tableLayoutPanelDetails.SuspendLayout();
-            SuspendLayout();
-            // 
-            // toolStrip1
-            // 
-            toolStrip1.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            toolStrip1.GripStyle = ToolStripGripStyle.Hidden;
-            toolStrip1.ImageScalingSize = new Size(24, 24);
-            toolStrip1.Items.AddRange(new ToolStripItem[] { tsbNew, tsbSave, tsbDelete, toolStripSeparator1, tsbFirst, tsbPrevious, tsbNext, tsbLast, toolStripSeparator2, txtSearch, tsbSearch });
-            toolStrip1.Location = new Point(0, 0);
-            toolStrip1.Name = "toolStrip1";
-            toolStrip1.Padding = new Padding(8, 5, 8, 5);
-            toolStrip1.RenderMode = ToolStripRenderMode.System;
-            toolStrip1.Size = new Size(1118, 46);
-            toolStrip1.TabIndex = 0;
-            toolStrip1.Text = "toolStrip1";
-            toolStrip1.BackColor = Color.FromArgb(240, 240, 240);
-            // 
-            // tsbNew
-            // 
-            tsbNew.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNew.Image = (Image)resources.GetObject("tsbNew.Image");
-            tsbNew.ImageTransparentColor = Color.Magenta;
-            tsbNew.Margin = new Padding(4);
-            tsbNew.Name = "tsbNew";
-            tsbNew.Size = new Size(146, 28);
-            tsbNew.Text = "New Category";
-            tsbNew.ToolTipText = "Add New Category (Ctrl+N)";
-            tsbNew.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            tsbNew.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNew.Click += tsbNew_Click;
-            // 
-            // tsbSave
-            // 
-            tsbSave.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbSave.Image = (Image)resources.GetObject("tsbSave.Image");
-            tsbSave.ImageTransparentColor = Color.Magenta;
-            tsbSave.Margin = new Padding(4);
-            tsbSave.Name = "tsbSave";
-            tsbSave.Size = new Size(144, 28);
-            tsbSave.Text = "Save Changes";
-            tsbSave.ToolTipText = "Save Changes (Ctrl+S)";
-            tsbSave.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            tsbSave.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbSave.Click += tsbSave_Click;
-            // 
-            // tsbDelete
-            // 
-            tsbDelete.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbDelete.Image = (Image)resources.GetObject("tsbDelete.Image");
-            tsbDelete.ImageTransparentColor = Color.Magenta;
-            tsbDelete.Margin = new Padding(4);
-            tsbDelete.Name = "tsbDelete";
-            tsbDelete.Size = new Size(161, 28);
-            tsbDelete.Text = "Delete Category";
-            tsbDelete.ToolTipText = "Delete Selected Category (Del)";
-            tsbDelete.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            tsbDelete.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbDelete.Click += tsbDelete_Click;
-            // 
-            // toolStripSeparator1
-            // 
-            toolStripSeparator1.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator1.Name = "toolStripSeparator1";
-            toolStripSeparator1.Size = new Size(6, 36);
-            // 
-            // tsbFirst
-            // 
-            tsbFirst.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbFirst.Image = (Image)resources.GetObject("tsbFirst.Image");
-            tsbFirst.ImageTransparentColor = Color.Magenta;
-            tsbFirst.Margin = new Padding(4);
-            tsbFirst.Name = "tsbFirst";
-            tsbFirst.Size = new Size(127, 28);
-            tsbFirst.Text = "First Record";
-            tsbFirst.ToolTipText = "Go to First Record (Ctrl+Home)";
-            tsbFirst.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            tsbFirst.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbFirst.Click += tsbFirst_Click;
-            // 
-            // tsbPrevious
-            // 
-            tsbPrevious.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbPrevious.Image = (Image)resources.GetObject("tsbPrevious.Image");
-            tsbPrevious.ImageTransparentColor = Color.Magenta;
-            tsbPrevious.Margin = new Padding(4);
-            tsbPrevious.Name = "tsbPrevious";
-            tsbPrevious.Size = new Size(160, 28);
-            tsbPrevious.Text = "Previous Record";
-            tsbPrevious.ToolTipText = "Go to Previous Record (Ctrl+Left)";
-            tsbPrevious.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            tsbPrevious.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbPrevious.Click += tsbPrevious_Click;
-            // 
-            // tsbNext
-            // 
-            tsbNext.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNext.Image = (Image)resources.GetObject("tsbNext.Image");
-            tsbNext.ImageTransparentColor = Color.Magenta;
-            tsbNext.Margin = new Padding(4);
-            tsbNext.Name = "tsbNext";
-            tsbNext.Size = new Size(132, 28);
-            tsbNext.Text = "Next Record";
-            tsbNext.ToolTipText = "Go to Next Record (Ctrl+Right)";
-            tsbNext.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            tsbNext.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNext.Click += tsbNext_Click;
-            // 
-            // tsbLast
-            // 
-            tsbLast.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            tsbLast.ImageTransparentColor = Color.Magenta;
-            tsbLast.Margin = new Padding(4);
-            tsbLast.Name = "tsbLast";
-            tsbLast.Size = new Size(102, 28);
-            tsbLast.Text = "Last Record";
-            tsbLast.ToolTipText = "Go to Last Record (Ctrl+End)";
-            tsbLast.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            tsbLast.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbLast.Click += tsbLast_Click;
-            // 
-            // toolStripSeparator2
-            // 
-            toolStripSeparator2.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator2.Name = "toolStripSeparator2";
-            toolStripSeparator2.Size = new Size(6, 36);
-            // 
-            // txtSearch
-            // 
-            txtSearch.Alignment = ToolStripItemAlignment.Right;
-            txtSearch.BackColor = Color.White;
-            txtSearch.BorderStyle = BorderStyle.FixedSingle;
-            txtSearch.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            txtSearch.ForeColor = Color.FromArgb(64, 64, 64);
-            txtSearch.Margin = new Padding(1, 2, 6, 2); 
-            txtSearch.Name = "txtSearch";
-            txtSearch.Size = new Size(200, 27);
-            txtSearch.ToolTipText = "Enter search term and press Enter or click Search";
-            txtSearch.KeyDown += txtSearch_KeyDown;
-            // 
-            // tsbSearch
-            // 
-            tsbSearch.Alignment = ToolStripItemAlignment.Right;
-            tsbSearch.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            tsbSearch.Image = (Image)resources.GetObject("tsbSearch.Image"); 
-            tsbSearch.ImageTransparentColor = Color.Magenta;
-            tsbSearch.Margin = new Padding(1, 2, 1, 2); 
-            tsbSearch.Name = "tsbSearch";
-            tsbSearch.Size = new Size(28, 28); 
-            tsbSearch.Text = "Search"; 
-            tsbSearch.ToolTipText = "Search Categories (Enter)";
-            tsbSearch.Click += tsbSearch_Click;
-            // 
-            // statusStrip1
-            // 
-            statusStrip1.ImageScalingSize = new Size(20, 20);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { lblStatus });
-            statusStrip1.Location = new Point(0, 288);
-            statusStrip1.Name = "statusStrip1";
-            statusStrip1.Padding = new Padding(1, 0, 16, 0);
-            statusStrip1.Size = new Size(1118, 22);
-            statusStrip1.TabIndex = 2;
-            statusStrip1.BackColor = Color.FromArgb(248, 248, 248);
-            statusStrip1.Text = "statusStrip1";
-            // 
-            // lblStatus
-            // 
-            lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(1101, 16);
-            lblStatus.Spring = true;
-            lblStatus.TextAlign = ContentAlignment.MiddleLeft;
-            lblStatus.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
-            lblStatus.ForeColor = Color.FromArgb(80, 80, 80);
-            // 
-            // categoryBindingSource
-            // 
-            categoryBindingSource.DataSource = typeof(Category);
-            categoryBindingSource.CurrentChanged += categoryBindingSource_CurrentChanged;
-            // 
-            // groupBoxDetails
-            // 
-            groupBoxDetails.Controls.Add(tableLayoutPanelDetails);
-            groupBoxDetails.Dock = DockStyle.Fill;
-            groupBoxDetails.Location = new Point(0, 46);
-            groupBoxDetails.Margin = new Padding(10);
-            groupBoxDetails.Name = "groupBoxDetails";
-            groupBoxDetails.Padding = new Padding(20);
-            groupBoxDetails.Size = new Size(1118, 242);
-            groupBoxDetails.TabIndex = 1;
-            groupBoxDetails.TabStop = false;
-            groupBoxDetails.Text = "Category Details";
-            groupBoxDetails.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold, GraphicsUnit.Point);
-            groupBoxDetails.ForeColor = Color.FromArgb(55, 55, 55);
-            // 
-            // tableLayoutPanelDetails
-            // 
-            tableLayoutPanelDetails.ColumnCount = 2;
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F)); // Adjusted for longer label
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Controls.Add(lblCategoryID, 0, 0);
-            tableLayoutPanelDetails.Controls.Add(txtCategoryID, 1, 0);
-            tableLayoutPanelDetails.Controls.Add(lblCategoryName, 0, 1);
-            tableLayoutPanelDetails.Controls.Add(txtCategoryName, 1, 1);
-            tableLayoutPanelDetails.Dock = DockStyle.Fill;
-            tableLayoutPanelDetails.Location = new Point(20, 43);
-            tableLayoutPanelDetails.Margin = new Padding(0);
-            tableLayoutPanelDetails.Name = "tableLayoutPanelDetails";
-            tableLayoutPanelDetails.RowCount = 3; // 2 for fields, 1 for percent spacer
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F)); // Adjusted row height
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F)); // Adjusted row height
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Size = new Size(1078, 179);
-            tableLayoutPanelDetails.TabIndex = 0;
-            // 
-            // lblCategoryID
-            // 
-            lblCategoryID.Anchor = AnchorStyles.Left;
-            lblCategoryID.AutoSize = true;
-            lblCategoryID.Location = new Point(3, 11); 
-            lblCategoryID.Name = "lblCategoryID";
-            lblCategoryID.Size = new Size(112, 23); 
-            lblCategoryID.TabIndex = 0;
-            lblCategoryID.Text = "Category ID:";
-            lblCategoryID.TextAlign = ContentAlignment.MiddleLeft;
-            lblCategoryID.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            lblCategoryID.ForeColor = Color.FromArgb(80, 80, 80);
-            // 
-            // txtCategoryID
-            // 
-            txtCategoryID.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtCategoryID.Location = new Point(133, 7); // Adjusted from 121 based on 130F col width
-            txtCategoryID.Margin = new Padding(3, 4, 10, 4);
-            txtCategoryID.Name = "txtCategoryID";
-            txtCategoryID.ReadOnly = true;
-            txtCategoryID.Size = new Size(935, 30); // Adjusted for Font
-            txtCategoryID.TabIndex = 1;
-            txtCategoryID.TabStop = false;
-            txtCategoryID.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            txtCategoryID.ForeColor = Color.FromArgb(100, 100, 100);
-            txtCategoryID.BackColor = Color.FromArgb(245, 245, 245);
-            txtCategoryID.BorderStyle = BorderStyle.FixedSingle;
-            // 
-            // lblCategoryName
-            // 
-            lblCategoryName.Anchor = AnchorStyles.Left;
-            lblCategoryName.AutoSize = true;
-            lblCategoryName.Location = new Point(3, 56); 
-            lblCategoryName.Name = "lblCategoryName";
-            lblCategoryName.Size = new Size(116, 23); 
-            lblCategoryName.TabIndex = 2;
-            lblCategoryName.Text = "Category Name:";
-            lblCategoryName.TextAlign = ContentAlignment.MiddleLeft;
-            lblCategoryName.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            lblCategoryName.ForeColor = Color.FromArgb(80, 80, 80);
-            // 
-            // txtCategoryName
-            // 
-            txtCategoryName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtCategoryName.Location = new Point(133, 52); // Adjusted from 121 based on 130F col width
-            txtCategoryName.Margin = new Padding(3, 4, 10, 4);
-            txtCategoryName.MaxLength = 50;
-            txtCategoryName.Name = "txtCategoryName";
-            txtCategoryName.Size = new Size(935, 30); // Adjusted
-            txtCategoryName.TabIndex = 0; // This should be the first editable field
-            txtCategoryName.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            txtCategoryName.ForeColor = Color.FromArgb(50, 50, 50);
-            txtCategoryName.BorderStyle = BorderStyle.FixedSingle;
-            // 
-            // frmCategories
-            // 
-            AutoScaleDimensions = new SizeF(8F, 20F);
-            AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.White;
-            ClientSize = new Size(1118, 310);
-            Controls.Add(groupBoxDetails);
-            Controls.Add(statusStrip1);
-            Controls.Add(toolStrip1);
-            MinimumSize = new Size(550, 320);
-            Name = "frmCategories";
-            Text = "Manage Categories";
-            Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point); 
-            ForeColor = Color.FromArgb(64, 64, 64);
-            Load += frmCategories_Load;
-            toolStrip1.ResumeLayout(false);
-            toolStrip1.PerformLayout();
-            statusStrip1.ResumeLayout(false);
-            statusStrip1.PerformLayout();
-            ((ISupportInitialize)categoryBindingSource).EndInit();
-            groupBoxDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.PerformLayout();
-            ResumeLayout(false);
-            PerformLayout();
-        }
+        /* Define Radii */
+        --app-radius-sm: 4px;
+        --app-radius-md: 6px;
+        --app-radius-lg: 10px;
 
-        #endregion
-
-        private System.Windows.Forms.ToolStrip toolStrip1;
-        private System.Windows.Forms.ToolStripButton tsbNew;
-        private System.Windows.Forms.ToolStripButton tsbSave;
-        private System.Windows.Forms.ToolStripButton tsbDelete;
-        private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
-        private System.Windows.Forms.ToolStripButton tsbFirst;
-        private System.Windows.Forms.ToolStripButton tsbPrevious;
-        private System.Windows.Forms.ToolStripButton tsbNext;
-        private System.Windows.Forms.ToolStripButton tsbLast;
-        private System.Windows.Forms.ToolStripSeparator toolStripSeparator2;
-        private System.Windows.Forms.ToolStripTextBox txtSearch;
-        private System.Windows.Forms.ToolStripButton tsbSearch;
-        private System.Windows.Forms.StatusStrip statusStrip1;
-        private System.Windows.Forms.ToolStripStatusLabel lblStatus;
-        private System.Windows.Forms.BindingSource categoryBindingSource;
-        private System.Windows.Forms.GroupBox groupBoxDetails;
-        private System.Windows.Forms.TableLayoutPanel tableLayoutPanelDetails;
-        private System.Windows.Forms.Label lblCategoryID;
-        private System.Windows.Forms.TextBox txtCategoryID;
-        private System.Windows.Forms.Label lblCategoryName;
-        private System.Windows.Forms.TextBox txtCategoryName;
+        /* Define Shadow */
+        --app-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+        --app-shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.08);
     }
-}
+
+    /* --- Global Resets & Base --- */
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    body { background-color: var(--app-color-bg-page); color: var(--app-color-text-default); padding: var(--app-space-lg); }
+
+    /* --- Layout --- */
+    .app-container { max-width: 1200px; margin: 0 auto; } /* Padding is on body */
+    .app-heading { color: var(--app-color-text-default); margin-bottom: var(--app-space-lg); font-size: 24px; font-weight: bold; }
+    .app-section { background-color: var(--app-color-bg-section); padding: var(--app-space-lg); border-radius: var(--app-radius-md); margin-bottom: var(--app-space-lg); box-shadow: var(--app-shadow); }
+    .app-section-title { font-size: 18px; color: var(--app-color-text-default); margin-bottom: var(--app-space-lg); font-weight: bold; }
+    .app-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--app-space-lg); margin-bottom: var(--app-space-md); } /* Adjusted margin bottom as gap handles row spacing */
+    .app-form-group { margin-bottom: 0; } /* Gap on row handles vertical spacing */
+    .app-form-label { display: block; margin-bottom: var(--app-space-sm); color: var(--app-color-text-secondary); font-size: 14px; }
+
+    /* --- Form Elements --- */
+    .app-form-control { width: 100%; padding: var(--app-space-sm); border: 1px solid var(--app-color-border); border-radius: var(--app-radius-md); font-size: 14px; color: var(--app-color-text-default); }
+    .app-form-control::placeholder { color: var(--app-color-text-placeholder); }
+    .app-form-control:focus { outline: none; border-color: var(--app-color-primary); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); } /* Using fixed rgba for simplicity */
+    .app-form-select { width: 100%; padding: var(--app-space-sm); border: 1px solid var(--app-color-border); border-radius: var(--app-radius-md); font-size: 14px; appearance: menulist; color: var(--app-color-text-default); }
+     .app-form-select option[value=""][disabled] { display: none; } /* Hide empty default option */
+    .app-form-text-help { display: block; color: var(--app-color-text-secondary); font-size: 12px; margin-top: var(--app-space-xs); }
+
+    /* --- Buttons --- */
+    .app-button { display: inline-flex; align-items: center; justify-content: center; padding: var(--app-space-sm) var(--app-space-md); border: 1px solid transparent; border-radius: var(--app-radius-md); cursor: pointer; font-size: 14px; font-weight: 500; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease; line-height: 1.2; white-space: nowrap; gap: var(--app-space-xs); text-decoration: none; }
+    .app-button--primary { background-color: var(--app-color-primary); color: white; border-color: var(--app-color-primary); }
+    .app-button--primary:hover:not(:disabled) { background-color: var(--app-color-primary-dark); border-color: var(--app-color-primary-dark); }
+    .app-button--outline { background-color: var(--app-color-bg-section); color: var(--app-color-text-default); border: 1px solid var(--app-color-border); }
+    .app-button--outline:hover:not(:disabled) { background-color: var(--app-color-bg-highlight); border-color: #d1d5db; } /* A slightly darker border */
+    .app-button--danger { background-color: var(--app-color-error); color: white; border-color: var(--app-color-error); }
+    .app-button--danger:hover:not(:disabled) { background-color: #b91c1c; border-color: #b91c1c; } /* Slightly darker red */
+    .app-button:disabled { cursor: not-allowed; opacity: 0.6; }
+    .app-button-icon { line-height: 1; } /* Font icon or emoji container */
+
+    /* --- Action Buttons Container --- */
+     .app-action-buttons { display: flex; flex-wrap: wrap; gap: var(--app-space-md); margin-top: var(--app-space-xl); }
+     .app-action-buttons--right { justify-content: flex-end; } /* Align buttons to the right */
+     .app-action-buttons--center { justify-content: center; } /* Align buttons to the center */
+     .app-action-buttons--left { justify-content: flex-start; } /* Align buttons to the left */
+     .app-action-buttons--between { justify-content: space-between; } /* Space between buttons */
+
+
+    /* --- Info Grid (Page 1) --- */
+    .app-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--app-space-lg); margin-bottom: var(--app-space-xl); }
+    .app-info-section { background-color: transparent; } /* Info sections are transparent */
+    .app-info-title { color: var(--app-color-text-secondary); font-size: 14px; margin-bottom: var(--app-space-xs); }
+    .app-info-content { font-size: 16px; margin-bottom: var(--app-space-sm); color: var(--app-color-text-default); }
+
+    /* --- Cards (Page 2) --- */
+    .app-card-grid { display: flex; flex-wrap: wrap; gap: var(--app-space-lg); margin: var(--app-space-xl) 0; }
+    .app-card { background-color: var(--app-color-bg-section); border-radius: var(--app-radius-lg); padding: var(--app-space-lg); flex: 1 1 250px; /* Feature cards base */ box-shadow: var(--app-shadow); transition: transform 0.2s ease, box-shadow 0.2s ease; text-decoration: none; color: inherit; display: block;}
+    .app-card:hover { transform: translateY(-3px); box-shadow: var(--app-shadow-hover); }
+    .app-card--stat { flex: 1 1 200px; /* Stat cards override */ }
+
+    .app-card-icon { margin-bottom: var(--app-space-md); font-size: 24px; color: var(--app-color-primary); }
+    .app-card-title { font-size: 16px; margin-bottom: var(--app-space-sm); font-weight: 600; color: var(--app-color-text-default); }
+    .app-card-description { font-size: 14px; color: var(--app-color-text-secondary); }
+
+    .app-card--accent-blue { background-color: var(--app-color-accent); }
+    .app-card--accent-green { background-color: var(--app-color-success-light); } /* Using light success color */
+    .app-card--accent-purple { background-color: #f0e6ff; } /* Keeping the purple from original */
+
+    .app-stat-title { color: var(--app-color-text-secondary); font-size: 14px; margin-bottom: var(--app-space-sm); }
+    .app-stat-value { font-size: 24px; font-weight: 600; color: var(--app-color-text-default); }
+    .app-stat-icon { float: right; font-size: 20px; }
+    .app-stat-icon--blue { color: var(--app-color-primary); }
+    .app-stat-icon--orange { color: var(--app-color-warning); }
+    .app-stat-icon--green { color: var(--app-color-success); }
+    .app-stat-icon--red { color: var(--app-color-error); }
+
+
+    /* --- Data Table (Page 2 & 3) --- */
+    .app-data-table-container { width: 100%; background-color: var(--app-color-bg-section); border-radius: var(--app-radius-lg); overflow: hidden; box-shadow: var(--app-shadow); margin: var(--app-space-xl) 0; display: flex; flex-direction: column; }
+    .app-table-scroll-wrapper { width: 100%; overflow-x: auto; } /* For responsiveness */
+    .app-table-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: var(--app-space-lg); border-bottom: 1px solid var(--app-color-border); gap: var(--app-space-md); }
+    .app-table-header h2 { font-size: 18px; font-weight: 600; margin: 0; }
+
+    .app-table { width: 100%; border-collapse: collapse; min-width: 800px; /* Minimum width for table */ }
+    .app-table th, .app-table td { text-align: left; padding: var(--app-space-md) var(--app-space-lg); font-size: 14px; vertical-align: middle; }
+    .app-table th { background-color: var(--app-color-bg-highlight); color: var(--app-color-text-secondary); font-weight: 500; white-space: nowrap; }
+    .app-table tbody tr { border-bottom: 1px solid var(--app-color-border); }
+    .app-table tbody tr:last-child { border-bottom: none; }
+    .app-table tbody tr:hover { background-color: var(--app-color-bg-highlight); }
+    .app-table .no-results td { text-align: center; color: var(--app-color-text-secondary); font-style: italic; padding: var(--app-space-xl) var(--app-space-lg); }
+
+    /* --- Status Badges --- */
+    .app-status { padding: var(--app-space-xs) var(--app-space-sm); border-radius: var(--app-radius-sm); font-size: 12px; font-weight: 500; display: inline-block; white-space: nowrap; text-transform: capitalize; }
+    .app-status--active { background-color: var(--app-color-success-light); color: var(--app-color-success); }
+    .app-status--expiring { background-color: var(--app-color-warning-light); color: var(--app-color-warning); }
+    .app-status--expired { background-color: var(--app-color-error-light); color: var(--app-color-error); }
+
+
+    /* --- Pagination --- */
+    .app-pagination { display: flex; flex-wrap: wrap; justify-content: flex-end; padding: var(--app-space-md) var(--app-space-lg); gap: var(--app-space-sm); align-items: center; border-top: 1px solid var(--app-color-border); }
+    .app-pagination.hidden { display: none; }
+    .app-pagination button { min-width: 30px; height: 30px; padding: 0 var(--app-space-xs); border-radius: var(--app-radius-sm); border: 1px solid var(--app-color-border); background-color: var(--app-color-bg-section); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+    .app-pagination button:hover:not(:disabled) { border-color: #d1d5db; background-color: var(--app-color-bg-highlight); }
+    .app-pagination button.active { background-color: var(--app-color-primary); color: white; border-color: var(--app-color-primary); }
+    .app-pagination button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .app-pagination span { font-size: 14px; color: var(--app-color-text-secondary); margin-right: auto; }
+
+
+    /* --- Search Form (Page 2) --- */
+    .app-search-form { padding: var(--app-space-lg); border-bottom: 1px solid var(--app-color-border); }
+    .app-search-form h3 { margin-bottom: var(--app-space-md); font-size: 16px; color: var(--app-color-text-default); }
+    .app-search-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--app-space-md); margin-bottom: var(--app-space-md); }
+    .app-radio-group { display: flex; flex-wrap: wrap; gap: var(--app-space-md) var(--app-space-lg); margin-bottom: var(--app-space-lg); }
+    .app-radio-option { display: flex; align-items: center; gap: var(--app-space-xs); }
+    .app-radio-option input[type="radio"] { cursor: pointer; width: 16px; height: 16px; }
+    .app-radio-option label { font-size: 14px; cursor: pointer; color: var(--app-color-text-default); }
+    .app-inline-error { color: var(--app-color-error); margin-top: var(--app-space-sm); font-size: 14px; text-align: right; min-height: 1.2em; display: block; }
+
+
+    /* --- Tabs (Page 3) --- */
+    .app-tab-container { display: flex; margin-bottom: var(--app-space-lg); border-bottom: 2px solid var(--app-color-border); }
+    .app-tab { padding: var(--app-space-sm) var(--app-space-lg); background-color: transparent; color: var(--app-color-text-secondary); border: none; cursor: pointer; font-size: 16px; margin-right: var(--app-space-sm); border-bottom: 2px solid transparent; transition: border-bottom-color 0.2s ease, color 0.2s ease; }
+    .app-tab:hover:not(:disabled) { color: var(--app-color-primary); }
+    .app-tab.active { color: var(--app-color-primary); font-weight: bold; border-bottom-color: var(--app-color-primary); }
+    .app-tab-content { display: none; padding-top: var(--app-space-lg); } /* Add padding top to content */
+    .app-tab-content.active { display: block; }
+
+
+    /* --- Modals (Page 3) --- */
+    .app-modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); padding: var(--app-space-lg); } /* Add padding to modal container */
+    .app-modal-content { background-color: var(--app-color-bg-section); margin: 10vh auto; /* Adjusted margin for better vertical centering */ padding: var(--app-space-xl); border-radius: var(--app-radius-md); width: 90%; max-width: 600px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; }
+    .app-modal-close-btn { color: #aaa; position: absolute; top: var(--app-space-md); right: var(--app-space-lg); font-size: 28px; font-weight: bold; cursor: pointer; line-height: 1; }
+    .app-modal-close-btn:hover, .app-modal-close-btn:focus { color: var(--app-color-text-default); text-decoration: none; }
+    .app-modal .app-action-buttons { justify-content: flex-end; gap: var(--app-space-sm); margin-top: var(--app-space-xl); padding-top: var(--app-space-lg); border-top: 1px solid var(--app-color-border); } /* Style buttons inside modal */
+
+
+    /* --- Notification Config (Page 4) --- */
+    .app-current-value { display: block; margin-bottom: var(--app-space-md); padding: var(--app-space-sm); background-color: var(--app-color-bg-highlight); border: 1px solid var(--app-color-border); border-radius: var(--app-radius-md); color: var(--app-color-text-default); font-size: 16px; }
+    .app-current-value-label { font-weight: bold; color: var(--app-color-text-secondary); margin-right: var(--app-space-xs); }
+    .app-days-input-group { display: flex; align-items: center; gap: var(--app-space-sm); } /* Use gap */
+    .app-days-input { width: 80px; padding: var(--app-space-sm); border: 1px solid var(--app-color-border); border-radius: var(--app-radius-md); font-size: 16px; text-align: center; } /* Remove right margin, use gap */
+    .app-days-label { font-size: 16px; color: var(--app-color-text-secondary); }
+
+
+    /* --- Global Feedback (Success/Error) --- */
+    #global-feedback { position: fixed; top: var(--app-space-lg); left: 50%; transform: translateX(-50%); background-color: rgba(16, 185, 129, 0.9); /* Using RGBA of success color */ color: white; padding: var(--app-space-sm) var(--app-space-lg); border-radius: var(--app-radius-md); z-index: 1000; display: none; text-align: center; font-size: 16px; min-width: 250px; max-width: 90%; word-break: break-word; box-shadow: var(--app-shadow-hover); }
+    #global-feedback.error { background-color: rgba(220, 38, 38, 0.9); /* Using RGBA of error color */ }
+
+    /* --- Global Loading Overlay --- */
+    #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; z-index: 9999; color: white; font-size: 20px; }
+    #loading-overlay.active { display: flex; }
+
+    /* --- Inline Loader Spinner (Used in Buttons/Elements) --- */
+    .app-loader { border: 3px solid rgba(255, 255, 255, 0.3); border-top: 3px solid #fff; border-radius: 50%; width: 1em; height: 1em; animation: app-spin 1s linear infinite; vertical-align: middle; display: inline-block; }
+    .app-button--outline .app-loader { border-top-color: var(--app-color-primary); border-color: rgba(37, 99, 235, 0.3); } /* Spinner color for outline buttons */
+     .app-loader-inline { /* For loaders not inside buttons, e.g. near search results */
+         border: 3px solid var(--app-color-border);
+         border-top: 3px solid var(--app-color-primary);
+         border-radius: 50%;
+         width: 1.2em; height: 1.2em;
+         animation: app-spin 1s linear infinite;
+         display: inline-block;
+         vertical-align: middle;
+     }
+
+
+    @keyframes app-spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* --- Utility classes --- */
+    .text-center { text-align: center; }
+    .margin-top-lg { margin-top: var(--app-space-lg); }
+    .margin-bottom-lg { margin-bottom: var(--app-space-lg); }
+    .float-right { float: right; }
+
+</style>
 ```
 
 ---
-**File 2: `frmCategories.cs`**
----
-```csharp
-using Microsoft.EntityFrameworkCore;
-using Store.Data.Models;
-using Store.Services;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 
-namespace Store.Forms
-{
-    public partial class frmCategories : Form
-    {
-        private readonly CategoryService _categoryService;
-        private bool _isNew = false;
-        private bool _isLoading = false; // To prevent re-entrant calls during load
+**2. Shared JavaScript Block (to be included in all .ascx files within `<script>` tags):**
 
-        public frmCategories(CategoryService categoryService)
-        {
-            InitializeComponent();
-            _categoryService = categoryService;
-        }
+```javascript
+// --- Unified Helper Functions & API Service ---
 
-        private async void frmCategories_Load(object sender, EventArgs e)
-        {
-            _isLoading = true;
-            await LoadDataAsync();
-            SetupBindings();
-            // UpdateButtonStates and UpdateNavigationState are called in LoadDataAsync's finally block
-            _isLoading = false;
-            // Call them once more after _isLoading is false to ensure correct initial state
-            if (categoryBindingSource.Count > 0 && categoryBindingSource.Position < 0)
-            {
-                categoryBindingSource.MoveFirst();
-            }
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
+// Using a global object to hold shared functions to avoid conflicts
+const App = {
+    // !!! IMPORTANT: UPDATE THIS URL IF YOUR API IS HOSTED ELSEWHERE !!!
+    API_BASE_URL: 'https://localhost:7260/api/InsuranceRenewalAutoLicence',
+    DEFAULT_HEADERS: { 'Accept': 'application/json' },
+    JSON_HEADERS: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
 
-        private async Task LoadDataAsync(string? searchTerm = null)
-        {
-            ToggleControls(false, true); // Keep toolbar enabled during load
-            lblStatus.Text = "Loading categories...";
-            try
-            {
-                List<Category> categories;
-                if (string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    categories = await _categoryService.GetAllCategoriesAsync();
-                }
-                else
-                {
-                    categories = await _categoryService.SearchCategoriesAsync(searchTerm);
-                }
-                
-                var currentPosition = categoryBindingSource.Position;
-                var currentId = (categoryBindingSource.Current as Category)?.CategoryID;
+    // --- API Service ---
+    apiService: {
+        async _fetch(endpoint, options = {}) {
+            const url = `${App.API_BASE_URL}${endpoint}`;
+            console.log(`API Request: ${options.method || 'GET'} ${url}`); // Log request
+            try {
+                const response = await fetch(url, options);
+                let responseData = null;
+                const contentType = response.headers.get("content-type");
 
-                categoryBindingSource.DataSource = categories;
-                categoryBindingSource.ResetBindings(false);
-
-                if (categories.Count == 0)
-                {
-                    lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? "No categories found. Click 'New' to add one." : $"No categories matching '{searchTerm}'.";
-                    ClearForm(); // This will also clear bindings temporarily
-                    SetupBindings(); // Re-setup bindings to empty source if needed
-                }
-                else
-                {
-                    lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? $"Displaying {categories.Count} categories." : $"Found {categories.Count} matching '{searchTerm}'.";
-                     if (currentId.HasValue)
-                    {
-                        SelectCategoryById(currentId.Value, false); // Try to reselect, don't trigger CurrentChanged if not found
-                    }
-                    if (categoryBindingSource.Position < 0 && categories.Count > 0)
-                    {
-                        categoryBindingSource.MoveFirst();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading categories: {ex.Message}", "Loading Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Error loading data.";
-            }
-            finally
-            {
-                if (!_isLoading) // Only update states if not in initial load sequence
-                {
-                    UpdateButtonStates();
-                    UpdateNavigationState();
-                }
-                ToggleControls(true, true);
-            }
-        }
-
-        private void SetupBindings()
-        {
-            // Clear existing bindings before adding new ones to prevent duplicates
-            txtCategoryID.DataBindings.Clear();
-            txtCategoryName.DataBindings.Clear();
-
-            // Add new bindings
-            txtCategoryID.DataBindings.Add("Text", categoryBindingSource, "CategoryID", true, DataSourceUpdateMode.Never);
-            txtCategoryName.DataBindings.Add("Text", categoryBindingSource, "CategoryName", false, DataSourceUpdateMode.OnValidation);
-        }
-
-        private void ClearForm()
-        {
-            // Suspend binding before clearing, then resume after setting up for new or empty state
-            categoryBindingSource.SuspendBinding();
-
-            txtCategoryID.Clear();
-            txtCategoryName.Clear();
-            
-            // If you intend for cleared form to be bindable (e.g. to a 'new' object not yet in source),
-            // you might need to handle bindings differently or rely on _isNew state to manage fields directly.
-            // For now, clearing textboxes is sufficient. Binding will re-engage on next current item.
-            
-            categoryBindingSource.ResumeBinding();
-        }
-
-        private void ToggleControls(bool enabled, bool keepToolbarEnabled = false)
-        {
-            groupBoxDetails.Enabled = enabled;
-            if (!keepToolbarEnabled)
-            {
-                 toolStrip1.Enabled = enabled;
-            }
-            else
-            {
-                toolStrip1.Enabled = true; // Toolbar usually stays enabled, buttons managed by UpdateButtonStates
-            }
-           
-            this.Cursor = enabled ? Cursors.Default : Cursors.WaitCursor;
-        }
-
-        private void UpdateButtonStates()
-        {
-            if (_isLoading) return;
-
-            bool hasItems = categoryBindingSource.Count > 0;
-            bool isItemSelected = categoryBindingSource.Current != null;
-
-            tsbSave.Enabled = _isNew || (isItemSelected && !string.IsNullOrWhiteSpace(txtCategoryName.Text));
-            tsbDelete.Enabled = isItemSelected && !_isNew;
-
-            tsbFirst.Enabled = isItemSelected && !_isNew && categoryBindingSource.Position > 0;
-            tsbPrevious.Enabled = isItemSelected && !_isNew && categoryBindingSource.Position > 0;
-            tsbNext.Enabled = isItemSelected && !_isNew && categoryBindingSource.Position < categoryBindingSource.Count - 1;
-            tsbLast.Enabled = isItemSelected && !_isNew && categoryBindingSource.Position < categoryBindingSource.Count - 1;
-
-            // New, Search are always enabled unless the whole form is busy
-            tsbNew.Enabled = toolStrip1.Enabled;
-            txtSearch.Enabled = toolStrip1.Enabled;
-            tsbSearch.Enabled = toolStrip1.Enabled;
-        }
-
-        private void UpdateNavigationState()
-        {
-            if (_isLoading) return;
-
-            bool hasItems = categoryBindingSource.Count > 0;
-            bool isItemSelected = categoryBindingSource.Current != null;
-
-            if (_isNew)
-            {
-                lblStatus.Text = "Adding new category...";
-                groupBoxDetails.Enabled = true; // Ensure details are enabled for new entry
-            }
-            else if (isItemSelected)
-            {
-                lblStatus.Text = $"Record {categoryBindingSource.Position + 1} of {categoryBindingSource.Count}";
-                groupBoxDetails.Enabled = true; // Ensure details are enabled for editing
-            }
-            else // No items or no selection
-            {
-                lblStatus.Text = hasItems ? "No category selected." : (string.IsNullOrWhiteSpace(txtSearch.Text) ? "No categories found." : $"No categories matching '{txtSearch.Text}'.");
-                groupBoxDetails.Enabled = false; // Disable details if no item is selected/available
-                if (!hasItems) ClearForm(); // Clear form if no items exist
-            }
-            UpdateButtonStates(); // Call this to ensure button states are re-evaluated
-        }
-
-        private void tsbNew_Click(object sender, EventArgs e)
-        {
-            _isNew = true;
-            categoryBindingSource.SuspendBinding(); 
-            ClearForm(); 
-            // Do not call categoryBindingSource.AddNew() here if you handle object creation manually on save.
-            // SetupBindings(); // Re-establish bindings for a new, unbound state if desired, or handle manually
-            
-            txtCategoryName.Focus();
-            UpdateNavigationState(); // This will set status text and call UpdateButtonStates
-            // UpdateButtonStates(); // Called by UpdateNavigationState
-        }
-
-        private async void tsbSave_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(txtCategoryName.Text))
-            {
-                MessageBox.Show("Category Name cannot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtCategoryName.Focus();
-                return;
-            }
-
-            // If not _isNew, ensure the current item's changes are pushed to the BindingSource
-            if (!_isNew && categoryBindingSource.Current != null)
-            {
-                categoryBindingSource.EndEdit(); 
-            }
-
-            ToggleControls(false);
-            lblStatus.Text = "Saving...";
-
-            try
-            {
-                bool success = false;
-                Category? categoryToSave = null;
-                bool wasNewItemInitially = _isNew; // Store the state before trying to save
-
-                if (_isNew)
-                {
-                    categoryToSave = new Category { CategoryName = txtCategoryName.Text.Trim() };
-                    success = await _categoryService.AddCategoryAsync(categoryToSave);
-                    if (success) lblStatus.Text = "Category added successfully.";
-                    // else: _categoryService should throw an exception or return detailed error.
-                }
-                else
-                {
-                    if (categoryBindingSource.Current is Category currentCategory)
-                    {
-                        // Ensure text box value is applied if not using DataSourceUpdateMode.OnPropertyChanged for everything
-                        currentCategory.CategoryName = txtCategoryName.Text.Trim(); 
-                        categoryToSave = currentCategory;
-                        success = await _categoryService.UpdateCategoryAsync(currentCategory);
-                        if (success) lblStatus.Text = "Category updated successfully.";
-                    }
-                    else
-                    {
-                        MessageBox.Show("No category selected to update.", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "No category selected."; // Update status
-                    }
-                }
-
-                if (success)
-                {
-                    _isNew = false; // IMPORTANT: Reset _isNew flag AFTER successful save
-                    int savedItemId = categoryToSave?.CategoryID ?? -1;
-                    
-                    // Reload data: clear search if new item was added
-                    string? currentSearchTerm = wasNewItemInitially ? null : txtSearch.Text;
-                    if (wasNewItemInitially) txtSearch.Clear();
-                    
-                    await LoadDataAsync(currentSearchTerm); // LoadDataAsync now handles re-selection if possible or MoveFirst
-                    
-                    if (savedItemId > 0)
-                    {
-                        SelectCategoryById(savedItemId); // Attempt to select the saved item
-                    }
-                    else if (categoryBindingSource.Count > 0)
-                    {
-                        categoryBindingSource.MoveFirst(); // Fallback to first if ID not found (should not happen for new)
-                    }
-                }
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                MessageBox.Show("The record you attempted to edit was modified by another user after you got the original value. The edit operation was canceled.", "Concurrency Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                lblStatus.Text = "Save failed due to concurrency.";
-                await LoadDataAsync(txtSearch.Text); // Reload current search
-            }
-            catch (DbUpdateException dbEx)
-            {
-                // Check for unique constraint violation (example for SQL Server)
-                string errorMessage = $"Database error saving category: {dbEx.InnerException?.Message ?? dbEx.Message}.";
-                if (dbEx.InnerException?.Message.Contains("UNIQUE KEY constraint") == true || 
-                    dbEx.InnerException?.Message.Contains("duplicate key value violates unique constraint") == true) // PostgreSQL
-                {
-                    errorMessage += "\nThe category name might already exist.";
-                }
-                MessageBox.Show(errorMessage, "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Database save error.";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while saving: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Save error.";
-            }
-            finally
-            {
-                // ToggleControls(true); // LoadDataAsync will call this in its finally block.
-                // UpdateButtonStates and UpdateNavigationState are called by LoadDataAsync
-                // If LoadDataAsync wasn't called (e.g. on failure before reload), ensure states are updated.
-                if (!success) { // If save failed, re-enable controls and update UI state
-                     ToggleControls(true);
-                     UpdateButtonStates();
-                     UpdateNavigationState();
-                }
-            }
-        }
-
-        private async void tsbDelete_Click(object sender, EventArgs e)
-        {
-            if (_isNew) // Should not be able to delete while in "new" mode
-            {
-                MessageBox.Show("Cannot delete an unsaved new category.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            if (categoryBindingSource.Current is Category currentCategory)
-            {
-                var confirmResult = MessageBox.Show($"Are you sure you want to delete category '{currentCategory.CategoryName}' (ID: {currentCategory.CategoryID})?\nThis action cannot be undone.",
-                                                     "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-
-                if (confirmResult == DialogResult.Yes)
-                {
-                    ToggleControls(false);
-                    lblStatus.Text = "Deleting...";
-                    try
-                    {
-                        bool success = await _categoryService.DeleteCategoryAsync(currentCategory.CategoryID);
-
-                        if (success)
-                        {
-                            lblStatus.Text = "Category deleted successfully.";
+                // Attempt to parse JSON if content type is json or if response status is non-success
+                if (contentType && contentType.includes("application/json") || !response.ok) {
+                     try {
+                        responseData = await response.json();
+                        console.log("API Response JSON:", responseData); // Log response data
+                     } catch (jsonError) {
+                        console.warn('Failed to parse JSON response, but content-type was application/json.', jsonError);
+                        if (!response.ok) {
+                           let errorText = await response.text(); // Get raw text for non-json errors
+                           throw new Error(`API Error: ${response.status} ${response.statusText}. Failed to parse JSON. Raw text: ${errorText.substring(0, 200)}...`);
                         }
-                        // else: _categoryService should throw for errors
-                        
-                        await LoadDataAsync(txtSearch.Text.Trim()); // Reload data to reflect deletion
-                    }
-                    catch (DbUpdateException dbEx) // Catch specific exception for FK constraint
-                    {
-                        MessageBox.Show($"Database error deleting category: {dbEx.InnerException?.Message ?? dbEx.Message}.\nIt might be referenced by other records (e.g., products).", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Database delete error.";
-                        await LoadDataAsync(txtSearch.Text.Trim()); // Reload to show current state
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"An error occurred while deleting: {ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Delete error.";
-                        await LoadDataAsync(txtSearch.Text.Trim()); // Reload to show current state
-                    }
-                    // finally is handled by LoadDataAsync for ToggleControls and UI updates
-                }
-            }
-            else
-            {
-                MessageBox.Show("No category selected to delete.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private async void PerformSearch()
-        {
-            _isNew = false; // Exit "new" mode if searching
-            categoryBindingSource.ResumeBinding(); // Ensure binding is active
-            await LoadDataAsync(txtSearch.Text.Trim());
-        }
-
-        private void tsbSearch_Click(object sender, EventArgs e)
-        {
-            PerformSearch();
-        }
-
-        private void txtSearch_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Enter)
-            {
-                PerformSearch();
-                e.SuppressKeyPress = true; 
-            }
-        }
-
-        private void tsbFirst_Click(object sender, EventArgs e)
-        {
-            if (_isNew) _isNew = false; categoryBindingSource.ResumeBinding(); categoryBindingSource.MoveFirst();
-        }
-
-        private void tsbPrevious_Click(object sender, EventArgs e)
-        {
-            if (_isNew) _isNew = false; categoryBindingSource.ResumeBinding(); categoryBindingSource.MovePrevious();
-        }
-
-        private void tsbNext_Click(object sender, EventArgs e)
-        {
-            if (_isNew) _isNew = false; categoryBindingSource.ResumeBinding(); categoryBindingSource.MoveNext();
-        }
-
-        private void tsbLast_Click(object sender, EventArgs e)
-        {
-            if (_isNew) _isNew = false; categoryBindingSource.ResumeBinding(); categoryBindingSource.MoveLast();
-        }
-
-        private void categoryBindingSource_CurrentChanged(object sender, EventArgs e)
-        {
-            if (_isLoading || _isNew) return; // Don't interfere if loading or in "new" mode
-
-            if (categoryBindingSource.Current == null)
-            {
-                ClearForm();
-                // Bindings should already be set up, or will be by LoadDataAsync if list is empty
-            }
-            // Data binding should automatically update textboxes if Current is not null.
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
-
-        private void SelectCategoryById(int categoryId, bool triggerCurrentChanged = true)
-        {
-            if (categoryId <= 0) return;
-
-            if (categoryBindingSource.DataSource is List<Category> categories)
-            {
-                int index = -1;
-                for(int i=0; i < categories.Count; i++)
-                {
-                    if (categories[i].CategoryID == categoryId)
-                    {
-                        index = i;
-                        break;
-                    }
-                }
-
-                if (index != -1)
-                {
-                    if (!triggerCurrentChanged)
-                    {
-                        // Temporarily detach event handler
-                        this.categoryBindingSource.CurrentChanged -= categoryBindingSource_CurrentChanged;
-                        categoryBindingSource.Position = index;
-                        // Re-attach event handler
-                        this.categoryBindingSource.CurrentChanged += categoryBindingSource_CurrentChanged;
-                        // Manually update display if CurrentChanged was skipped
-                        if(categoryBindingSource.Current is Category cat)
-                        {
-                            txtCategoryID.Text = cat.CategoryID.ToString();
-                            txtCategoryName.Text = cat.CategoryName;
-                        }
-                    }
-                    else
-                    {
-                         categoryBindingSource.Position = index;
-                    }
-                }
-            }
-        }
-    }
-}
-```
-
----
-**File 3: `frmSuppliers.Designer.cs`**
----
-```csharp
-using System;
-using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
-using Store.Data.Models;
-
-namespace Store.Forms
-{
-    partial class frmSuppliers
-    {
-        private System.ComponentModel.IContainer components = null;
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null)) { components.Dispose(); }
-            base.Dispose(disposing);
-        }
-
-        #region Windows Form Designer generated code
-        private void InitializeComponent()
-        {
-            components = new Container();
-            ComponentResourceManager resources = new ComponentResourceManager(typeof(frmSuppliers));
-            toolStrip1 = new ToolStrip();
-            tsbNew = new ToolStripButton();
-            tsbSave = new ToolStripButton();
-            tsbDelete = new ToolStripButton();
-            toolStripSeparator1 = new ToolStripSeparator();
-            tsbFirst = new ToolStripButton();
-            tsbPrevious = new ToolStripButton();
-            tsbNext = new ToolStripButton();
-            tsbLast = new ToolStripButton();
-            toolStripSeparator2 = new ToolStripSeparator();
-            txtSearch = new ToolStripTextBox();
-            tsbSearch = new ToolStripButton();
-            statusStrip1 = new StatusStrip();
-            lblStatus = new ToolStripStatusLabel();
-            supplierBindingSource = new BindingSource(components);
-            groupBoxDetails = new GroupBox();
-            tableLayoutPanelDetails = new TableLayoutPanel();
-            lblSupplierID = new Label();
-            txtSupplierID = new TextBox();
-            lblSupplierName = new Label();
-            txtSupplierName = new TextBox();
-            lblContactPerson = new Label();
-            txtContactPerson = new TextBox();
-            lblPhoneNumber = new Label();
-            txtPhoneNumber = new TextBox();
-            lblEmail = new Label();
-            txtEmail = new TextBox();
-            toolStrip1.SuspendLayout();
-            statusStrip1.SuspendLayout();
-            ((ISupportInitialize)supplierBindingSource).BeginInit();
-            groupBoxDetails.SuspendLayout();
-            tableLayoutPanelDetails.SuspendLayout();
-            SuspendLayout();
-            // 
-            // toolStrip1
-            // 
-            toolStrip1.BackColor = Color.FromArgb(240, 240, 240);
-            toolStrip1.Font = new Font("Segoe UI", 10F);
-            toolStrip1.GripStyle = ToolStripGripStyle.Hidden;
-            toolStrip1.ImageScalingSize = new Size(24, 24);
-            toolStrip1.Items.AddRange(new ToolStripItem[] { tsbNew, tsbSave, tsbDelete, toolStripSeparator1, tsbFirst, tsbPrevious, tsbNext, tsbLast, toolStripSeparator2, txtSearch, tsbSearch });
-            toolStrip1.Location = new Point(0, 0);
-            toolStrip1.Name = "toolStrip1";
-            toolStrip1.Padding = new Padding(8, 5, 8, 5);
-            toolStrip1.RenderMode = ToolStripRenderMode.System;
-            toolStrip1.Size = new Size(1118, 46);
-            toolStrip1.TabIndex = 0;
-            toolStrip1.Text = "toolStrip1";
-            // 
-            // tsbNew
-            // 
-            tsbNew.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNew.Image = (Image)resources.GetObject("tsbNew.Image");
-            tsbNew.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNew.ImageTransparentColor = Color.Magenta;
-            tsbNew.Margin = new Padding(4);
-            tsbNew.Name = "tsbNew";
-            tsbNew.Size = new Size(138, 28); 
-            tsbNew.Text = "New Supplier";
-            tsbNew.ToolTipText = "Add New Supplier (Ctrl+N)";
-            tsbNew.Click += tsbNew_Click;
-            // 
-            // tsbSave
-            // 
-            tsbSave.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbSave.Image = (Image)resources.GetObject("tsbSave.Image");
-            tsbSave.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbSave.ImageTransparentColor = Color.Magenta;
-            tsbSave.Margin = new Padding(4);
-            tsbSave.Name = "tsbSave";
-            tsbSave.Size = new Size(144, 28);
-            tsbSave.Text = "Save Changes";
-            tsbSave.ToolTipText = "Save Changes (Ctrl+S)";
-            tsbSave.Click += tsbSave_Click;
-            // 
-            // tsbDelete
-            // 
-            tsbDelete.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbDelete.Image = (Image)resources.GetObject("tsbDelete.Image");
-            tsbDelete.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbDelete.ImageTransparentColor = Color.Magenta;
-            tsbDelete.Margin = new Padding(4);
-            tsbDelete.Name = "tsbDelete";
-            tsbDelete.Size = new Size(153, 28); 
-            tsbDelete.Text = "Delete Supplier";
-            tsbDelete.ToolTipText = "Delete Selected Supplier (Del)";
-            tsbDelete.Click += tsbDelete_Click;
-            // 
-            // toolStripSeparator1
-            // 
-            toolStripSeparator1.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator1.Name = "toolStripSeparator1";
-            toolStripSeparator1.Size = new Size(6, 36);
-            // 
-            // tsbFirst
-            // 
-            tsbFirst.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbFirst.Image = (Image)resources.GetObject("tsbFirst.Image");
-            tsbFirst.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbFirst.ImageTransparentColor = Color.Magenta;
-            tsbFirst.Margin = new Padding(4);
-            tsbFirst.Name = "tsbFirst";
-            tsbFirst.Size = new Size(127, 28);
-            tsbFirst.Text = "First Record";
-            tsbFirst.ToolTipText = "Go to First Record (Ctrl+Home)";
-            tsbFirst.Click += tsbFirst_Click;
-            // 
-            // tsbPrevious
-            // 
-            tsbPrevious.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbPrevious.Image = (Image)resources.GetObject("tsbPrevious.Image");
-            tsbPrevious.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbPrevious.ImageTransparentColor = Color.Magenta;
-            tsbPrevious.Margin = new Padding(4);
-            tsbPrevious.Name = "tsbPrevious";
-            tsbPrevious.Size = new Size(160, 28);
-            tsbPrevious.Text = "Previous Record";
-            tsbPrevious.ToolTipText = "Go to Previous Record (Ctrl+Left)";
-            tsbPrevious.Click += tsbPrevious_Click;
-            // 
-            // tsbNext
-            // 
-            tsbNext.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNext.Image = (Image)resources.GetObject("tsbNext.Image");
-            tsbNext.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNext.ImageTransparentColor = Color.Magenta;
-            tsbNext.Margin = new Padding(4);
-            tsbNext.Name = "tsbNext";
-            tsbNext.Size = new Size(132, 28);
-            tsbNext.Text = "Next Record";
-            tsbNext.ToolTipText = "Go to Next Record (Ctrl+Right)";
-            tsbNext.Click += tsbNext_Click;
-            // 
-            // tsbLast
-            // 
-            tsbLast.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            tsbLast.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbLast.ImageTransparentColor = Color.Magenta;
-            tsbLast.Margin = new Padding(4);
-            tsbLast.Name = "tsbLast";
-            tsbLast.Size = new Size(102, 28);
-            tsbLast.Text = "Last Record";
-            tsbLast.ToolTipText = "Go to Last Record (Ctrl+End)";
-            tsbLast.Click += tsbLast_Click;
-            // 
-            // toolStripSeparator2
-            // 
-            toolStripSeparator2.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator2.Name = "toolStripSeparator2";
-            toolStripSeparator2.Size = new Size(6, 36);
-            // 
-            // txtSearch
-            // 
-            txtSearch.Alignment = ToolStripItemAlignment.Right;
-            txtSearch.BackColor = Color.White;
-            txtSearch.BorderStyle = BorderStyle.FixedSingle;
-            txtSearch.Font = new Font("Segoe UI", 10F);
-            txtSearch.ForeColor = Color.FromArgb(64, 64, 64);
-            txtSearch.Margin = new Padding(1, 2, 6, 2);
-            txtSearch.Name = "txtSearch";
-            txtSearch.Size = new Size(200, 27);
-            txtSearch.ToolTipText = "Enter search term and press Enter or click Search";
-            txtSearch.KeyDown += txtSearch_KeyDown;
-            // 
-            // tsbSearch
-            // 
-            tsbSearch.Alignment = ToolStripItemAlignment.Right;
-            tsbSearch.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            tsbSearch.Image = (Image)resources.GetObject("tsbSearch.Image");
-            tsbSearch.ImageTransparentColor = Color.Magenta;
-            tsbSearch.Margin = new Padding(1, 2, 1, 2);
-            tsbSearch.Name = "tsbSearch";
-            tsbSearch.Size = new Size(28, 28);
-            tsbSearch.Text = "Search";
-            tsbSearch.ToolTipText = "Search Suppliers";
-            tsbSearch.Click += tsbSearch_Click;
-            // 
-            // statusStrip1
-            // 
-            statusStrip1.BackColor = Color.FromArgb(248, 248, 248);
-            statusStrip1.ImageScalingSize = new Size(20, 20);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { lblStatus });
-            statusStrip1.Location = new Point(0, 442);
-            statusStrip1.Name = "statusStrip1";
-            statusStrip1.Padding = new Padding(1, 0, 16, 0);
-            statusStrip1.Size = new Size(1118, 22);
-            statusStrip1.TabIndex = 2;
-            statusStrip1.Text = "statusStrip1";
-            // 
-            // lblStatus
-            // 
-            lblStatus.Font = new Font("Segoe UI", 9F);
-            lblStatus.ForeColor = Color.FromArgb(80, 80, 80);
-            lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(1101, 16);
-            lblStatus.Spring = true;
-            lblStatus.TextAlign = ContentAlignment.MiddleLeft;
-            // 
-            // supplierBindingSource
-            // 
-            supplierBindingSource.DataSource = typeof(Supplier);
-            supplierBindingSource.CurrentChanged += supplierBindingSource_CurrentChanged;
-            // 
-            // groupBoxDetails
-            // 
-            groupBoxDetails.Controls.Add(tableLayoutPanelDetails);
-            groupBoxDetails.Dock = DockStyle.Fill;
-            groupBoxDetails.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
-            groupBoxDetails.ForeColor = Color.FromArgb(55, 55, 55);
-            groupBoxDetails.Location = new Point(0, 46); 
-            groupBoxDetails.Margin = new Padding(10);
-            groupBoxDetails.Name = "groupBoxDetails";
-            groupBoxDetails.Padding = new Padding(20);
-            groupBoxDetails.Size = new Size(1118, 396); 
-            groupBoxDetails.TabIndex = 1;
-            groupBoxDetails.TabStop = false;
-            groupBoxDetails.Text = "Supplier Details";
-            // 
-            // tableLayoutPanelDetails
-            // 
-            tableLayoutPanelDetails.ColumnCount = 2;
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160F));
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Controls.Add(lblSupplierID, 0, 0);
-            tableLayoutPanelDetails.Controls.Add(txtSupplierID, 1, 0);
-            tableLayoutPanelDetails.Controls.Add(lblSupplierName, 0, 1);
-            tableLayoutPanelDetails.Controls.Add(txtSupplierName, 1, 1);
-            tableLayoutPanelDetails.Controls.Add(lblContactPerson, 0, 2);
-            tableLayoutPanelDetails.Controls.Add(txtContactPerson, 1, 2);
-            tableLayoutPanelDetails.Controls.Add(lblPhoneNumber, 0, 3);
-            tableLayoutPanelDetails.Controls.Add(txtPhoneNumber, 1, 3);
-            tableLayoutPanelDetails.Controls.Add(lblEmail, 0, 4);
-            tableLayoutPanelDetails.Controls.Add(txtEmail, 1, 4);
-            tableLayoutPanelDetails.Dock = DockStyle.Fill;
-            tableLayoutPanelDetails.Location = new Point(20, 43);
-            tableLayoutPanelDetails.Margin = new Padding(0);
-            tableLayoutPanelDetails.Name = "tableLayoutPanelDetails";
-            tableLayoutPanelDetails.RowCount = 6;
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Size = new Size(1078, 333); 
-            tableLayoutPanelDetails.TabIndex = 0;
-            // 
-            // lblSupplierID
-            // 
-            lblSupplierID.Anchor = AnchorStyles.Left;
-            lblSupplierID.AutoSize = true;
-            lblSupplierID.Font = new Font("Segoe UI", 10F);
-            lblSupplierID.ForeColor = Color.FromArgb(80, 80, 80);
-            lblSupplierID.Location = new Point(3, 11);
-            lblSupplierID.Name = "lblSupplierID";
-            lblSupplierID.Size = new Size(98, 23);
-            lblSupplierID.TabIndex = 0;
-            lblSupplierID.Text = "Supplier ID:";
-            // 
-            // txtSupplierID
-            // 
-            txtSupplierID.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtSupplierID.BackColor = Color.FromArgb(245, 245, 245);
-            txtSupplierID.BorderStyle = BorderStyle.FixedSingle;
-            txtSupplierID.Font = new Font("Segoe UI", 10F);
-            txtSupplierID.ForeColor = Color.FromArgb(100, 100, 100);
-            txtSupplierID.Location = new Point(163, 7);
-            txtSupplierID.Margin = new Padding(3, 4, 10, 4);
-            txtSupplierID.Name = "txtSupplierID";
-            txtSupplierID.ReadOnly = true;
-            txtSupplierID.Size = new Size(905, 30);
-            txtSupplierID.TabIndex = 99; // Non-focusable
-            txtSupplierID.TabStop = false;
-            // 
-            // lblSupplierName
-            // 
-            lblSupplierName.Anchor = AnchorStyles.Left;
-            lblSupplierName.AutoSize = true;
-            lblSupplierName.Font = new Font("Segoe UI", 10F);
-            lblSupplierName.ForeColor = Color.FromArgb(80, 80, 80);
-            lblSupplierName.Location = new Point(3, 56);
-            lblSupplierName.Name = "lblSupplierName";
-            lblSupplierName.Size = new Size(127, 23);
-            lblSupplierName.TabIndex = 2;
-            lblSupplierName.Text = "Supplier Name:";
-            // 
-            // txtSupplierName
-            // 
-            txtSupplierName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtSupplierName.BorderStyle = BorderStyle.FixedSingle;
-            txtSupplierName.Font = new Font("Segoe UI", 10F);
-            txtSupplierName.ForeColor = Color.FromArgb(50, 50, 50);
-            txtSupplierName.Location = new Point(163, 52);
-            txtSupplierName.Margin = new Padding(3, 4, 10, 4);
-            txtSupplierName.MaxLength = 100;
-            txtSupplierName.Name = "txtSupplierName";
-            txtSupplierName.Size = new Size(905, 30);
-            txtSupplierName.TabIndex = 0;
-            // 
-            // lblContactPerson
-            // 
-            lblContactPerson.Anchor = AnchorStyles.Left;
-            lblContactPerson.AutoSize = true;
-            lblContactPerson.Font = new Font("Segoe UI", 10F);
-            lblContactPerson.ForeColor = Color.FromArgb(80, 80, 80);
-            lblContactPerson.Location = new Point(3, 101);
-            lblContactPerson.Name = "lblContactPerson";
-            lblContactPerson.Size = new Size(130, 23);
-            lblContactPerson.TabIndex = 4;
-            lblContactPerson.Text = "Contact Person:";
-            // 
-            // txtContactPerson
-            // 
-            txtContactPerson.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtContactPerson.BorderStyle = BorderStyle.FixedSingle;
-            txtContactPerson.Font = new Font("Segoe UI", 10F);
-            txtContactPerson.ForeColor = Color.FromArgb(50, 50, 50);
-            txtContactPerson.Location = new Point(163, 97);
-            txtContactPerson.Margin = new Padding(3, 4, 10, 4);
-            txtContactPerson.MaxLength = 100;
-            txtContactPerson.Name = "txtContactPerson";
-            txtContactPerson.Size = new Size(905, 30);
-            txtContactPerson.TabIndex = 1;
-            // 
-            // lblPhoneNumber
-            // 
-            lblPhoneNumber.Anchor = AnchorStyles.Left;
-            lblPhoneNumber.AutoSize = true;
-            lblPhoneNumber.Font = new Font("Segoe UI", 10F);
-            lblPhoneNumber.ForeColor = Color.FromArgb(80, 80, 80);
-            lblPhoneNumber.Location = new Point(3, 146);
-            lblPhoneNumber.Name = "lblPhoneNumber";
-            lblPhoneNumber.Size = new Size(131, 23);
-            lblPhoneNumber.TabIndex = 6;
-            lblPhoneNumber.Text = "Phone Number:";
-            // 
-            // txtPhoneNumber
-            // 
-            txtPhoneNumber.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtPhoneNumber.BorderStyle = BorderStyle.FixedSingle;
-            txtPhoneNumber.Font = new Font("Segoe UI", 10F);
-            txtPhoneNumber.ForeColor = Color.FromArgb(50, 50, 50);
-            txtPhoneNumber.Location = new Point(163, 142);
-            txtPhoneNumber.Margin = new Padding(3, 4, 10, 4);
-            txtPhoneNumber.MaxLength = 20;
-            txtPhoneNumber.Name = "txtPhoneNumber";
-            txtPhoneNumber.Size = new Size(905, 30);
-            txtPhoneNumber.TabIndex = 2;
-            // 
-            // lblEmail
-            // 
-            lblEmail.Anchor = AnchorStyles.Left;
-            lblEmail.AutoSize = true;
-            lblEmail.Font = new Font("Segoe UI", 10F);
-            lblEmail.ForeColor = Color.FromArgb(80, 80, 80);
-            lblEmail.Location = new Point(3, 191);
-            lblEmail.Name = "lblEmail";
-            lblEmail.Size = new Size(55, 23);
-            lblEmail.TabIndex = 8;
-            lblEmail.Text = "Email:";
-            // 
-            // txtEmail
-            // 
-            txtEmail.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtEmail.BorderStyle = BorderStyle.FixedSingle;
-            txtEmail.Font = new Font("Segoe UI", 10F);
-            txtEmail.ForeColor = Color.FromArgb(50, 50, 50);
-            txtEmail.Location = new Point(163, 187);
-            txtEmail.Margin = new Padding(3, 4, 10, 4);
-            txtEmail.MaxLength = 100;
-            txtEmail.Name = "txtEmail";
-            txtEmail.Size = new Size(905, 30);
-            txtEmail.TabIndex = 3;
-            // 
-            // frmSuppliers
-            // 
-            AutoScaleDimensions = new SizeF(8F, 20F);
-            AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.White;
-            ClientSize = new Size(1118, 464);
-            Controls.Add(groupBoxDetails);
-            Controls.Add(statusStrip1);
-            Controls.Add(toolStrip1);
-            Font = new Font("Segoe UI", 9F);
-            ForeColor = Color.FromArgb(64, 64, 64);
-            MinimumSize = new Size(600, 450); // Adjusted min height
-            Name = "frmSuppliers";
-            Text = "Manage Suppliers";
-            Load += frmSuppliers_Load;
-            toolStrip1.ResumeLayout(false);
-            toolStrip1.PerformLayout();
-            statusStrip1.ResumeLayout(false);
-            statusStrip1.PerformLayout();
-            ((ISupportInitialize)supplierBindingSource).EndInit();
-            groupBoxDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.PerformLayout();
-            ResumeLayout(false);
-            PerformLayout();
-        }
-        #endregion
-
-        private ToolStrip toolStrip1;
-        private ToolStripButton tsbNew;
-        private ToolStripButton tsbSave;
-        private ToolStripButton tsbDelete;
-        private ToolStripSeparator toolStripSeparator1;
-        private ToolStripButton tsbFirst;
-        private ToolStripButton tsbPrevious;
-        private ToolStripButton tsbNext;
-        private ToolStripButton tsbLast;
-        private ToolStripSeparator toolStripSeparator2;
-        private ToolStripTextBox txtSearch;
-        private ToolStripButton tsbSearch;
-        private StatusStrip statusStrip1;
-        private ToolStripStatusLabel lblStatus;
-        private BindingSource supplierBindingSource;
-        private GroupBox groupBoxDetails;
-        private TableLayoutPanel tableLayoutPanelDetails;
-        private Label lblSupplierID;
-        private TextBox txtSupplierID;
-        private Label lblSupplierName;
-        private TextBox txtSupplierName;
-        private Label lblContactPerson;
-        private TextBox txtContactPerson;
-        private Label lblPhoneNumber;
-        private TextBox txtPhoneNumber;
-        private Label lblEmail;
-        private TextBox txtEmail;
-    }
-}
-```
-
----
-**File 4: `frmSuppliers.cs`**
----
-```csharp
-using Microsoft.EntityFrameworkCore;
-using Store.Data.Models;
-using Store.Services;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
-namespace Store.Forms
-{
-    public partial class frmSuppliers : Form
-    {
-        private readonly SupplierService _supplierService;
-        private bool _isNew = false;
-        private bool _isLoading = false;
-
-        public frmSuppliers(SupplierService supplierService)
-        {
-            InitializeComponent();
-            _supplierService = supplierService;
-        }
-
-        private async void frmSuppliers_Load(object sender, EventArgs e)
-        {
-            _isLoading = true;
-            await LoadDataAsync();
-            SetupBindings();
-            _isLoading = false;
-            if (supplierBindingSource.Count > 0 && supplierBindingSource.Position < 0)
-            {
-                supplierBindingSource.MoveFirst();
-            }
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
-
-        private async Task LoadDataAsync(string? searchTerm = null)
-        {
-            ToggleControls(false, true);
-            lblStatus.Text = "Loading suppliers...";
-            try
-            {
-                List<Supplier> suppliers;
-                if (string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    suppliers = await _supplierService.GetAllSuppliersAsync();
-                }
-                else
-                {
-                    suppliers = await _supplierService.SearchSuppliersAsync(searchTerm);
-                }
-
-                var currentId = (supplierBindingSource.Current as Supplier)?.SupplierID;
-
-                supplierBindingSource.DataSource = suppliers;
-                supplierBindingSource.ResetBindings(false);
-
-                if (suppliers.Count == 0)
-                {
-                    lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? "No suppliers found. Click 'New' to add one." : $"No suppliers matching '{searchTerm}'.";
-                    ClearForm();
-                    SetupBindings(); 
-                }
-                else
-                {
-                    lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? $"Displaying {suppliers.Count} suppliers." : $"Found {suppliers.Count} matching '{searchTerm}'.";
-                    if (currentId.HasValue)
-                    {
-                        SelectSupplierById(currentId.Value, false);
-                    }
-                     if (supplierBindingSource.Position < 0 && suppliers.Count > 0)
-                    {
-                        supplierBindingSource.MoveFirst();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading suppliers: {ex.Message}", "Loading Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Error loading data.";
-            }
-            finally
-            {
-                if (!_isLoading)
-                {
-                    UpdateButtonStates();
-                    UpdateNavigationState();
-                }
-                ToggleControls(true, true);
-            }
-        }
-
-        private void SetupBindings()
-        {
-            txtSupplierID.DataBindings.Clear();
-            txtSupplierName.DataBindings.Clear();
-            txtContactPerson.DataBindings.Clear();
-            txtPhoneNumber.DataBindings.Clear();
-            txtEmail.DataBindings.Clear();
-
-            txtSupplierID.DataBindings.Add("Text", supplierBindingSource, "SupplierID", true, DataSourceUpdateMode.Never);
-            txtSupplierName.DataBindings.Add("Text", supplierBindingSource, "SupplierName", false, DataSourceUpdateMode.OnValidation);
-            txtContactPerson.DataBindings.Add("Text", supplierBindingSource, "ContactPerson", true, DataSourceUpdateMode.OnValidation, string.Empty);
-            txtPhoneNumber.DataBindings.Add("Text", supplierBindingSource, "PhoneNumber", true, DataSourceUpdateMode.OnValidation, string.Empty);
-            txtEmail.DataBindings.Add("Text", supplierBindingSource, "Email", true, DataSourceUpdateMode.OnValidation, string.Empty);
-        }
-
-        private void ClearForm()
-        {
-            supplierBindingSource.SuspendBinding();
-            txtSupplierID.Clear();
-            txtSupplierName.Clear();
-            txtContactPerson.Clear();
-            txtPhoneNumber.Clear();
-            txtEmail.Clear();
-            supplierBindingSource.ResumeBinding();
-        }
-        
-        private void ToggleControls(bool enabled, bool keepToolbarEnabled = false)
-        {
-            groupBoxDetails.Enabled = enabled;
-            if (!keepToolbarEnabled) toolStrip1.Enabled = enabled;
-            else toolStrip1.Enabled = true;
-            this.Cursor = enabled ? Cursors.Default : Cursors.WaitCursor;
-        }
-
-        private void UpdateButtonStates()
-        {
-            if (_isLoading) return;
-            bool hasItems = supplierBindingSource.Count > 0;
-            bool isItemSelected = supplierBindingSource.Current != null;
-
-            tsbSave.Enabled = _isNew || (isItemSelected && !string.IsNullOrWhiteSpace(txtSupplierName.Text));
-            tsbDelete.Enabled = isItemSelected && !_isNew;
-            tsbFirst.Enabled = isItemSelected && !_isNew && supplierBindingSource.Position > 0;
-            tsbPrevious.Enabled = isItemSelected && !_isNew && supplierBindingSource.Position > 0;
-            tsbNext.Enabled = isItemSelected && !_isNew && supplierBindingSource.Position < supplierBindingSource.Count - 1;
-            tsbLast.Enabled = isItemSelected && !_isNew && supplierBindingSource.Position < supplierBindingSource.Count - 1;
-            tsbNew.Enabled = toolStrip1.Enabled;
-            txtSearch.Enabled = toolStrip1.Enabled;
-            tsbSearch.Enabled = toolStrip1.Enabled;
-        }
-
-        private void UpdateNavigationState()
-        {
-            if (_isLoading) return;
-            bool hasItems = supplierBindingSource.Count > 0;
-            bool isItemSelected = supplierBindingSource.Current != null;
-
-            if (_isNew)
-            {
-                lblStatus.Text = "Adding new supplier...";
-                groupBoxDetails.Enabled = true;
-            }
-            else if (isItemSelected)
-            {
-                lblStatus.Text = $"Record {supplierBindingSource.Position + 1} of {supplierBindingSource.Count}";
-                groupBoxDetails.Enabled = true;
-            }
-            else
-            {
-                lblStatus.Text = hasItems ? "No supplier selected." : (string.IsNullOrWhiteSpace(txtSearch.Text) ? "No suppliers found." : $"No suppliers matching '{txtSearch.Text}'.");
-                groupBoxDetails.Enabled = false;
-                if (!hasItems) ClearForm();
-            }
-             UpdateButtonStates();
-        }
-
-        private void tsbNew_Click(object sender, EventArgs e)
-        {
-            _isNew = true;
-            supplierBindingSource.SuspendBinding();
-            ClearForm();
-            txtSupplierName.Focus();
-            UpdateNavigationState();
-        }
-
-        private async void tsbSave_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(txtSupplierName.Text))
-            {
-                MessageBox.Show("Supplier Name cannot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtSupplierName.Focus();
-                return;
-            }
-            // Basic email validation (optional, enhance as needed)
-            if (!string.IsNullOrWhiteSpace(txtEmail.Text) && !txtEmail.Text.Contains("@"))
-            {
-                MessageBox.Show("Please enter a valid email address or leave it empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtEmail.Focus();
-                return;
-            }
-
-            if (!_isNew && supplierBindingSource.Current != null)
-            {
-                supplierBindingSource.EndEdit();
-            }
-
-            ToggleControls(false);
-            lblStatus.Text = "Saving...";
-
-            try
-            {
-                bool success = false;
-                Supplier? supplierToSave = null;
-                bool wasNewItemInitially = _isNew;
-
-                if (_isNew)
-                {
-                    supplierToSave = new Supplier
-                    {
-                        SupplierName = txtSupplierName.Text.Trim(),
-                        ContactPerson = string.IsNullOrWhiteSpace(txtContactPerson.Text) ? null : txtContactPerson.Text.Trim(),
-                        PhoneNumber = string.IsNullOrWhiteSpace(txtPhoneNumber.Text) ? null : txtPhoneNumber.Text.Trim(),
-                        Email = string.IsNullOrWhiteSpace(txtEmail.Text) ? null : txtEmail.Text.Trim()
-                    };
-                    success = await _supplierService.AddSupplierAsync(supplierToSave);
-                     if (success) lblStatus.Text = "Supplier added successfully.";
-                }
-                else
-                {
-                    if (supplierBindingSource.Current is Supplier currentSupplier)
-                    {
-                        currentSupplier.SupplierName = txtSupplierName.Text.Trim();
-                        currentSupplier.ContactPerson = string.IsNullOrWhiteSpace(txtContactPerson.Text) ? null : txtContactPerson.Text.Trim();
-                        currentSupplier.PhoneNumber = string.IsNullOrWhiteSpace(txtPhoneNumber.Text) ? null : txtPhoneNumber.Text.Trim();
-                        currentSupplier.Email = string.IsNullOrWhiteSpace(txtEmail.Text) ? null : txtEmail.Text.Trim();
-                        supplierToSave = currentSupplier;
-                        success = await _supplierService.UpdateSupplierAsync(currentSupplier);
-                        if (success) lblStatus.Text = "Supplier updated successfully.";
-                    }
-                    else
-                    {
-                         MessageBox.Show("No supplier selected to update.", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                         lblStatus.Text = "No supplier selected.";
-                    }
-                }
-
-                if (success)
-                {
-                    _isNew = false;
-                    int savedItemId = supplierToSave?.SupplierID ?? -1;
-                    string? currentSearchTerm = wasNewItemInitially ? null : txtSearch.Text;
-                    if (wasNewItemInitially) txtSearch.Clear();
-                    
-                    await LoadDataAsync(currentSearchTerm);
-                    
-                    if (savedItemId > 0) SelectSupplierById(savedItemId);
-                    else if(supplierBindingSource.Count > 0) supplierBindingSource.MoveFirst();
-                }
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                MessageBox.Show("The record was modified. Please reload and try again.", "Concurrency Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                lblStatus.Text = "Save failed due to concurrency.";
-                await LoadDataAsync(txtSearch.Text);
-            }
-            catch (DbUpdateException dbEx)
-            {
-                string errorMessage = $"Database error: {dbEx.InnerException?.Message ?? dbEx.Message}.";
-                 if (dbEx.InnerException?.Message.Contains("UNIQUE KEY constraint") == true || 
-                    dbEx.InnerException?.Message.Contains("duplicate key value violates unique constraint") == true)
-                {
-                    errorMessage += "\nA supplier with the same name or email might already exist if they are unique.";
-                }
-                MessageBox.Show(errorMessage, "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Database save error.";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Save error.";
-            }
-            finally
-            {
-                 if (!success) { 
-                     ToggleControls(true);
-                     UpdateButtonStates();
-                     UpdateNavigationState();
-                }
-            }
-        }
-
-        private async void tsbDelete_Click(object sender, EventArgs e)
-        {
-             if (_isNew) {
-                MessageBox.Show("Cannot delete an unsaved new supplier.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            if (supplierBindingSource.Current is Supplier currentSupplier)
-            {
-                var confirmResult = MessageBox.Show($"Delete supplier '{currentSupplier.SupplierName}' (ID: {currentSupplier.SupplierID})?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (confirmResult == DialogResult.Yes)
-                {
-                    ToggleControls(false);
-                    lblStatus.Text = "Deleting...";
-                    try
-                    {
-                        bool success = await _supplierService.DeleteSupplierAsync(currentSupplier.SupplierID);
-                        if (success) lblStatus.Text = "Supplier deleted.";
-                        await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                    catch (DbUpdateException dbEx)
-                    {
-                        MessageBox.Show($"Database error: {dbEx.InnerException?.Message ?? dbEx.Message}.\nSupplier might have related products.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Database delete error.";
-                        await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"An error occurred: {ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Delete error.";
-                        await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                }
-            }
-            else
-            {
-                MessageBox.Show("No supplier selected.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private async void PerformSearch()
-        {
-            _isNew = false; supplierBindingSource.ResumeBinding();
-            await LoadDataAsync(txtSearch.Text.Trim());
-        }
-        private void tsbSearch_Click(object sender, EventArgs e) => PerformSearch();
-        private void txtSearch_KeyDown(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { PerformSearch(); e.SuppressKeyPress = true; } }
-        private void tsbFirst_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; supplierBindingSource.ResumeBinding(); supplierBindingSource.MoveFirst(); }
-        private void tsbPrevious_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; supplierBindingSource.ResumeBinding(); supplierBindingSource.MovePrevious(); }
-        private void tsbNext_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; supplierBindingSource.ResumeBinding(); supplierBindingSource.MoveNext(); }
-        private void tsbLast_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; supplierBindingSource.ResumeBinding(); supplierBindingSource.MoveLast(); }
-
-        private void supplierBindingSource_CurrentChanged(object sender, EventArgs e)
-        {
-            if (_isLoading || _isNew) return;
-            if (supplierBindingSource.Current == null) ClearForm();
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
-
-        private void SelectSupplierById(int supplierId, bool triggerCurrentChanged = true)
-        {
-            if (supplierId <= 0) return;
-            if (supplierBindingSource.DataSource is List<Supplier> suppliers)
-            {
-                int index = suppliers.FindIndex(s => s.SupplierID == supplierId);
-                if (index != -1)
-                {
-                    if(!triggerCurrentChanged)
-                    {
-                        this.supplierBindingSource.CurrentChanged -= supplierBindingSource_CurrentChanged;
-                        supplierBindingSource.Position = index;
-                        this.supplierBindingSource.CurrentChanged += supplierBindingSource_CurrentChanged;
-                        if(supplierBindingSource.Current is Supplier sup)
-                        {
-                            txtSupplierID.Text = sup.SupplierID.ToString();
-                            txtSupplierName.Text = sup.SupplierName;
-                            txtContactPerson.Text = sup.ContactPerson;
-                            txtPhoneNumber.Text = sup.PhoneNumber;
-                            txtEmail.Text = sup.Email;
-                        }
-                    }
-                    else
-                    {
-                         supplierBindingSource.Position = index;
-                    }
-                }
-            }
-        }
-    }
-}
-```
-
----
-**File 5: `frmProducts.Designer.cs`**
----
-```csharp
-using System;
-using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
-using Store.Data.Models;
-
-namespace Store.Forms
-{
-    partial class frmProducts
-    {
-        private System.ComponentModel.IContainer components = null;
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null)) { components.Dispose(); }
-            base.Dispose(disposing);
-        }
-
-        #region Windows Form Designer generated code
-        private void InitializeComponent()
-        {
-            components = new Container();
-            ComponentResourceManager resources = new ComponentResourceManager(typeof(frmProducts));
-            toolStrip1 = new ToolStrip();
-            tsbNew = new ToolStripButton();
-            tsbSave = new ToolStripButton();
-            tsbDelete = new ToolStripButton();
-            toolStripSeparator1 = new ToolStripSeparator();
-            tsbFirst = new ToolStripButton();
-            tsbPrevious = new ToolStripButton();
-            tsbNext = new ToolStripButton();
-            tsbLast = new ToolStripButton();
-            toolStripSeparator2 = new ToolStripSeparator();
-            txtSearch = new ToolStripTextBox();
-            tsbSearch = new ToolStripButton();
-            statusStrip1 = new StatusStrip();
-            lblStatus = new ToolStripStatusLabel();
-            productBindingSource = new BindingSource(components);
-            groupBoxDetails = new GroupBox();
-            tableLayoutPanelDetails = new TableLayoutPanel();
-            lblProductID = new Label();
-            txtProductID = new TextBox();
-            lblProductName = new Label();
-            txtProductName = new TextBox();
-            lblDescription = new Label();
-            txtDescription = new TextBox();
-            lblCategory = new Label();
-            cmbCategory = new ComboBox();
-            categoryBindingSource = new BindingSource(components); // For cmbCategory
-            lblSupplier = new Label();
-            cmbSupplier = new ComboBox();
-            supplierBindingSource = new BindingSource(components); // For cmbSupplier
-            lblPurchasePrice = new Label();
-            txtPurchasePrice = new TextBox();
-            lblSellingPrice = new Label();
-            txtSellingPrice = new TextBox();
-            lblStockQuantity = new Label();
-            txtStockQuantity = new TextBox();
-            toolStrip1.SuspendLayout();
-            statusStrip1.SuspendLayout();
-            ((ISupportInitialize)productBindingSource).BeginInit();
-            ((ISupportInitialize)categoryBindingSource).BeginInit();
-            ((ISupportInitialize)supplierBindingSource).BeginInit();
-            groupBoxDetails.SuspendLayout();
-            tableLayoutPanelDetails.SuspendLayout();
-            SuspendLayout();
-            // 
-            // toolStrip1
-            // 
-            toolStrip1.BackColor = Color.FromArgb(240, 240, 240);
-            toolStrip1.Font = new Font("Segoe UI", 10F);
-            toolStrip1.GripStyle = ToolStripGripStyle.Hidden;
-            toolStrip1.ImageScalingSize = new Size(24, 24);
-            toolStrip1.Items.AddRange(new ToolStripItem[] { tsbNew, tsbSave, tsbDelete, toolStripSeparator1, tsbFirst, tsbPrevious, tsbNext, tsbLast, toolStripSeparator2, txtSearch, tsbSearch });
-            toolStrip1.Location = new Point(0, 0);
-            toolStrip1.Name = "toolStrip1";
-            toolStrip1.Padding = new Padding(8, 5, 8, 5);
-            toolStrip1.RenderMode = ToolStripRenderMode.System;
-            toolStrip1.Size = new Size(1118, 46);
-            toolStrip1.TabIndex = 0;
-            toolStrip1.Text = "toolStrip1";
-            // 
-            // tsbNew
-            // 
-            tsbNew.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNew.Image = (Image)resources.GetObject("tsbNew.Image");
-            tsbNew.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNew.ImageTransparentColor = Color.Magenta;
-            tsbNew.Margin = new Padding(4);
-            tsbNew.Name = "tsbNew";
-            tsbNew.Size = new Size(136, 28); 
-            tsbNew.Text = "New Product";
-            tsbNew.ToolTipText = "Add New Product (Ctrl+N)";
-            tsbNew.Click += tsbNew_Click;
-            // 
-            // tsbSave
-            // 
-            tsbSave.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbSave.Image = (Image)resources.GetObject("tsbSave.Image");
-            tsbSave.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbSave.ImageTransparentColor = Color.Magenta;
-            tsbSave.Margin = new Padding(4);
-            tsbSave.Name = "tsbSave";
-            tsbSave.Size = new Size(144, 28);
-            tsbSave.Text = "Save Changes";
-            tsbSave.ToolTipText = "Save Changes (Ctrl+S)";
-            tsbSave.Click += tsbSave_Click;
-            // 
-            // tsbDelete
-            // 
-            tsbDelete.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbDelete.Image = (Image)resources.GetObject("tsbDelete.Image");
-            tsbDelete.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbDelete.ImageTransparentColor = Color.Magenta;
-            tsbDelete.Margin = new Padding(4);
-            tsbDelete.Name = "tsbDelete";
-            tsbDelete.Size = new Size(151, 28); 
-            tsbDelete.Text = "Delete Product";
-            tsbDelete.ToolTipText = "Delete Selected Product (Del)";
-            tsbDelete.Click += tsbDelete_Click;
-            // 
-            // toolStripSeparator1
-            // 
-            toolStripSeparator1.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator1.Name = "toolStripSeparator1";
-            toolStripSeparator1.Size = new Size(6, 36);
-            // 
-            // tsbFirst
-            // 
-            tsbFirst.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbFirst.Image = (Image)resources.GetObject("tsbFirst.Image");
-            tsbFirst.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbFirst.ImageTransparentColor = Color.Magenta;
-            tsbFirst.Margin = new Padding(4);
-            tsbFirst.Name = "tsbFirst";
-            tsbFirst.Size = new Size(127, 28);
-            tsbFirst.Text = "First Record";
-            tsbFirst.ToolTipText = "Go to First Record (Ctrl+Home)";
-            tsbFirst.Click += tsbFirst_Click;
-            // 
-            // tsbPrevious
-            // 
-            tsbPrevious.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbPrevious.Image = (Image)resources.GetObject("tsbPrevious.Image");
-            tsbPrevious.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbPrevious.ImageTransparentColor = Color.Magenta;
-            tsbPrevious.Margin = new Padding(4);
-            tsbPrevious.Name = "tsbPrevious";
-            tsbPrevious.Size = new Size(160, 28);
-            tsbPrevious.Text = "Previous Record";
-            tsbPrevious.ToolTipText = "Go to Previous Record (Ctrl+Left)";
-            tsbPrevious.Click += tsbPrevious_Click;
-            // 
-            // tsbNext
-            // 
-            tsbNext.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNext.Image = (Image)resources.GetObject("tsbNext.Image");
-            tsbNext.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNext.ImageTransparentColor = Color.Magenta;
-            tsbNext.Margin = new Padding(4);
-            tsbNext.Name = "tsbNext";
-            tsbNext.Size = new Size(132, 28);
-            tsbNext.Text = "Next Record";
-            tsbNext.ToolTipText = "Go to Next Record (Ctrl+Right)";
-            tsbNext.Click += tsbNext_Click;
-            // 
-            // tsbLast
-            // 
-            tsbLast.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            tsbLast.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbLast.ImageTransparentColor = Color.Magenta;
-            tsbLast.Margin = new Padding(4);
-            tsbLast.Name = "tsbLast";
-            tsbLast.Size = new Size(102, 28);
-            tsbLast.Text = "Last Record";
-            tsbLast.ToolTipText = "Go to Last Record (Ctrl+End)";
-            tsbLast.Click += tsbLast_Click;
-            // 
-            // toolStripSeparator2
-            // 
-            toolStripSeparator2.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator2.Name = "toolStripSeparator2";
-            toolStripSeparator2.Size = new Size(6, 36);
-            // 
-            // txtSearch
-            // 
-            txtSearch.Alignment = ToolStripItemAlignment.Right;
-            txtSearch.BackColor = Color.White;
-            txtSearch.BorderStyle = BorderStyle.FixedSingle;
-            txtSearch.Font = new Font("Segoe UI", 10F);
-            txtSearch.ForeColor = Color.FromArgb(64, 64, 64);
-            txtSearch.Margin = new Padding(1, 2, 6, 2);
-            txtSearch.Name = "txtSearch";
-            txtSearch.Size = new Size(200, 27);
-            txtSearch.ToolTipText = "Enter search term and press Enter or click Search";
-            txtSearch.KeyDown += txtSearch_KeyDown;
-            // 
-            // tsbSearch
-            // 
-            tsbSearch.Alignment = ToolStripItemAlignment.Right;
-            tsbSearch.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            tsbSearch.Image = (Image)resources.GetObject("tsbSearch.Image");
-            tsbSearch.ImageTransparentColor = Color.Magenta;
-            tsbSearch.Margin = new Padding(1, 2, 1, 2);
-            tsbSearch.Name = "tsbSearch";
-            tsbSearch.Size = new Size(28, 28);
-            tsbSearch.Text = "Search";
-            tsbSearch.ToolTipText = "Search Products";
-            tsbSearch.Click += tsbSearch_Click;
-            // 
-            // statusStrip1
-            // 
-            statusStrip1.BackColor = Color.FromArgb(248, 248, 248);
-            statusStrip1.ImageScalingSize = new Size(20, 20);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { lblStatus });
-            statusStrip1.Location = new Point(0, 592);
-            statusStrip1.Name = "statusStrip1";
-            statusStrip1.Padding = new Padding(1, 0, 16, 0);
-            statusStrip1.Size = new Size(1118, 22);
-            statusStrip1.TabIndex = 2;
-            statusStrip1.Text = "statusStrip1";
-            // 
-            // lblStatus
-            // 
-            lblStatus.Font = new Font("Segoe UI", 9F);
-            lblStatus.ForeColor = Color.FromArgb(80, 80, 80);
-            lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(1101, 16);
-            lblStatus.Spring = true;
-            lblStatus.TextAlign = ContentAlignment.MiddleLeft;
-            // 
-            // productBindingSource
-            // 
-            productBindingSource.DataSource = typeof(Product);
-            productBindingSource.CurrentChanged += productBindingSource_CurrentChanged;
-            // 
-            // categoryBindingSource
-            //
-            categoryBindingSource.DataSource = typeof(Category);
-            //
-            // supplierBindingSource
-            //
-            supplierBindingSource.DataSource = typeof(Supplier);
-            // 
-            // groupBoxDetails
-            // 
-            groupBoxDetails.Controls.Add(tableLayoutPanelDetails);
-            groupBoxDetails.Dock = DockStyle.Fill;
-            groupBoxDetails.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
-            groupBoxDetails.ForeColor = Color.FromArgb(55, 55, 55);
-            groupBoxDetails.Location = new Point(0, 46); 
-            groupBoxDetails.Margin = new Padding(10);
-            groupBoxDetails.Name = "groupBoxDetails";
-            groupBoxDetails.Padding = new Padding(20);
-            groupBoxDetails.Size = new Size(1118, 546); 
-            groupBoxDetails.TabIndex = 1;
-            groupBoxDetails.TabStop = false;
-            groupBoxDetails.Text = "Product Details";
-            // 
-            // tableLayoutPanelDetails
-            // 
-            tableLayoutPanelDetails.ColumnCount = 2;
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Controls.Add(lblProductID, 0, 0);
-            tableLayoutPanelDetails.Controls.Add(txtProductID, 1, 0);
-            tableLayoutPanelDetails.Controls.Add(lblProductName, 0, 1);
-            tableLayoutPanelDetails.Controls.Add(txtProductName, 1, 1);
-            tableLayoutPanelDetails.Controls.Add(lblDescription, 0, 2);
-            tableLayoutPanelDetails.Controls.Add(txtDescription, 1, 2);
-            tableLayoutPanelDetails.Controls.Add(lblCategory, 0, 3);
-            tableLayoutPanelDetails.Controls.Add(cmbCategory, 1, 3);
-            tableLayoutPanelDetails.Controls.Add(lblSupplier, 0, 4);
-            tableLayoutPanelDetails.Controls.Add(cmbSupplier, 1, 4);
-            tableLayoutPanelDetails.Controls.Add(lblPurchasePrice, 0, 5);
-            tableLayoutPanelDetails.Controls.Add(txtPurchasePrice, 1, 5);
-            tableLayoutPanelDetails.Controls.Add(lblSellingPrice, 0, 6);
-            tableLayoutPanelDetails.Controls.Add(txtSellingPrice, 1, 6);
-            tableLayoutPanelDetails.Controls.Add(lblStockQuantity, 0, 7);
-            tableLayoutPanelDetails.Controls.Add(txtStockQuantity, 1, 7);
-            tableLayoutPanelDetails.Dock = DockStyle.Fill;
-            tableLayoutPanelDetails.Location = new Point(20, 43);
-            tableLayoutPanelDetails.Margin = new Padding(0);
-            tableLayoutPanelDetails.Name = "tableLayoutPanelDetails";
-            tableLayoutPanelDetails.RowCount = 9; // 8 for fields, 1 for spacer
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 80F)); // Description
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F)); // Category
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F)); // Supplier
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F)); // Purchase Price
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F)); // Selling Price
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F)); // Stock
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Size = new Size(1078, 483); 
-            tableLayoutPanelDetails.TabIndex = 0;
-            // 
-            // lblProductID
-            // 
-            lblProductID.Anchor = AnchorStyles.Left; lblProductID.AutoSize = true;
-            lblProductID.Font = new Font("Segoe UI", 10F); lblProductID.ForeColor = Color.FromArgb(80, 80, 80);
-            lblProductID.Location = new Point(3, 11); lblProductID.Name = "lblProductID";
-            lblProductID.Size = new Size(96, 23); lblProductID.TabIndex = 0; lblProductID.Text = "Product ID:";
-            // 
-            // txtProductID
-            // 
-            txtProductID.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtProductID.BackColor = Color.FromArgb(245, 245, 245); txtProductID.BorderStyle = BorderStyle.FixedSingle;
-            txtProductID.Font = new Font("Segoe UI", 10F); txtProductID.ForeColor = Color.FromArgb(100, 100, 100);
-            txtProductID.Location = new Point(153, 7); txtProductID.Margin = new Padding(3, 4, 10, 4);
-            txtProductID.Name = "txtProductID"; txtProductID.ReadOnly = true;
-            txtProductID.Size = new Size(915, 30); txtProductID.TabIndex = 99; txtProductID.TabStop = false;
-            // 
-            // lblProductName
-            // 
-            lblProductName.Anchor = AnchorStyles.Left; lblProductName.AutoSize = true;
-            lblProductName.Font = new Font("Segoe UI", 10F); lblProductName.ForeColor = Color.FromArgb(80, 80, 80);
-            lblProductName.Location = new Point(3, 56); lblProductName.Name = "lblProductName";
-            lblProductName.Size = new Size(125, 23); lblProductName.TabIndex = 2; lblProductName.Text = "Product Name:";
-            // 
-            // txtProductName
-            // 
-            txtProductName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtProductName.BorderStyle = BorderStyle.FixedSingle; txtProductName.Font = new Font("Segoe UI", 10F);
-            txtProductName.ForeColor = Color.FromArgb(50, 50, 50);
-            txtProductName.Location = new Point(153, 52); txtProductName.Margin = new Padding(3, 4, 10, 4);
-            txtProductName.MaxLength = 100; txtProductName.Name = "txtProductName";
-            txtProductName.Size = new Size(915, 30); txtProductName.TabIndex = 0;
-            // 
-            // lblDescription
-            // 
-            lblDescription.AutoSize = true; lblDescription.Font = new Font("Segoe UI", 10F);
-            lblDescription.ForeColor = Color.FromArgb(80, 80, 80);
-            lblDescription.Location = new Point(3, 98); 
-            lblDescription.Margin = new Padding(3, 8, 3, 0); lblDescription.Name = "lblDescription";
-            lblDescription.Size = new Size(100, 23); lblDescription.TabIndex = 4; lblDescription.Text = "Description:";
-            // 
-            // txtDescription
-            // 
-            txtDescription.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtDescription.BorderStyle = BorderStyle.FixedSingle; txtDescription.Font = new Font("Segoe UI", 10F);
-            txtDescription.ForeColor = Color.FromArgb(50, 50, 50);
-            txtDescription.Location = new Point(153, 94); txtDescription.Margin = new Padding(3, 4, 10, 4);
-            txtDescription.MaxLength = 1000; txtDescription.Multiline = true; txtDescription.Name = "txtDescription";
-            txtDescription.ScrollBars = ScrollBars.Vertical; txtDescription.Size = new Size(915, 72);
-            txtDescription.TabIndex = 1;
-            // 
-            // lblCategory
-            // 
-            lblCategory.Anchor = AnchorStyles.Left; lblCategory.AutoSize = true;
-            lblCategory.Font = new Font("Segoe UI", 10F); lblCategory.ForeColor = Color.FromArgb(80, 80, 80);
-            lblCategory.Location = new Point(3, 181); lblCategory.Name = "lblCategory";
-            lblCategory.Size = new Size(83, 23); lblCategory.TabIndex = 6; lblCategory.Text = "Category:";
-            // 
-            // cmbCategory
-            // 
-            cmbCategory.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            cmbCategory.DataSource = categoryBindingSource; // Bind to its own source
-            cmbCategory.DisplayMember = "CategoryName";
-            cmbCategory.ValueMember = "CategoryID";
-            cmbCategory.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbCategory.Font = new Font("Segoe UI", 10F); cmbCategory.ForeColor = Color.FromArgb(50, 50, 50);
-            cmbCategory.FormattingEnabled = true; cmbCategory.Location = new Point(153, 178);
-            cmbCategory.Margin = new Padding(3, 4, 10, 4); cmbCategory.Name = "cmbCategory";
-            cmbCategory.Size = new Size(915, 31); cmbCategory.TabIndex = 2;
-            // 
-            // lblSupplier
-            // 
-            lblSupplier.Anchor = AnchorStyles.Left; lblSupplier.AutoSize = true;
-            lblSupplier.Font = new Font("Segoe UI", 10F); lblSupplier.ForeColor = Color.FromArgb(80, 80, 80);
-            lblSupplier.Location = new Point(3, 226); lblSupplier.Name = "lblSupplier";
-            lblSupplier.Size = new Size(76, 23); lblSupplier.TabIndex = 8; lblSupplier.Text = "Supplier:";
-            // 
-            // cmbSupplier
-            // 
-            cmbSupplier.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            cmbSupplier.DataSource = supplierBindingSource; // Bind to its own source
-            cmbSupplier.DisplayMember = "SupplierName";
-            cmbSupplier.ValueMember = "SupplierID";
-            cmbSupplier.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbSupplier.Font = new Font("Segoe UI", 10F); cmbSupplier.ForeColor = Color.FromArgb(50, 50, 50);
-            cmbSupplier.FormattingEnabled = true; cmbSupplier.Location = new Point(153, 223);
-            cmbSupplier.Margin = new Padding(3, 4, 10, 4); cmbSupplier.Name = "cmbSupplier";
-            cmbSupplier.Size = new Size(915, 31); cmbSupplier.TabIndex = 3;
-            // 
-            // lblPurchasePrice
-            // 
-            lblPurchasePrice.Anchor = AnchorStyles.Left; lblPurchasePrice.AutoSize = true;
-            lblPurchasePrice.Font = new Font("Segoe UI", 10F); lblPurchasePrice.ForeColor = Color.FromArgb(80, 80, 80);
-            lblPurchasePrice.Location = new Point(3, 271); lblPurchasePrice.Name = "lblPurchasePrice";
-            lblPurchasePrice.Size = new Size(125, 23); lblPurchasePrice.TabIndex = 10; lblPurchasePrice.Text = "Purchase Price:";
-            // 
-            // txtPurchasePrice
-            // 
-            txtPurchasePrice.Anchor = AnchorStyles.Left; 
-            txtPurchasePrice.BorderStyle = BorderStyle.FixedSingle; txtPurchasePrice.Font = new Font("Segoe UI", 10F);
-            txtPurchasePrice.ForeColor = Color.FromArgb(50, 50, 50);
-            txtPurchasePrice.Location = new Point(153, 267); txtPurchasePrice.Margin = new Padding(3, 4, 10, 4);
-            txtPurchasePrice.MaxLength = 15; txtPurchasePrice.Name = "txtPurchasePrice";
-            txtPurchasePrice.Size = new Size(200, 30); txtPurchasePrice.TabIndex = 4;
-            txtPurchasePrice.TextAlign = HorizontalAlignment.Right;
-            // 
-            // lblSellingPrice
-            // 
-            lblSellingPrice.Anchor = AnchorStyles.Left; lblSellingPrice.AutoSize = true;
-            lblSellingPrice.Font = new Font("Segoe UI", 10F); lblSellingPrice.ForeColor = Color.FromArgb(80, 80, 80);
-            lblSellingPrice.Location = new Point(3, 316); lblSellingPrice.Name = "lblSellingPrice";
-            lblSellingPrice.Size = new Size(106, 23); lblSellingPrice.TabIndex = 12; lblSellingPrice.Text = "Selling Price:";
-            // 
-            // txtSellingPrice
-            // 
-            txtSellingPrice.Anchor = AnchorStyles.Left; 
-            txtSellingPrice.BorderStyle = BorderStyle.FixedSingle; txtSellingPrice.Font = new Font("Segoe UI", 10F);
-            txtSellingPrice.ForeColor = Color.FromArgb(50, 50, 50);
-            txtSellingPrice.Location = new Point(153, 312); txtSellingPrice.Margin = new Padding(3, 4, 10, 4);
-            txtSellingPrice.MaxLength = 15; txtSellingPrice.Name = "txtSellingPrice";
-            txtSellingPrice.Size = new Size(200, 30); txtSellingPrice.TabIndex = 5;
-            txtSellingPrice.TextAlign = HorizontalAlignment.Right;
-            // 
-            // lblStockQuantity
-            // 
-            lblStockQuantity.Anchor = AnchorStyles.Left; lblStockQuantity.AutoSize = true;
-            lblStockQuantity.Font = new Font("Segoe UI", 10F); lblStockQuantity.ForeColor = Color.FromArgb(80, 80, 80);
-            lblStockQuantity.Location = new Point(3, 361); lblStockQuantity.Name = "lblStockQuantity";
-            lblStockQuantity.Size = new Size(125, 23); lblStockQuantity.TabIndex = 14; lblStockQuantity.Text = "Stock Quantity:";
-            // 
-            // txtStockQuantity
-            // 
-            txtStockQuantity.Anchor = AnchorStyles.Left;
-            txtStockQuantity.BorderStyle = BorderStyle.FixedSingle; txtStockQuantity.Font = new Font("Segoe UI", 10F);
-            txtStockQuantity.ForeColor = Color.FromArgb(50, 50, 50);
-            txtStockQuantity.Location = new Point(153, 357); txtStockQuantity.Margin = new Padding(3, 4, 10, 4);
-            txtStockQuantity.MaxLength = 10; txtStockQuantity.Name = "txtStockQuantity";
-            txtStockQuantity.Size = new Size(150, 30); txtStockQuantity.TabIndex = 6;
-            txtStockQuantity.TextAlign = HorizontalAlignment.Right;
-            // 
-            // frmProducts
-            // 
-            AutoScaleDimensions = new SizeF(8F, 20F);
-            AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.White;
-            ClientSize = new Size(1118, 614);
-            Controls.Add(groupBoxDetails);
-            Controls.Add(statusStrip1);
-            Controls.Add(toolStrip1);
-            Font = new Font("Segoe UI", 9F);
-            ForeColor = Color.FromArgb(64, 64, 64);
-            MinimumSize = new Size(700, 600); // Adjusted min height
-            Name = "frmProducts";
-            Text = "Manage Products";
-            Load += frmProducts_Load;
-            toolStrip1.ResumeLayout(false);
-            toolStrip1.PerformLayout();
-            statusStrip1.ResumeLayout(false);
-            statusStrip1.PerformLayout();
-            ((ISupportInitialize)productBindingSource).EndInit();
-            ((ISupportInitialize)categoryBindingSource).EndInit();
-            ((ISupportInitialize)supplierBindingSource).EndInit();
-            groupBoxDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.PerformLayout();
-            ResumeLayout(false);
-            PerformLayout();
-        }
-        #endregion
-
-        private ToolStrip toolStrip1;
-        private ToolStripButton tsbNew;
-        private ToolStripButton tsbSave;
-        private ToolStripButton tsbDelete;
-        private ToolStripSeparator toolStripSeparator1;
-        private ToolStripButton tsbFirst;
-        private ToolStripButton tsbPrevious;
-        private ToolStripButton tsbNext;
-        private ToolStripButton tsbLast;
-        private ToolStripSeparator toolStripSeparator2;
-        private ToolStripTextBox txtSearch;
-        private ToolStripButton tsbSearch;
-        private StatusStrip statusStrip1;
-        private ToolStripStatusLabel lblStatus;
-        private BindingSource productBindingSource;
-        private BindingSource categoryBindingSource;
-        private BindingSource supplierBindingSource;
-        private GroupBox groupBoxDetails;
-        private TableLayoutPanel tableLayoutPanelDetails;
-        private Label lblProductID;
-        private TextBox txtProductID;
-        private Label lblProductName;
-        private TextBox txtProductName;
-        private Label lblDescription;
-        private TextBox txtDescription;
-        private Label lblCategory;
-        private ComboBox cmbCategory;
-        private Label lblSupplier;
-        private ComboBox cmbSupplier;
-        private Label lblPurchasePrice;
-        private TextBox txtPurchasePrice;
-        private Label lblSellingPrice;
-        private TextBox txtSellingPrice;
-        private Label lblStockQuantity;
-        private TextBox txtStockQuantity;
-    }
-}
-```
-
----
-**File 6: `frmProducts.cs`**
----
-```csharp
-using Microsoft.EntityFrameworkCore;
-using Store.Data.Models;
-using Store.Services;
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
-namespace Store.Forms
-{
-    public partial class frmProducts : Form
-    {
-        private readonly ProductService _productService;
-        // Assuming ProductService can provide lists for dropdowns, 
-        // or inject CategoryService and SupplierService if they handle that.
-        // For this example, ProductService will have methods GetCategoriesForDropdownAsync and GetSuppliersForDropdownAsync
-        private bool _isNew = false;
-        private bool _isLoading = false;
-        private bool _isLoadingComboBoxes = false;
-
-        public frmProducts(ProductService productService)
-        {
-            InitializeComponent();
-            _productService = productService;
-        }
-
-        private async void frmProducts_Load(object sender, EventArgs e)
-        {
-            _isLoading = true;
-            _isLoadingComboBoxes = true;
-            await LoadComboBoxesAsync();
-            _isLoadingComboBoxes = false;
-            await LoadDataAsync();
-            SetupBindings(); // Bindings for main product data
-            _isLoading = false;
-            if (productBindingSource.Count > 0 && productBindingSource.Position < 0)
-            {
-                productBindingSource.MoveFirst();
-            }
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
-
-        private async Task LoadComboBoxesAsync()
-        {
-            try
-            {
-                var categories = await _productService.GetCategoriesForDropdownAsync();
-                var suppliers = await _productService.GetSuppliersForDropdownAsync();
-
-                // Add placeholder for "None" or "Select"
-                categories.Insert(0, new Category { CategoryID = 0, CategoryName = "(Select Category)" });
-                suppliers.Insert(0, new Supplier { SupplierID = 0, SupplierName = "(Select Supplier)" });
-                
-                categoryBindingSource.DataSource = categories; // Use the dedicated BindingSource
-                supplierBindingSource.DataSource = suppliers;   // Use the dedicated BindingSource
-
-                // cmbCategory.DataSource already set via designer to categoryBindingSource
-                // cmbSupplier.DataSource already set via designer to supplierBindingSource
-
-                if (cmbCategory.Items.Count > 0) cmbCategory.SelectedIndex = 0;
-                if (cmbSupplier.Items.Count > 0) cmbSupplier.SelectedIndex = 0;
-
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading dropdown data: {ex.Message}", "Dropdown Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                cmbCategory.Enabled = false;
-                cmbSupplier.Enabled = false;
-            }
-        }
-        
-        private async Task LoadDataAsync(string? searchTerm = null)
-        {
-            ToggleControls(false, true);
-            lblStatus.Text = "Loading products...";
-            try
-            {
-                List<Product> products;
-                if (string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    products = await _productService.GetAllProductsAsync();
-                }
-                else
-                {
-                    products = await _productService.SearchProductsAsync(searchTerm);
-                }
-                
-                var currentId = (productBindingSource.Current as Product)?.ProductID;
-
-                productBindingSource.DataSource = products;
-                productBindingSource.ResetBindings(false);
-
-                if (products.Count == 0)
-                {
-                    lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? "No products found. Click 'New' to add one." : $"No products matching '{searchTerm}'.";
-                    ClearForm();
-                    SetupBindings(); 
-                }
-                else
-                {
-                    lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? $"Displaying {products.Count} products." : $"Found {products.Count} matching '{searchTerm}'.";
-                    if (currentId.HasValue)
-                    {
-                        SelectProductById(currentId.Value, false);
-                    }
-                    if (productBindingSource.Position < 0 && products.Count > 0)
-                    {
-                        productBindingSource.MoveFirst();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading products: {ex.Message}", "Loading Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Error loading data.";
-            }
-            finally
-            {
-                 if (!_isLoading)
-                {
-                    UpdateButtonStates();
-                    UpdateNavigationState();
-                }
-                ToggleControls(true, true);
-            }
-        }
-
-        private void SetupBindings()
-        {
-            txtProductID.DataBindings.Clear();
-            txtProductName.DataBindings.Clear();
-            txtDescription.DataBindings.Clear();
-            cmbCategory.DataBindings.Clear(); // For Product.CategoryID
-            cmbSupplier.DataBindings.Clear(); // For Product.SupplierID
-            txtPurchasePrice.DataBindings.Clear();
-            txtSellingPrice.DataBindings.Clear();
-            txtStockQuantity.DataBindings.Clear();
-
-            txtProductID.DataBindings.Add("Text", productBindingSource, "ProductID", true, DataSourceUpdateMode.Never);
-            txtProductName.DataBindings.Add("Text", productBindingSource, "ProductName", false, DataSourceUpdateMode.OnValidation);
-            txtDescription.DataBindings.Add("Text", productBindingSource, "Description", true, DataSourceUpdateMode.OnValidation, string.Empty, "");
-            
-            // Bind the SelectedValue of ComboBoxes to the Product's foreign key properties
-            cmbCategory.DataBindings.Add("SelectedValue", productBindingSource, "CategoryID", true, DataSourceUpdateMode.OnValidation, DBNull.Value);
-            cmbSupplier.DataBindings.Add("SelectedValue", productBindingSource, "SupplierID", true, DataSourceUpdateMode.OnValidation, DBNull.Value);
-
-            txtPurchasePrice.DataBindings.Add("Text", productBindingSource, "PurchasePrice", true, DataSourceUpdateMode.OnValidation, DBNull.Value, "N2");
-            txtSellingPrice.DataBindings.Add("Text", productBindingSource, "SellingPrice", true, DataSourceUpdateMode.OnValidation, DBNull.Value, "N2");
-            txtStockQuantity.DataBindings.Add("Text", productBindingSource, "StockQuantity", true, DataSourceUpdateMode.OnValidation, 0);
-        }
-
-        private void ClearForm()
-        {
-            productBindingSource.SuspendBinding();
-            txtProductID.Clear();
-            txtProductName.Clear();
-            txtDescription.Clear();
-            if (cmbCategory.Items.Count > 0) cmbCategory.SelectedIndex = 0;
-            if (cmbSupplier.Items.Count > 0) cmbSupplier.SelectedIndex = 0;
-            txtPurchasePrice.Clear();
-            txtSellingPrice.Clear();
-            txtStockQuantity.Text = "0";
-            productBindingSource.ResumeBinding();
-        }
-
-        private void ToggleControls(bool enabled, bool keepToolbarEnabled = false)
-        {
-            groupBoxDetails.Enabled = enabled;
-            if (!keepToolbarEnabled) toolStrip1.Enabled = enabled;
-            else toolStrip1.Enabled = true;
-            this.Cursor = enabled ? Cursors.Default : Cursors.WaitCursor;
-        }
-        
-        private void UpdateButtonStates()
-        {
-            if (_isLoading) return;
-            bool hasItems = productBindingSource.Count > 0;
-            bool isItemSelected = productBindingSource.Current != null;
-
-            tsbSave.Enabled = _isNew || (isItemSelected && !string.IsNullOrWhiteSpace(txtProductName.Text));
-            tsbDelete.Enabled = isItemSelected && !_isNew;
-            tsbFirst.Enabled = isItemSelected && !_isNew && productBindingSource.Position > 0;
-            tsbPrevious.Enabled = isItemSelected && !_isNew && productBindingSource.Position > 0;
-            tsbNext.Enabled = isItemSelected && !_isNew && productBindingSource.Position < productBindingSource.Count - 1;
-            tsbLast.Enabled = isItemSelected && !_isNew && productBindingSource.Position < productBindingSource.Count - 1;
-            tsbNew.Enabled = toolStrip1.Enabled;
-            txtSearch.Enabled = toolStrip1.Enabled;
-            tsbSearch.Enabled = toolStrip1.Enabled;
-        }
-
-        private void UpdateNavigationState()
-        {
-             if (_isLoading) return;
-            bool hasItems = productBindingSource.Count > 0;
-            bool isItemSelected = productBindingSource.Current != null;
-
-            if (_isNew)
-            {
-                lblStatus.Text = "Adding new product...";
-                groupBoxDetails.Enabled = true;
-            }
-            else if (isItemSelected)
-            {
-                lblStatus.Text = $"Record {productBindingSource.Position + 1} of {productBindingSource.Count}";
-                 groupBoxDetails.Enabled = true;
-            }
-            else
-            {
-                lblStatus.Text = hasItems ? "No product selected." : (string.IsNullOrWhiteSpace(txtSearch.Text) ? "No products found." : $"No products matching '{txtSearch.Text}'.");
-                groupBoxDetails.Enabled = false;
-                if (!hasItems) ClearForm();
-            }
-            UpdateButtonStates();
-        }
-
-        private void tsbNew_Click(object sender, EventArgs e)
-        {
-            _isNew = true;
-            productBindingSource.SuspendBinding();
-            ClearForm();
-            txtProductName.Focus();
-            UpdateNavigationState();
-        }
-
-        private async void tsbSave_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(txtProductName.Text))
-            {
-                MessageBox.Show("Product Name cannot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtProductName.Focus(); return;
-            }
-            if (!decimal.TryParse(txtSellingPrice.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out decimal sellingPrice) || sellingPrice < 0)
-            {
-                MessageBox.Show("Selling Price must be a valid non-negative number.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtSellingPrice.Focus(); return;
-            }
-            if (!int.TryParse(txtStockQuantity.Text, out int stockQuantity) || stockQuantity < 0)
-            {
-                MessageBox.Show("Stock Quantity must be a valid non-negative integer.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtStockQuantity.Focus(); return;
-            }
-            decimal? purchasePrice = null;
-            if (!string.IsNullOrWhiteSpace(txtPurchasePrice.Text))
-            {
-                if (!decimal.TryParse(txtPurchasePrice.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out decimal pp) || pp < 0)
-                {
-                    MessageBox.Show("Purchase Price must be valid non-negative or empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtPurchasePrice.Focus(); return;
-                }
-                purchasePrice = pp;
-            }
-
-             if (!_isNew && productBindingSource.Current != null)
-            {
-                productBindingSource.EndEdit();
-            }
-
-            ToggleControls(false);
-            lblStatus.Text = "Saving...";
-
-            try
-            {
-                bool success = false;
-                Product? productToSave = null;
-                bool wasNewItemInitially = _isNew;
-
-                int? categoryId = (cmbCategory.SelectedValue != null && (int)cmbCategory.SelectedValue != 0) ? (int)cmbCategory.SelectedValue : (int?)null;
-                int? supplierId = (cmbSupplier.SelectedValue != null && (int)cmbSupplier.SelectedValue != 0) ? (int)cmbSupplier.SelectedValue : (int?)null;
-                
-                if (_isNew)
-                {
-                    productToSave = new Product
-                    {
-                        ProductName = txtProductName.Text.Trim(),
-                        Description = string.IsNullOrWhiteSpace(txtDescription.Text) ? null : txtDescription.Text.Trim(),
-                        CategoryID = categoryId,
-                        SupplierID = supplierId,
-                        PurchasePrice = purchasePrice,
-                        SellingPrice = sellingPrice,
-                        StockQuantity = stockQuantity
-                    };
-                    success = await _productService.AddProductAsync(productToSave);
-                    if (success) lblStatus.Text = "Product added successfully.";
-                }
-                else
-                {
-                    if (productBindingSource.Current is Product currentProduct)
-                    {
-                        currentProduct.ProductName = txtProductName.Text.Trim();
-                        currentProduct.Description = string.IsNullOrWhiteSpace(txtDescription.Text) ? null : txtDescription.Text.Trim();
-                        currentProduct.CategoryID = categoryId;
-                        currentProduct.SupplierID = supplierId;
-                        currentProduct.PurchasePrice = purchasePrice;
-                        currentProduct.SellingPrice = sellingPrice;
-                        currentProduct.StockQuantity = stockQuantity;
-                        productToSave = currentProduct;
-                        success = await _productService.UpdateProductAsync(currentProduct);
-                        if (success) lblStatus.Text = "Product updated successfully.";
-                    }
-                     else
-                    {
-                         MessageBox.Show("No product selected to update.", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                         lblStatus.Text = "No product selected.";
-                    }
-                }
-
-                if (success)
-                {
-                    _isNew = false;
-                    int savedItemId = productToSave?.ProductID ?? -1;
-                    string? currentSearchTerm = wasNewItemInitially ? null : txtSearch.Text;
-                    if (wasNewItemInitially) txtSearch.Clear();
-                    
-                    await LoadDataAsync(currentSearchTerm);
-                    
-                    if (savedItemId > 0) SelectProductById(savedItemId);
-                    else if(productBindingSource.Count > 0) productBindingSource.MoveFirst();
-                }
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                MessageBox.Show("Record modified. Reload and try again.", "Concurrency Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                lblStatus.Text = "Save failed due to concurrency.";
-                await LoadDataAsync(txtSearch.Text);
-            }
-            catch (DbUpdateException dbEx)
-            {
-                 string errorMessage = $"Database error: {dbEx.InnerException?.Message ?? dbEx.Message}.";
-                 if (dbEx.InnerException?.Message.Contains("UNIQUE KEY constraint") == true || 
-                    dbEx.InnerException?.Message.Contains("duplicate key value violates unique constraint") == true)
-                {
-                    errorMessage += "\nA product with the same name might already exist if it's unique.";
-                }
-                MessageBox.Show(errorMessage, "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Database save error.";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Save error.";
-            }
-            finally
-            {
-                if (!success) { 
-                     ToggleControls(true);
-                     UpdateButtonStates();
-                     UpdateNavigationState();
-                }
-            }
-        }
-
-        private async void tsbDelete_Click(object sender, EventArgs e)
-        {
-            if (_isNew) {
-                MessageBox.Show("Cannot delete an unsaved new product.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            if (productBindingSource.Current is Product currentProduct)
-            {
-                var confirmResult = MessageBox.Show($"Delete product '{currentProduct.ProductName}' (ID: {currentProduct.ProductID})?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (confirmResult == DialogResult.Yes)
-                {
-                    ToggleControls(false);
-                    lblStatus.Text = "Deleting...";
-                    try
-                    {
-                        bool success = await _productService.DeleteProductAsync(currentProduct.ProductID);
-                        if (success) lblStatus.Text = "Product deleted.";
-                        await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                    catch (DbUpdateException dbEx)
-                    {
-                        MessageBox.Show($"Database error: {dbEx.InnerException?.Message ?? dbEx.Message}.\nProduct might be in an order.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Database delete error.";
-                         await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"An error occurred: {ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Delete error.";
-                         await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                }
-            }
-            else
-            {
-                MessageBox.Show("No product selected.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private async void PerformSearch()
-        {
-            _isNew = false; productBindingSource.ResumeBinding();
-            await LoadDataAsync(txtSearch.Text.Trim());
-        }
-        private void tsbSearch_Click(object sender, EventArgs e) => PerformSearch();
-        private void txtSearch_KeyDown(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { PerformSearch(); e.SuppressKeyPress = true; } }
-        private void tsbFirst_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; productBindingSource.ResumeBinding(); productBindingSource.MoveFirst(); }
-        private void tsbPrevious_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; productBindingSource.ResumeBinding(); productBindingSource.MovePrevious(); }
-        private void tsbNext_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; productBindingSource.ResumeBinding(); productBindingSource.MoveNext(); }
-        private void tsbLast_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; productBindingSource.ResumeBinding(); productBindingSource.MoveLast(); }
-
-        private void productBindingSource_CurrentChanged(object sender, EventArgs e)
-        {
-            if (_isLoading || _isNew || _isLoadingComboBoxes) return;
-            if (productBindingSource.Current == null) ClearForm();
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
-
-        private void SelectProductById(int productId, bool triggerCurrentChanged = true)
-        {
-            if (productId <= 0) return;
-            if (productBindingSource.DataSource is List<Product> products)
-            {
-                int index = products.FindIndex(p => p.ProductID == productId);
-                if (index != -1)
-                {
-                     if(!triggerCurrentChanged)
-                    {
-                        this.productBindingSource.CurrentChanged -= productBindingSource_CurrentChanged;
-                        productBindingSource.Position = index;
-                        this.productBindingSource.CurrentChanged += productBindingSource_CurrentChanged;
-
-                        if(productBindingSource.Current is Product prod)
-                        {
-                             txtProductID.Text = prod.ProductID.ToString();
-                             txtProductName.Text = prod.ProductName;
-                             txtDescription.Text = prod.Description;
-                             cmbCategory.SelectedValue = prod.CategoryID ?? 0;
-                             cmbSupplier.SelectedValue = prod.SupplierID ?? 0;
-                             txtPurchasePrice.Text = prod.PurchasePrice?.ToString("N2") ?? "";
-                             txtSellingPrice.Text = prod.SellingPrice.ToString("N2");
-                             txtStockQuantity.Text = prod.StockQuantity.ToString();
-                        }
-                    }
-                    else
-                    {
-                        productBindingSource.Position = index;
-                    }
-                }
-            }
-        }
-    }
-}
-```
-
----
-**File 7: `frmCustomers.Designer.cs`**
----
-```csharp
-using System;
-using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
-using Store.Data.Models; 
-
-namespace Store.Forms
-{
-    partial class frmCustomers
-    {
-        private System.ComponentModel.IContainer components = null;
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null))
-            {
-                components.Dispose();
-            }
-            base.Dispose(disposing);
-        }
-
-        #region Windows Form Designer generated code
-
-        private void InitializeComponent()
-        {
-            components = new Container();
-            ComponentResourceManager resources = new ComponentResourceManager(typeof(frmCustomers));
-            toolStrip1 = new ToolStrip();
-            tsbNew = new ToolStripButton();
-            tsbSave = new ToolStripButton();
-            tsbDelete = new ToolStripButton();
-            toolStripSeparator1 = new ToolStripSeparator();
-            tsbFirst = new ToolStripButton();
-            tsbPrevious = new ToolStripButton();
-            tsbNext = new ToolStripButton();
-            tsbLast = new ToolStripButton();
-            toolStripSeparator2 = new ToolStripSeparator();
-            txtSearch = new ToolStripTextBox();
-            tsbSearch = new ToolStripButton();
-            statusStrip1 = new StatusStrip();
-            lblStatus = new ToolStripStatusLabel();
-            customerBindingSource = new BindingSource(components);
-            groupBoxDetails = new GroupBox();
-            tableLayoutPanelDetails = new TableLayoutPanel();
-            lblCustomerID = new Label();
-            txtCustomerID = new TextBox();
-            lblFirstName = new Label();
-            txtFirstName = new TextBox();
-            lblLastName = new Label();
-            txtLastName = new TextBox();
-            lblPhoneNumber = new Label();
-            txtPhoneNumber = new TextBox();
-            lblEmail = new Label();
-            txtEmail = new TextBox();
-            lblAddress = new Label();
-            txtAddress = new TextBox();
-            toolStrip1.SuspendLayout();
-            statusStrip1.SuspendLayout();
-            ((ISupportInitialize)customerBindingSource).BeginInit();
-            groupBoxDetails.SuspendLayout();
-            tableLayoutPanelDetails.SuspendLayout();
-            SuspendLayout();
-            //
-            // toolStrip1
-            //
-            toolStrip1.Font = new Font("Segoe UI", 10F);
-            toolStrip1.GripStyle = ToolStripGripStyle.Hidden;
-            toolStrip1.ImageScalingSize = new Size(24, 24);
-            toolStrip1.Items.AddRange(new ToolStripItem[] { tsbNew, tsbSave, tsbDelete, toolStripSeparator1, tsbFirst, tsbPrevious, tsbNext, tsbLast, toolStripSeparator2, txtSearch, tsbSearch });
-            toolStrip1.Location = new Point(0, 0);
-            toolStrip1.Name = "toolStrip1";
-            toolStrip1.Padding = new Padding(8, 5, 8, 5);
-            toolStrip1.RenderMode = ToolStripRenderMode.System;
-            toolStrip1.Size = new Size(1118, 46);
-            toolStrip1.TabIndex = 0;
-            toolStrip1.Text = "toolStrip1";
-            toolStrip1.BackColor = Color.FromArgb(240, 240, 240);
-            //
-            // tsbNew
-            //
-            tsbNew.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNew.Image = (Image)resources.GetObject("tsbNew.Image");
-            tsbNew.ImageTransparentColor = Color.Magenta;
-            tsbNew.Margin = new Padding(4);
-            tsbNew.Name = "tsbNew";
-            tsbNew.Size = new Size(158, 28); 
-            tsbNew.Text = "New Customer";
-            tsbNew.ToolTipText = "Add New Customer (Ctrl+N)";
-            tsbNew.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNew.Click += tsbNew_Click;
-            //
-            // tsbSave
-            //
-            tsbSave.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbSave.Image = (Image)resources.GetObject("tsbSave.Image");
-            tsbSave.ImageTransparentColor = Color.Magenta;
-            tsbSave.Margin = new Padding(4);
-            tsbSave.Name = "tsbSave";
-            tsbSave.Size = new Size(144, 28);
-            tsbSave.Text = "Save Changes";
-            tsbSave.ToolTipText = "Save Changes (Ctrl+S)";
-            tsbSave.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbSave.Click += tsbSave_Click;
-            //
-            // tsbDelete
-            //
-            tsbDelete.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbDelete.Image = (Image)resources.GetObject("tsbDelete.Image");
-            tsbDelete.ImageTransparentColor = Color.Magenta;
-            tsbDelete.Margin = new Padding(4);
-            tsbDelete.Name = "tsbDelete";
-            tsbDelete.Size = new Size(173, 28); 
-            tsbDelete.Text = "Delete Customer";
-            tsbDelete.ToolTipText = "Delete Selected Customer (Del)";
-            tsbDelete.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbDelete.Click += tsbDelete_Click;
-            //
-            // toolStripSeparator1
-            //
-            toolStripSeparator1.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator1.Name = "toolStripSeparator1";
-            toolStripSeparator1.Size = new Size(6, 36);
-            //
-            // tsbFirst
-            //
-            tsbFirst.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbFirst.Image = (Image)resources.GetObject("tsbFirst.Image");
-            tsbFirst.ImageTransparentColor = Color.Magenta;
-            tsbFirst.Margin = new Padding(4);
-            tsbFirst.Name = "tsbFirst";
-            tsbFirst.Size = new Size(127, 28);
-            tsbFirst.Text = "First Record";
-            tsbFirst.ToolTipText = "Go to First Record (Ctrl+Home)";
-            tsbFirst.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbFirst.Click += tsbFirst_Click;
-            //
-            // tsbPrevious
-            //
-            tsbPrevious.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbPrevious.Image = (Image)resources.GetObject("tsbPrevious.Image");
-            tsbPrevious.ImageTransparentColor = Color.Magenta;
-            tsbPrevious.Margin = new Padding(4);
-            tsbPrevious.Name = "tsbPrevious";
-            tsbPrevious.Size = new Size(160, 28);
-            tsbPrevious.Text = "Previous Record";
-            tsbPrevious.ToolTipText = "Go to Previous Record (Ctrl+Left)";
-            tsbPrevious.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbPrevious.Click += tsbPrevious_Click;
-            //
-            // tsbNext
-            //
-            tsbNext.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNext.Image = (Image)resources.GetObject("tsbNext.Image");
-            tsbNext.ImageTransparentColor = Color.Magenta;
-            tsbNext.Margin = new Padding(4);
-            tsbNext.Name = "tsbNext";
-            tsbNext.Size = new Size(132, 28);
-            tsbNext.Text = "Next Record";
-            tsbNext.ToolTipText = "Go to Next Record (Ctrl+Right)";
-            tsbNext.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNext.Click += tsbNext_Click;
-            //
-            // tsbLast
-            //
-            tsbLast.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            tsbLast.ImageTransparentColor = Color.Magenta;
-            tsbLast.Margin = new Padding(4);
-            tsbLast.Name = "tsbLast";
-            tsbLast.Size = new Size(102, 28);
-            tsbLast.Text = "Last Record";
-            tsbLast.ToolTipText = "Go to Last Record (Ctrl+End)";
-            tsbLast.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbLast.Click += tsbLast_Click;
-            //
-            // toolStripSeparator2
-            //
-            toolStripSeparator2.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator2.Name = "toolStripSeparator2";
-            toolStripSeparator2.Size = new Size(6, 36);
-            //
-            // txtSearch
-            //
-            txtSearch.Alignment = ToolStripItemAlignment.Right;
-            txtSearch.BackColor = Color.White;
-            txtSearch.BorderStyle = BorderStyle.FixedSingle;
-            txtSearch.Font = new Font("Segoe UI", 10F);
-            txtSearch.ForeColor = Color.FromArgb(64, 64, 64);
-            txtSearch.Margin = new Padding(1, 2, 6, 2);
-            txtSearch.Name = "txtSearch";
-            txtSearch.Size = new Size(200, 27); 
-            txtSearch.ToolTipText = "Enter search term and press Enter or click Search";
-            txtSearch.KeyDown += txtSearch_KeyDown;
-            //
-            // tsbSearch
-            //
-            tsbSearch.Alignment = ToolStripItemAlignment.Right;
-            tsbSearch.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            tsbSearch.Image = (Image)resources.GetObject("tsbSearch.Image");
-            tsbSearch.ImageTransparentColor = Color.Magenta;
-            tsbSearch.Margin = new Padding(1, 2, 1, 2);
-            tsbSearch.Name = "tsbSearch";
-            tsbSearch.Size = new Size(28, 28); 
-            tsbSearch.Text = "Search";
-            tsbSearch.ToolTipText = "Search Customers (Enter)";
-            tsbSearch.Click += tsbSearch_Click;
-            //
-            // statusStrip1
-            //
-            statusStrip1.ImageScalingSize = new Size(20, 20);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { lblStatus });
-            statusStrip1.Location = new Point(0, 488);
-            statusStrip1.Name = "statusStrip1";
-            statusStrip1.Padding = new Padding(1, 0, 16, 0);
-            statusStrip1.Size = new Size(1118, 22); 
-            statusStrip1.TabIndex = 2;
-            statusStrip1.BackColor = Color.FromArgb(248, 248, 248);
-            statusStrip1.Text = "statusStrip1";
-            //
-            // lblStatus
-            //
-            lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(1101, 16); 
-            lblStatus.Spring = true;
-            lblStatus.TextAlign = ContentAlignment.MiddleLeft;
-            lblStatus.Font = new Font("Segoe UI", 9F);
-            lblStatus.ForeColor = Color.FromArgb(80, 80, 80);
-            //
-            // customerBindingSource
-            //
-            customerBindingSource.DataSource = typeof(Customer);
-            customerBindingSource.CurrentChanged += customerBindingSource_CurrentChanged;
-            //
-            // groupBoxDetails
-            //
-            groupBoxDetails.Controls.Add(tableLayoutPanelDetails);
-            groupBoxDetails.Dock = DockStyle.Fill;
-            groupBoxDetails.Location = new Point(0, 46);
-            groupBoxDetails.Margin = new Padding(10);
-            groupBoxDetails.Name = "groupBoxDetails";
-            groupBoxDetails.Padding = new Padding(20);
-            groupBoxDetails.Size = new Size(1118, 442);
-            groupBoxDetails.TabIndex = 1;
-            groupBoxDetails.TabStop = false;
-            groupBoxDetails.Text = "Customer Details";
-            groupBoxDetails.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
-            groupBoxDetails.ForeColor = Color.FromArgb(55, 55, 55);
-            //
-            // tableLayoutPanelDetails
-            //
-            tableLayoutPanelDetails.ColumnCount = 2;
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Controls.Add(lblCustomerID, 0, 0);
-            tableLayoutPanelDetails.Controls.Add(txtCustomerID, 1, 0);
-            tableLayoutPanelDetails.Controls.Add(lblFirstName, 0, 1);
-            tableLayoutPanelDetails.Controls.Add(txtFirstName, 1, 1);
-            tableLayoutPanelDetails.Controls.Add(lblLastName, 0, 2);
-            tableLayoutPanelDetails.Controls.Add(txtLastName, 1, 2);
-            tableLayoutPanelDetails.Controls.Add(lblPhoneNumber, 0, 3);
-            tableLayoutPanelDetails.Controls.Add(txtPhoneNumber, 1, 3);
-            tableLayoutPanelDetails.Controls.Add(lblEmail, 0, 4);
-            tableLayoutPanelDetails.Controls.Add(txtEmail, 1, 4);
-            tableLayoutPanelDetails.Controls.Add(lblAddress, 0, 5);
-            tableLayoutPanelDetails.Controls.Add(txtAddress, 1, 5);
-            tableLayoutPanelDetails.Dock = DockStyle.Fill;
-            tableLayoutPanelDetails.Location = new Point(20, 43);
-            tableLayoutPanelDetails.Margin = new Padding(0);
-            tableLayoutPanelDetails.Name = "tableLayoutPanelDetails";
-            tableLayoutPanelDetails.RowCount = 7;
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 80F)); // Address
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Size = new Size(1078, 379);
-            tableLayoutPanelDetails.TabIndex = 0;
-            //
-            // lblCustomerID 
-            //
-            lblCustomerID.Anchor = AnchorStyles.Left; lblCustomerID.AutoSize = true;
-            lblCustomerID.Location = new Point(3, 11); lblCustomerID.Name = "lblCustomerID";
-            lblCustomerID.Size = new Size(115, 23); 
-            lblCustomerID.TabIndex = 0; lblCustomerID.Text = "Customer ID:";
-            lblCustomerID.Font = new Font("Segoe UI", 10F); 
-            lblCustomerID.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtCustomerID.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtCustomerID.Location = new Point(153, 7); txtCustomerID.Margin = new Padding(3, 4, 10, 4);
-            txtCustomerID.Name = "txtCustomerID"; txtCustomerID.ReadOnly = true;
-            txtCustomerID.Size = new Size(915, 30); txtCustomerID.TabIndex = 99; // Non-focusable
-            txtCustomerID.TabStop = false; txtCustomerID.Font = new Font("Segoe UI", 10F);
-            txtCustomerID.ForeColor = Color.FromArgb(100, 100, 100);
-            txtCustomerID.BackColor = Color.FromArgb(245, 245, 245); txtCustomerID.BorderStyle = BorderStyle.FixedSingle;
-            //
-            // lblFirstName 
-            //
-            lblFirstName.Anchor = AnchorStyles.Left; lblFirstName.AutoSize = true;
-            lblFirstName.Location = new Point(3, 56); lblFirstName.Name = "lblFirstName";
-            lblFirstName.Size = new Size(97, 23); lblFirstName.TabIndex = 2; lblFirstName.Text = "First Name:";
-            lblFirstName.Font = new Font("Segoe UI", 10F); lblFirstName.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtFirstName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtFirstName.Location = new Point(153, 52); txtFirstName.Margin = new Padding(3, 4, 10, 4);
-            txtFirstName.MaxLength = 50; txtFirstName.Name = "txtFirstName";
-            txtFirstName.Size = new Size(915, 30); txtFirstName.TabIndex = 0;
-            txtFirstName.Font = new Font("Segoe UI", 10F); txtFirstName.ForeColor = Color.FromArgb(50, 50, 50);
-            txtFirstName.BorderStyle = BorderStyle.FixedSingle;
-            //
-            // lblLastName 
-            //
-            lblLastName.Anchor = AnchorStyles.Left; lblLastName.AutoSize = true;
-            lblLastName.Location = new Point(3, 101); lblLastName.Name = "lblLastName";
-            lblLastName.Size = new Size(95, 23); lblLastName.TabIndex = 4; lblLastName.Text = "Last Name:";
-            lblLastName.Font = new Font("Segoe UI", 10F); lblLastName.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtLastName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtLastName.Location = new Point(153, 97); txtLastName.Margin = new Padding(3, 4, 10, 4);
-            txtLastName.MaxLength = 50; txtLastName.Name = "txtLastName";
-            txtLastName.Size = new Size(915, 30); txtLastName.TabIndex = 1;
-            txtLastName.Font = new Font("Segoe UI", 10F); txtLastName.ForeColor = Color.FromArgb(50, 50, 50);
-            txtLastName.BorderStyle = BorderStyle.FixedSingle;
-            //
-            // lblPhoneNumber 
-            //
-            lblPhoneNumber.Anchor = AnchorStyles.Left; lblPhoneNumber.AutoSize = true;
-            lblPhoneNumber.Location = new Point(3, 146); lblPhoneNumber.Name = "lblPhoneNumber";
-            lblPhoneNumber.Size = new Size(128, 23); lblPhoneNumber.TabIndex = 6; lblPhoneNumber.Text = "Phone Number:";
-            lblPhoneNumber.Font = new Font("Segoe UI", 10F); lblPhoneNumber.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtPhoneNumber.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtPhoneNumber.Location = new Point(153, 142); txtPhoneNumber.Margin = new Padding(3, 4, 10, 4);
-            txtPhoneNumber.MaxLength = 20; txtPhoneNumber.Name = "txtPhoneNumber";
-            txtPhoneNumber.Size = new Size(915, 30); txtPhoneNumber.TabIndex = 2;
-            txtPhoneNumber.Font = new Font("Segoe UI", 10F); txtPhoneNumber.ForeColor = Color.FromArgb(50, 50, 50);
-            txtPhoneNumber.BorderStyle = BorderStyle.FixedSingle;
-            //
-            // lblEmail 
-            //
-            lblEmail.Anchor = AnchorStyles.Left; lblEmail.AutoSize = true;
-            lblEmail.Location = new Point(3, 191); lblEmail.Name = "lblEmail";
-            lblEmail.Size = new Size(55, 23); lblEmail.TabIndex = 8; lblEmail.Text = "Email:";
-            lblEmail.Font = new Font("Segoe UI", 10F); lblEmail.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtEmail.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtEmail.Location = new Point(153, 187); txtEmail.Margin = new Padding(3, 4, 10, 4);
-            txtEmail.MaxLength = 100; txtEmail.Name = "txtEmail";
-            txtEmail.Size = new Size(915, 30); txtEmail.TabIndex = 3;
-            txtEmail.Font = new Font("Segoe UI", 10F); txtEmail.ForeColor = Color.FromArgb(50, 50, 50);
-            txtEmail.BorderStyle = BorderStyle.FixedSingle;
-            //
-            // lblAddress 
-            //
-            lblAddress.Anchor = AnchorStyles.Left | AnchorStyles.Top; lblAddress.AutoSize = true;
-            lblAddress.Location = new Point(3, 228); lblAddress.Margin = new Padding(3, 8, 3, 0);
-            lblAddress.Name = "lblAddress"; lblAddress.Size = new Size(74, 23);
-            lblAddress.TabIndex = 10; lblAddress.Text = "Address:";
-            lblAddress.Font = new Font("Segoe UI", 10F); lblAddress.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtAddress.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtAddress.Location = new Point(153, 224); txtAddress.Margin = new Padding(3, 4, 10, 4);
-            txtAddress.MaxLength = 255; txtAddress.Multiline = true; txtAddress.Name = "txtAddress";
-            txtAddress.ScrollBars = ScrollBars.Vertical; txtAddress.Size = new Size(915, 72);
-            txtAddress.TabIndex = 4; txtAddress.Font = new Font("Segoe UI", 10F);
-            txtAddress.ForeColor = Color.FromArgb(50, 50, 50); txtAddress.BorderStyle = BorderStyle.FixedSingle;
-            //
-            // frmCustomers
-            //
-            AutoScaleDimensions = new SizeF(8F, 20F);
-            AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.White;
-            ClientSize = new Size(1118, 510); 
-            Controls.Add(groupBoxDetails);
-            Controls.Add(statusStrip1);
-            Controls.Add(toolStrip1);
-            MinimumSize = new Size(650, 500); // Adjusted min height
-            Name = "frmCustomers";
-            Text = "Manage Customers";
-            Font = new Font("Segoe UI", 9F);
-            ForeColor = Color.FromArgb(64, 64, 64);
-            Load += frmCustomers_Load;
-            toolStrip1.ResumeLayout(false);
-            toolStrip1.PerformLayout();
-            statusStrip1.ResumeLayout(false);
-            statusStrip1.PerformLayout();
-            ((ISupportInitialize)customerBindingSource).EndInit();
-            groupBoxDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.PerformLayout();
-            ResumeLayout(false);
-            PerformLayout();
-        }
-
-        #endregion
-
-        private ToolStrip toolStrip1;
-        private ToolStripButton tsbNew;
-        private ToolStripButton tsbSave;
-        private ToolStripButton tsbDelete;
-        private ToolStripSeparator toolStripSeparator1;
-        private ToolStripButton tsbFirst;
-        private ToolStripButton tsbPrevious;
-        private ToolStripButton tsbNext;
-        private ToolStripButton tsbLast;
-        private ToolStripSeparator toolStripSeparator2;
-        private ToolStripTextBox txtSearch;
-        private ToolStripButton tsbSearch;
-        private StatusStrip statusStrip1;
-        private ToolStripStatusLabel lblStatus;
-        private BindingSource customerBindingSource;
-        private GroupBox groupBoxDetails;
-        private TableLayoutPanel tableLayoutPanelDetails;
-        private Label lblCustomerID;
-        private TextBox txtCustomerID;
-        private Label lblFirstName;
-        private TextBox txtFirstName;
-        private Label lblLastName;
-        private TextBox txtLastName;
-        private Label lblPhoneNumber;
-        private TextBox txtPhoneNumber;
-        private Label lblEmail;
-        private TextBox txtEmail;
-        private Label lblAddress;
-        private TextBox txtAddress;
-    }
-}
-```
-
----
-**File 8: `frmCustomers.cs`**
----
-```csharp
-using Microsoft.EntityFrameworkCore;
-using Store.Data.Models;
-using Store.Services;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
-namespace Store.Forms
-{
-    public partial class frmCustomers : Form
-    {
-        private readonly CustomerService _customerService;
-        private bool _isNew = false;
-        private bool _isLoading = false;
-
-        public frmCustomers(CustomerService customerService)
-        {
-            InitializeComponent();
-            _customerService = customerService;
-        }
-
-        private async void frmCustomers_Load(object sender, EventArgs e)
-        {
-            _isLoading = true;
-            await LoadDataAsync();
-            SetupBindings();
-            _isLoading = false;
-             if (customerBindingSource.Count > 0 && customerBindingSource.Position < 0)
-            {
-                customerBindingSource.MoveFirst();
-            }
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
-
-        private async Task LoadDataAsync(string? searchTerm = null)
-        {
-            ToggleControls(false, true);
-            lblStatus.Text = "Loading customers...";
-            try
-            {
-                List<Customer> customers;
-                if (string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    customers = await _customerService.GetAllCustomersAsync();
-                }
-                else
-                {
-                    customers = await _customerService.SearchCustomersAsync(searchTerm);
-                }
-
-                var currentId = (customerBindingSource.Current as Customer)?.CustomerID;
-                
-                customerBindingSource.DataSource = customers;
-                customerBindingSource.ResetBindings(false);
-
-                if (customers.Count == 0)
-                {
-                     lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? "No customers found. Click 'New' to add one." : $"No customers matching '{searchTerm}'.";
-                    ClearForm();
-                    SetupBindings();
-                }
-                else
-                {
-                    lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? $"Displaying {customers.Count} customers." : $"Found {customers.Count} matching '{searchTerm}'.";
-                    if(currentId.HasValue)
-                    {
-                        SelectCustomerById(currentId.Value, false);
-                    }
-                     if (customerBindingSource.Position < 0 && customers.Count > 0)
-                    {
-                        customerBindingSource.MoveFirst();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading customers: {ex.Message}", "Loading Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Error loading data.";
-            }
-            finally
-            {
-                if (!_isLoading)
-                {
-                    UpdateButtonStates();
-                    UpdateNavigationState();
-                }
-                ToggleControls(true, true);
-            }
-        }
-
-        private void SetupBindings()
-        {
-            txtCustomerID.DataBindings.Clear();
-            txtFirstName.DataBindings.Clear();
-            txtLastName.DataBindings.Clear();
-            txtPhoneNumber.DataBindings.Clear();
-            txtEmail.DataBindings.Clear();
-            txtAddress.DataBindings.Clear();
-
-            txtCustomerID.DataBindings.Add("Text", customerBindingSource, "CustomerID", true, DataSourceUpdateMode.Never);
-            txtFirstName.DataBindings.Add("Text", customerBindingSource, "FirstName", false, DataSourceUpdateMode.OnValidation);
-            txtLastName.DataBindings.Add("Text", customerBindingSource, "LastName", false, DataSourceUpdateMode.OnValidation);
-            txtPhoneNumber.DataBindings.Add("Text", customerBindingSource, "PhoneNumber", true, DataSourceUpdateMode.OnValidation, string.Empty, "");
-            txtEmail.DataBindings.Add("Text", customerBindingSource, "Email", true, DataSourceUpdateMode.OnValidation, string.Empty, "");
-            txtAddress.DataBindings.Add("Text", customerBindingSource, "Address", true, DataSourceUpdateMode.OnValidation, string.Empty, "");
-        }
-
-        private void ClearForm()
-        {
-            customerBindingSource.SuspendBinding();
-            txtCustomerID.Clear();
-            txtFirstName.Clear();
-            txtLastName.Clear();
-            txtPhoneNumber.Clear();
-            txtEmail.Clear();
-            txtAddress.Clear();
-            customerBindingSource.ResumeBinding();
-        }
-
-        private void ToggleControls(bool enabled, bool keepToolbarEnabled = false)
-        {
-            groupBoxDetails.Enabled = enabled;
-            if (!keepToolbarEnabled) toolStrip1.Enabled = enabled;
-            else toolStrip1.Enabled = true;
-            this.Cursor = enabled ? Cursors.Default : Cursors.WaitCursor;
-        }
-
-        private void UpdateButtonStates()
-        {
-            if (_isLoading) return;
-            bool hasItems = customerBindingSource.Count > 0;
-            bool isItemSelected = customerBindingSource.Current != null;
-
-            tsbSave.Enabled = _isNew || (isItemSelected && (!string.IsNullOrWhiteSpace(txtFirstName.Text) || !string.IsNullOrWhiteSpace(txtLastName.Text)));
-            tsbDelete.Enabled = isItemSelected && !_isNew;
-            tsbFirst.Enabled = isItemSelected && !_isNew && customerBindingSource.Position > 0;
-            tsbPrevious.Enabled = isItemSelected && !_isNew && customerBindingSource.Position > 0;
-            tsbNext.Enabled = isItemSelected && !_isNew && customerBindingSource.Position < customerBindingSource.Count - 1;
-            tsbLast.Enabled = isItemSelected && !_isNew && customerBindingSource.Position < customerBindingSource.Count - 1;
-            tsbNew.Enabled = toolStrip1.Enabled;
-            txtSearch.Enabled = toolStrip1.Enabled;
-            tsbSearch.Enabled = toolStrip1.Enabled;
-        }
-
-        private void UpdateNavigationState()
-        {
-            if (_isLoading) return;
-            bool hasItems = customerBindingSource.Count > 0;
-            bool isItemSelected = customerBindingSource.Current != null;
-
-            if (_isNew)
-            {
-                lblStatus.Text = "Adding new customer...";
-                groupBoxDetails.Enabled = true;
-            }
-            else if (isItemSelected)
-            {
-                lblStatus.Text = $"Record {customerBindingSource.Position + 1} of {customerBindingSource.Count}";
-                 groupBoxDetails.Enabled = true;
-            }
-            else
-            {
-                lblStatus.Text = hasItems ? "No customer selected." : (string.IsNullOrWhiteSpace(txtSearch.Text) ? "No customers found." : $"No customers matching '{txtSearch.Text}'.");
-                groupBoxDetails.Enabled = false;
-                if (!hasItems) ClearForm();
-            }
-            UpdateButtonStates();
-        }
-
-        private void tsbNew_Click(object sender, EventArgs e)
-        {
-            _isNew = true;
-            customerBindingSource.SuspendBinding();
-            ClearForm();
-            txtFirstName.Focus();
-            UpdateNavigationState();
-        }
-
-        private async void tsbSave_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(txtFirstName.Text) || string.IsNullOrWhiteSpace(txtLastName.Text))
-            {
-                MessageBox.Show("First Name and Last Name cannot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtFirstName.Focus(); return;
-            }
-             if (!string.IsNullOrWhiteSpace(txtEmail.Text) && !txtEmail.Text.Contains("@"))
-            {
-                MessageBox.Show("Please enter a valid email address or leave it empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtEmail.Focus();
-                return;
-            }
-
-            if (!_isNew && customerBindingSource.Current != null)
-            {
-                customerBindingSource.EndEdit();
-            }
-
-            ToggleControls(false);
-            lblStatus.Text = "Saving...";
-
-            try
-            {
-                bool success = false;
-                Customer? customerToSave = null;
-                bool wasNewItemInitially = _isNew;
-
-                if (_isNew)
-                {
-                    customerToSave = new Customer
-                    {
-                        FirstName = txtFirstName.Text.Trim(),
-                        LastName = txtLastName.Text.Trim(),
-                        PhoneNumber = string.IsNullOrWhiteSpace(txtPhoneNumber.Text) ? null : txtPhoneNumber.Text.Trim(),
-                        Email = string.IsNullOrWhiteSpace(txtEmail.Text) ? null : txtEmail.Text.Trim(),
-                        Address = string.IsNullOrWhiteSpace(txtAddress.Text) ? null : txtAddress.Text.Trim()
-                    };
-                    success = await _customerService.AddCustomerAsync(customerToSave);
-                    if (success) lblStatus.Text = "Customer added successfully.";
-                }
-                else
-                {
-                    if (customerBindingSource.Current is Customer currentCustomer)
-                    {
-                        currentCustomer.FirstName = txtFirstName.Text.Trim();
-                        currentCustomer.LastName = txtLastName.Text.Trim();
-                        currentCustomer.PhoneNumber = string.IsNullOrWhiteSpace(txtPhoneNumber.Text) ? null : txtPhoneNumber.Text.Trim();
-                        currentCustomer.Email = string.IsNullOrWhiteSpace(txtEmail.Text) ? null : txtEmail.Text.Trim();
-                        currentCustomer.Address = string.IsNullOrWhiteSpace(txtAddress.Text) ? null : txtAddress.Text.Trim();
-                        customerToSave = currentCustomer;
-                        success = await _customerService.UpdateCustomerAsync(currentCustomer);
-                        if (success) lblStatus.Text = "Customer updated successfully.";
-                    }
-                    else
-                    {
-                         MessageBox.Show("No customer selected to update.", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                         lblStatus.Text = "No customer selected.";
-                    }
-                }
-
-                if (success)
-                {
-                    _isNew = false;
-                    int savedItemId = customerToSave?.CustomerID ?? -1;
-                    string? currentSearchTerm = wasNewItemInitially ? null : txtSearch.Text;
-                    if (wasNewItemInitially) txtSearch.Clear();
-                    
-                    await LoadDataAsync(currentSearchTerm);
-                    
-                    if (savedItemId > 0) SelectCustomerById(savedItemId);
-                    else if(customerBindingSource.Count > 0) customerBindingSource.MoveFirst();
-                }
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                MessageBox.Show("Record modified. Reload and try again.", "Concurrency Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                lblStatus.Text = "Save failed due to concurrency.";
-                await LoadDataAsync(txtSearch.Text);
-            }
-            catch (DbUpdateException dbEx)
-            {
-                string errorMessage = $"Database error: {dbEx.InnerException?.Message ?? dbEx.Message}.";
-                 if (dbEx.InnerException?.Message.Contains("UNIQUE KEY constraint") == true || 
-                    dbEx.InnerException?.Message.Contains("duplicate key value violates unique constraint") == true) // For PostgreSQL
-                {
-                    errorMessage += "\nA customer with the same Phone Number or Email might already exist if they are unique.";
-                }
-                MessageBox.Show(errorMessage, "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Database save error.";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Save error.";
-            }
-            finally
-            {
-                if (!success) { 
-                     ToggleControls(true);
-                     UpdateButtonStates();
-                     UpdateNavigationState();
-                }
-            }
-        }
-
-        private async void tsbDelete_Click(object sender, EventArgs e)
-        {
-            if (_isNew) {
-                MessageBox.Show("Cannot delete an unsaved new customer.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            if (customerBindingSource.Current is Customer currentCustomer)
-            {
-                var confirmResult = MessageBox.Show($"Delete customer '{currentCustomer.FullName}' (ID: {currentCustomer.CustomerID})?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (confirmResult == DialogResult.Yes)
-                {
-                    ToggleControls(false);
-                    lblStatus.Text = "Deleting...";
-                    try
-                    {
-                        bool success = await _customerService.DeleteCustomerAsync(currentCustomer.CustomerID);
-                        if (success) lblStatus.Text = "Customer deleted.";
-                        await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                    catch (DbUpdateException dbEx)
-                    {
-                        MessageBox.Show($"Database error: {dbEx.InnerException?.Message ?? dbEx.Message}.\nCustomer might have related orders.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Database delete error.";
-                        await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"An error occurred: {ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Delete error.";
-                        await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                }
-            }
-            else
-            {
-                MessageBox.Show("No customer selected.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private async void PerformSearch()
-        {
-            _isNew = false; customerBindingSource.ResumeBinding();
-            await LoadDataAsync(txtSearch.Text.Trim());
-        }
-        private void tsbSearch_Click(object sender, EventArgs e) => PerformSearch();
-        private void txtSearch_KeyDown(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { PerformSearch(); e.SuppressKeyPress = true; } }
-        private void tsbFirst_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; customerBindingSource.ResumeBinding(); customerBindingSource.MoveFirst(); }
-        private void tsbPrevious_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; customerBindingSource.ResumeBinding(); customerBindingSource.MovePrevious(); }
-        private void tsbNext_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; customerBindingSource.ResumeBinding(); customerBindingSource.MoveNext(); }
-        private void tsbLast_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; customerBindingSource.ResumeBinding(); customerBindingSource.MoveLast(); }
-
-        private void customerBindingSource_CurrentChanged(object sender, EventArgs e)
-        {
-            if (_isLoading || _isNew) return;
-            if (customerBindingSource.Current == null) ClearForm();
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
-
-        private void SelectCustomerById(int customerId, bool triggerCurrentChanged = true)
-        {
-            if (customerId <= 0) return;
-            if (customerBindingSource.DataSource is List<Customer> customers)
-            {
-                int index = customers.FindIndex(c => c.CustomerID == customerId);
-                if (index != -1)
-                {
-                     if(!triggerCurrentChanged)
-                    {
-                        this.customerBindingSource.CurrentChanged -= customerBindingSource_CurrentChanged;
-                        customerBindingSource.Position = index;
-                        this.customerBindingSource.CurrentChanged += customerBindingSource_CurrentChanged;
-                        if(customerBindingSource.Current is Customer cust)
-                        {
-                            txtCustomerID.Text = cust.CustomerID.ToString();
-                            txtFirstName.Text = cust.FirstName;
-                            txtLastName.Text = cust.LastName;
-                            txtPhoneNumber.Text = cust.PhoneNumber;
-                            txtEmail.Text = cust.Email;
-                            txtAddress.Text = cust.Address;
-                        }
-                    }
-                    else
-                    {
-                        customerBindingSource.Position = index;
-                    }
-                }
-            }
-        }
-    }
-}
-```
-
----
-**File 9: `frmEmployees.Designer.cs`**
----
-```csharp
-using System;
-using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
-using Store.Data.Models;
-
-namespace Store.Forms
-{
-    partial class frmEmployees
-    {
-        private System.ComponentModel.IContainer components = null;
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null)) { components.Dispose(); }
-            base.Dispose(disposing);
-        }
-
-        #region Windows Form Designer generated code
-        private void InitializeComponent()
-        {
-            components = new Container();
-            ComponentResourceManager resources = new ComponentResourceManager(typeof(frmEmployees));
-            toolStrip1 = new ToolStrip();
-            tsbNew = new ToolStripButton();
-            tsbSave = new ToolStripButton();
-            tsbDelete = new ToolStripButton();
-            toolStripSeparator1 = new ToolStripSeparator();
-            tsbFirst = new ToolStripButton();
-            tsbPrevious = new ToolStripButton();
-            tsbNext = new ToolStripButton();
-            tsbLast = new ToolStripButton();
-            toolStripSeparator2 = new ToolStripSeparator();
-            txtSearch = new ToolStripTextBox();
-            tsbSearch = new ToolStripButton();
-            statusStrip1 = new StatusStrip();
-            lblStatus = new ToolStripStatusLabel();
-            employeeBindingSource = new BindingSource(components);
-            groupBoxDetails = new GroupBox();
-            tableLayoutPanelDetails = new TableLayoutPanel();
-            lblEmployeeID = new Label();
-            txtEmployeeID = new TextBox();
-            lblFirstName = new Label();
-            txtFirstName = new TextBox();
-            lblLastName = new Label();
-            txtLastName = new TextBox();
-            lblPosition = new Label();
-            txtPosition = new TextBox();
-            lblUsername = new Label();
-            txtUsername = new TextBox();
-            lblPassword = new Label();
-            txtPassword = new TextBox();
-            lblPasswordInfo = new Label();
-            toolStrip1.SuspendLayout();
-            statusStrip1.SuspendLayout();
-            ((ISupportInitialize)employeeBindingSource).BeginInit();
-            groupBoxDetails.SuspendLayout();
-            tableLayoutPanelDetails.SuspendLayout();
-            SuspendLayout();
-            //
-            // toolStrip1
-            //
-            toolStrip1.Font = new Font("Segoe UI", 10F);
-            toolStrip1.GripStyle = ToolStripGripStyle.Hidden;
-            toolStrip1.ImageScalingSize = new Size(24, 24);
-            toolStrip1.Items.AddRange(new ToolStripItem[] { tsbNew, tsbSave, tsbDelete, toolStripSeparator1, tsbFirst, tsbPrevious, tsbNext, tsbLast, toolStripSeparator2, txtSearch, tsbSearch });
-            toolStrip1.Location = new Point(0, 0);
-            toolStrip1.Name = "toolStrip1";
-            toolStrip1.Padding = new Padding(8, 5, 8, 5);
-            toolStrip1.RenderMode = ToolStripRenderMode.System;
-            toolStrip1.Size = new Size(1118, 46);
-            toolStrip1.TabIndex = 0;
-            toolStrip1.Text = "toolStrip1";
-            toolStrip1.BackColor = Color.FromArgb(240, 240, 240);
-            //
-            // tsbNew
-            //
-            tsbNew.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNew.Image = (Image)resources.GetObject("tsbNew.Image");
-            tsbNew.ImageTransparentColor = Color.Magenta;
-            tsbNew.Margin = new Padding(4);
-            tsbNew.Name = "tsbNew";
-            tsbNew.Size = new Size(152, 28);
-            tsbNew.Text = "New Employee";
-            tsbNew.ToolTipText = "Add New Employee (Ctrl+N)";
-            tsbNew.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNew.Click += tsbNew_Click;
-            //
-            // tsbSave
-            //
-            tsbSave.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbSave.Image = (Image)resources.GetObject("tsbSave.Image");
-            tsbSave.ImageTransparentColor = Color.Magenta;
-            tsbSave.Margin = new Padding(4);
-            tsbSave.Name = "tsbSave";
-            tsbSave.Size = new Size(144, 28);
-            tsbSave.Text = "Save Changes";
-            tsbSave.ToolTipText = "Save Changes (Ctrl+S)";
-            tsbSave.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbSave.Click += tsbSave_Click;
-            //
-            // tsbDelete
-            //
-            tsbDelete.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbDelete.Image = (Image)resources.GetObject("tsbDelete.Image");
-            tsbDelete.ImageTransparentColor = Color.Magenta;
-            tsbDelete.Margin = new Padding(4);
-            tsbDelete.Name = "tsbDelete";
-            tsbDelete.Size = new Size(167, 28);
-            tsbDelete.Text = "Delete Employee";
-            tsbDelete.ToolTipText = "Delete Selected Employee (Del)";
-            tsbDelete.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbDelete.Click += tsbDelete_Click;
-            //
-            // toolStripSeparator1
-            //
-            toolStripSeparator1.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator1.Name = "toolStripSeparator1";
-            toolStripSeparator1.Size = new Size(6, 36);
-            //
-            // tsbFirst
-            //
-            tsbFirst.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbFirst.Image = (Image)resources.GetObject("tsbFirst.Image");
-            tsbFirst.ImageTransparentColor = Color.Magenta;
-            tsbFirst.Margin = new Padding(4);
-            tsbFirst.Name = "tsbFirst";
-            tsbFirst.Size = new Size(127, 28);
-            tsbFirst.Text = "First Record";
-            tsbFirst.ToolTipText = "Go to First Record (Ctrl+Home)";
-            tsbFirst.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbFirst.Click += tsbFirst_Click;
-            //
-            // tsbPrevious
-            //
-            tsbPrevious.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbPrevious.Image = (Image)resources.GetObject("tsbPrevious.Image");
-            tsbPrevious.ImageTransparentColor = Color.Magenta;
-            tsbPrevious.Margin = new Padding(4);
-            tsbPrevious.Name = "tsbPrevious";
-            tsbPrevious.Size = new Size(160, 28);
-            tsbPrevious.Text = "Previous Record";
-            tsbPrevious.ToolTipText = "Go to Previous Record (Ctrl+Left)";
-            tsbPrevious.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbPrevious.Click += tsbPrevious_Click;
-            //
-            // tsbNext
-            //
-            tsbNext.DisplayStyle = ToolStripItemDisplayStyle.ImageAndText;
-            tsbNext.Image = (Image)resources.GetObject("tsbNext.Image");
-            tsbNext.ImageTransparentColor = Color.Magenta;
-            tsbNext.Margin = new Padding(4);
-            tsbNext.Name = "tsbNext";
-            tsbNext.Size = new Size(132, 28);
-            tsbNext.Text = "Next Record";
-            tsbNext.ToolTipText = "Go to Next Record (Ctrl+Right)";
-            tsbNext.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbNext.Click += tsbNext_Click;
-            //
-            // tsbLast
-            //
-            tsbLast.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            tsbLast.ImageTransparentColor = Color.Magenta;
-            tsbLast.Margin = new Padding(4);
-            tsbLast.Name = "tsbLast";
-            tsbLast.Size = new Size(102, 28);
-            tsbLast.Text = "Last Record";
-            tsbLast.ToolTipText = "Go to Last Record (Ctrl+End)";
-            tsbLast.ForeColor = Color.FromArgb(64, 64, 64);
-            tsbLast.Click += tsbLast_Click;
-            //
-            // toolStripSeparator2
-            //
-            toolStripSeparator2.Margin = new Padding(10, 0, 10, 0);
-            toolStripSeparator2.Name = "toolStripSeparator2";
-            toolStripSeparator2.Size = new Size(6, 36);
-            //
-            // txtSearch
-            //
-            txtSearch.Alignment = ToolStripItemAlignment.Right;
-            txtSearch.BackColor = Color.White;
-            txtSearch.BorderStyle = BorderStyle.FixedSingle;
-            txtSearch.Font = new Font("Segoe UI", 10F);
-            txtSearch.ForeColor = Color.FromArgb(64, 64, 64);
-            txtSearch.Margin = new Padding(1, 2, 6, 2);
-            txtSearch.Name = "txtSearch";
-            txtSearch.Size = new Size(200, 27);
-            txtSearch.ToolTipText = "Enter search term and press Enter or click Search";
-            txtSearch.KeyDown += txtSearch_KeyDown;
-            //
-            // tsbSearch
-            //
-            tsbSearch.Alignment = ToolStripItemAlignment.Right;
-            tsbSearch.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            tsbSearch.Image = (Image)resources.GetObject("tsbSearch.Image");
-            tsbSearch.ImageTransparentColor = Color.Magenta;
-            tsbSearch.Margin = new Padding(1, 2, 1, 2);
-            tsbSearch.Name = "tsbSearch";
-            tsbSearch.Size = new Size(28, 28);
-            tsbSearch.Text = "Search";
-            tsbSearch.ToolTipText = "Search Employees (Enter)";
-            tsbSearch.Click += tsbSearch_Click;
-            // 
-            // statusStrip1
-            // 
-            statusStrip1.ImageScalingSize = new Size(20, 20);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { lblStatus });
-            statusStrip1.Location = new Point(0, 488);
-            statusStrip1.Name = "statusStrip1";
-            statusStrip1.Padding = new Padding(1, 0, 16, 0);
-            statusStrip1.Size = new Size(1118, 22);
-            statusStrip1.TabIndex = 2;
-            statusStrip1.BackColor = Color.FromArgb(248, 248, 248);
-            statusStrip1.Text = "statusStrip1";
-            // 
-            // lblStatus
-            // 
-            lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(1101, 16);
-            lblStatus.Spring = true;
-            lblStatus.TextAlign = ContentAlignment.MiddleLeft;
-            lblStatus.Font = new Font("Segoe UI", 9F);
-            lblStatus.ForeColor = Color.FromArgb(80, 80, 80);
-            // 
-            // employeeBindingSource
-            // 
-            employeeBindingSource.DataSource = typeof(Employee);
-            employeeBindingSource.CurrentChanged += employeeBindingSource_CurrentChanged;
-            // 
-            // groupBoxDetails
-            // 
-            groupBoxDetails.Controls.Add(tableLayoutPanelDetails);
-            groupBoxDetails.Dock = DockStyle.Fill;
-            groupBoxDetails.Location = new Point(0, 46);
-            groupBoxDetails.Margin = new Padding(10);
-            groupBoxDetails.Name = "groupBoxDetails";
-            groupBoxDetails.Padding = new Padding(20);
-            groupBoxDetails.Size = new Size(1118, 442);
-            groupBoxDetails.TabIndex = 1;
-            groupBoxDetails.TabStop = false;
-            groupBoxDetails.Text = "Employee Details";
-            groupBoxDetails.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
-            groupBoxDetails.ForeColor = Color.FromArgb(55, 55, 55);
-            // 
-            // tableLayoutPanelDetails
-            // 
-            tableLayoutPanelDetails.ColumnCount = 2;
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
-            tableLayoutPanelDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Controls.Add(lblEmployeeID, 0, 0);
-            tableLayoutPanelDetails.Controls.Add(txtEmployeeID, 1, 0);
-            tableLayoutPanelDetails.Controls.Add(lblFirstName, 0, 1);
-            tableLayoutPanelDetails.Controls.Add(txtFirstName, 1, 1);
-            tableLayoutPanelDetails.Controls.Add(lblLastName, 0, 2);
-            tableLayoutPanelDetails.Controls.Add(txtLastName, 1, 2);
-            tableLayoutPanelDetails.Controls.Add(lblPosition, 0, 3);
-            tableLayoutPanelDetails.Controls.Add(txtPosition, 1, 3);
-            tableLayoutPanelDetails.Controls.Add(lblUsername, 0, 4);
-            tableLayoutPanelDetails.Controls.Add(txtUsername, 1, 4);
-            tableLayoutPanelDetails.Controls.Add(lblPassword, 0, 5);
-            tableLayoutPanelDetails.Controls.Add(txtPassword, 1, 5);
-            tableLayoutPanelDetails.Controls.Add(lblPasswordInfo, 1, 6); // Span if needed or just in second column
-            tableLayoutPanelDetails.Dock = DockStyle.Fill;
-            tableLayoutPanelDetails.Location = new Point(20, 43);
-            tableLayoutPanelDetails.Margin = new Padding(0);
-            tableLayoutPanelDetails.Name = "tableLayoutPanelDetails";
-            tableLayoutPanelDetails.RowCount = 8; // 6 fields, 1 info label, 1 spacer
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F));
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 45F)); // Password
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F)); // Password Info
-            tableLayoutPanelDetails.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanelDetails.Size = new Size(1078, 379);
-            tableLayoutPanelDetails.TabIndex = 0;
-            // 
-            // lblEmployeeID 
-            // 
-            lblEmployeeID.Anchor = AnchorStyles.Left; lblEmployeeID.AutoSize = true;
-            lblEmployeeID.Location = new Point(3, 11); lblEmployeeID.Name = "lblEmployeeID";
-            lblEmployeeID.Size = new Size(119, 23); lblEmployeeID.TabIndex = 0; lblEmployeeID.Text = "Employee ID:";
-            lblEmployeeID.Font = new Font("Segoe UI", 10F); lblEmployeeID.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtEmployeeID.Anchor = AnchorStyles.Left | AnchorStyles.Right; txtEmployeeID.Location = new Point(153, 7);
-            txtEmployeeID.Margin = new Padding(3, 4, 10, 4); txtEmployeeID.Name = "txtEmployeeID"; txtEmployeeID.ReadOnly = true;
-            txtEmployeeID.Size = new Size(915, 30); txtEmployeeID.TabIndex = 99; txtEmployeeID.TabStop = false; // Non-focusable
-            txtEmployeeID.Font = new Font("Segoe UI", 10F); txtEmployeeID.ForeColor = Color.FromArgb(100, 100, 100);
-            txtEmployeeID.BackColor = Color.FromArgb(245, 245, 245); txtEmployeeID.BorderStyle = BorderStyle.FixedSingle;
-            // 
-            // lblFirstName 
-            // 
-            lblFirstName.Anchor = AnchorStyles.Left; lblFirstName.AutoSize = true;
-            lblFirstName.Location = new Point(3, 56); lblFirstName.Name = "lblFirstName";
-            lblFirstName.Size = new Size(97, 23); lblFirstName.TabIndex = 2; lblFirstName.Text = "First Name:";
-            lblFirstName.Font = new Font("Segoe UI", 10F); lblFirstName.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtFirstName.Anchor = AnchorStyles.Left | AnchorStyles.Right; txtFirstName.Location = new Point(153, 52);
-            txtFirstName.Margin = new Padding(3, 4, 10, 4); txtFirstName.MaxLength = 50; txtFirstName.Name = "txtFirstName";
-            txtFirstName.Size = new Size(915, 30); txtFirstName.TabIndex = 0;
-            txtFirstName.Font = new Font("Segoe UI", 10F); txtFirstName.ForeColor = Color.FromArgb(50, 50, 50); txtFirstName.BorderStyle = BorderStyle.FixedSingle;
-            // 
-            // lblLastName 
-            // 
-            lblLastName.Anchor = AnchorStyles.Left; lblLastName.AutoSize = true;
-            lblLastName.Location = new Point(3, 101); lblLastName.Name = "lblLastName";
-            lblLastName.Size = new Size(95, 23); lblLastName.TabIndex = 4; lblLastName.Text = "Last Name:";
-            lblLastName.Font = new Font("Segoe UI", 10F); lblLastName.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtLastName.Anchor = AnchorStyles.Left | AnchorStyles.Right; txtLastName.Location = new Point(153, 97);
-            txtLastName.Margin = new Padding(3, 4, 10, 4); txtLastName.MaxLength = 50; txtLastName.Name = "txtLastName";
-            txtLastName.Size = new Size(915, 30); txtLastName.TabIndex = 1;
-            txtLastName.Font = new Font("Segoe UI", 10F); txtLastName.ForeColor = Color.FromArgb(50, 50, 50); txtLastName.BorderStyle = BorderStyle.FixedSingle;
-            // 
-            // lblPosition 
-            // 
-            lblPosition.Anchor = AnchorStyles.Left; lblPosition.AutoSize = true;
-            lblPosition.Location = new Point(3, 146); lblPosition.Name = "lblPosition";
-            lblPosition.Size = new Size(73, 23); lblPosition.TabIndex = 6; lblPosition.Text = "Position:";
-            lblPosition.Font = new Font("Segoe UI", 10F); lblPosition.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtPosition.Anchor = AnchorStyles.Left | AnchorStyles.Right; txtPosition.Location = new Point(153, 142);
-            txtPosition.Margin = new Padding(3, 4, 10, 4); txtPosition.MaxLength = 50; txtPosition.Name = "txtPosition";
-            txtPosition.Size = new Size(915, 30); txtPosition.TabIndex = 2;
-            txtPosition.Font = new Font("Segoe UI", 10F); txtPosition.ForeColor = Color.FromArgb(50, 50, 50); txtPosition.BorderStyle = BorderStyle.FixedSingle;
-            // 
-            // lblUsername 
-            // 
-            lblUsername.Anchor = AnchorStyles.Left; lblUsername.AutoSize = true;
-            lblUsername.Location = new Point(3, 191); lblUsername.Name = "lblUsername";
-            lblUsername.Size = new Size(91, 23); lblUsername.TabIndex = 8; lblUsername.Text = "Username:";
-            lblUsername.Font = new Font("Segoe UI", 10F); lblUsername.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtUsername.Anchor = AnchorStyles.Left | AnchorStyles.Right; txtUsername.Location = new Point(153, 187);
-            txtUsername.Margin = new Padding(3, 4, 10, 4); txtUsername.MaxLength = 50; txtUsername.Name = "txtUsername";
-            txtUsername.Size = new Size(915, 30); txtUsername.TabIndex = 3;
-            txtUsername.Font = new Font("Segoe UI", 10F); txtUsername.ForeColor = Color.FromArgb(50, 50, 50); txtUsername.BorderStyle = BorderStyle.FixedSingle;
-            // 
-            // lblPassword 
-            // 
-            lblPassword.Anchor = AnchorStyles.Left; lblPassword.AutoSize = true;
-            lblPassword.Location = new Point(3, 236); lblPassword.Name = "lblPassword";
-            lblPassword.Size = new Size(84, 23); lblPassword.TabIndex = 10; lblPassword.Text = "Password:";
-            lblPassword.Font = new Font("Segoe UI", 10F); lblPassword.ForeColor = Color.FromArgb(80, 80, 80);
-
-            txtPassword.Anchor = AnchorStyles.Left | AnchorStyles.Right; txtPassword.Location = new Point(153, 232);
-            txtPassword.Margin = new Padding(3, 4, 10, 4); txtPassword.MaxLength = 100; // Hashed passwords can be long
-            txtPassword.Name = "txtPassword"; txtPassword.PasswordChar = '*';
-            txtPassword.Size = new Size(915, 30); txtPassword.TabIndex = 4;
-            txtPassword.Font = new Font("Segoe UI", 10F); txtPassword.ForeColor = Color.FromArgb(50, 50, 50); txtPassword.BorderStyle = BorderStyle.FixedSingle;
-            // 
-            // lblPasswordInfo
-            // 
-            lblPasswordInfo.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
-            lblPasswordInfo.AutoSize = false; // Set to false to allow manual sizing and text alignment
-            lblPasswordInfo.Location = new Point(153, 270); // Position in the second column, below password
-            lblPasswordInfo.Margin = new Padding(3, 0, 10, 0); // Adjust margins as needed
-            lblPasswordInfo.Name = "lblPasswordInfo";
-            lblPasswordInfo.Size = new Size(915, 30); // Span the width of the second column
-            lblPasswordInfo.TabIndex = 12;
-            lblPasswordInfo.Text = "Enter password only for new employee or to change existing.";
-            lblPasswordInfo.TextAlign = ContentAlignment.MiddleLeft;
-            lblPasswordInfo.Font = new Font("Segoe UI", 8F, FontStyle.Italic); 
-            lblPasswordInfo.ForeColor = Color.FromArgb(120, 120, 120);
-            // 
-            // frmEmployees
-            // 
-            AutoScaleDimensions = new SizeF(8F, 20F);
-            AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.White;
-            ClientSize = new Size(1118, 510);
-            Controls.Add(groupBoxDetails);
-            Controls.Add(statusStrip1);
-            Controls.Add(toolStrip1);
-            MinimumSize = new Size(650, 520); // Adjusted min height
-            Name = "frmEmployees";
-            Text = "Manage Employees";
-            Font = new Font("Segoe UI", 9F);
-            ForeColor = Color.FromArgb(64, 64, 64);
-            Load += frmEmployees_Load;
-            toolStrip1.ResumeLayout(false);
-            toolStrip1.PerformLayout();
-            statusStrip1.ResumeLayout(false);
-            statusStrip1.PerformLayout();
-            ((ISupportInitialize)employeeBindingSource).EndInit();
-            groupBoxDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.ResumeLayout(false);
-            tableLayoutPanelDetails.PerformLayout();
-            ResumeLayout(false);
-            PerformLayout();
-        }
-        #endregion
-
-        private ToolStrip toolStrip1;
-        private ToolStripButton tsbNew;
-        private ToolStripButton tsbSave;
-        private ToolStripButton tsbDelete;
-        private ToolStripSeparator toolStripSeparator1;
-        private ToolStripButton tsbFirst;
-        private ToolStripButton tsbPrevious;
-        private ToolStripButton tsbNext;
-        private ToolStripButton tsbLast;
-        private ToolStripSeparator toolStripSeparator2;
-        private ToolStripTextBox txtSearch;
-        private ToolStripButton tsbSearch;
-        private StatusStrip statusStrip1;
-        private ToolStripStatusLabel lblStatus;
-        private BindingSource employeeBindingSource;
-        private GroupBox groupBoxDetails;
-        private TableLayoutPanel tableLayoutPanelDetails;
-        private Label lblEmployeeID;
-        private TextBox txtEmployeeID;
-        private Label lblFirstName;
-        private TextBox txtFirstName;
-        private Label lblLastName;
-        private TextBox txtLastName;
-        private Label lblPosition;
-        private TextBox txtPosition;
-        private Label lblUsername;
-        private TextBox txtUsername;
-        private Label lblPassword;
-        private TextBox txtPassword;
-        private Label lblPasswordInfo;
-    }
-}
-```
-
----
-**File 10: `frmEmployees.cs`**
----
-```csharp
-using Microsoft.EntityFrameworkCore;
-using Store.Data.Models;
-using Store.Services;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
-namespace Store.Forms
-{
-    public partial class frmEmployees : Form
-    {
-        private readonly EmployeeService _employeeService;
-        private bool _isNew = false;
-        private bool _isLoading = false;
-
-        public frmEmployees(EmployeeService employeeService)
-        {
-            InitializeComponent();
-            _employeeService = employeeService;
-        }
-
-        private async void frmEmployees_Load(object sender, EventArgs e)
-        {
-            _isLoading = true;
-            await LoadDataAsync();
-            SetupBindings();
-            _isLoading = false;
-             if (employeeBindingSource.Count > 0 && employeeBindingSource.Position < 0)
-            {
-                employeeBindingSource.MoveFirst();
-            }
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
-
-        private async Task LoadDataAsync(string? searchTerm = null)
-        {
-            ToggleControls(false, true);
-            lblStatus.Text = "Loading employees...";
-            try
-            {
-                List<Employee> employees;
-                if (string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    employees = await _employeeService.GetAllEmployeesAsync();
-                }
-                else
-                {
-                    employees = await _employeeService.SearchEmployeesAsync(searchTerm);
-                }
-                
-                var currentId = (employeeBindingSource.Current as Employee)?.EmployeeID;
-
-                employeeBindingSource.DataSource = employees;
-                employeeBindingSource.ResetBindings(false);
-
-                if (employees.Count == 0)
-                {
-                    lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? "No employees found. Click 'New' to add one." : $"No employees matching '{searchTerm}'.";
-                    ClearForm();
-                    SetupBindings();
-                }
-                else
-                {
-                     lblStatus.Text = string.IsNullOrWhiteSpace(searchTerm) ? $"Displaying {employees.Count} employees." : $"Found {employees.Count} matching '{searchTerm}'.";
-                     if(currentId.HasValue)
-                     {
-                        SelectEmployeeById(currentId.Value, false);
+                        // If JSON parsing fails on OK response, responseData remains null, handled below
                      }
-                     if (employeeBindingSource.Position < 0 && employees.Count > 0)
-                    {
-                        employeeBindingSource.MoveFirst();
+                } else if (response.status === 204) {
+                   console.log("API Response: 204 No Content");
+                   return { isSuccess: true, data: null, totalDataCount: 0, message: "Operation successful (No Content)" };
+                } else if (!response.ok) {
+                   // Handle non-JSON error responses (e.g., plain text error)
+                   let errorText = await response.text();
+                   throw new Error(`API Error: ${response.status} ${response.statusText}. ${errorText.substring(0, 200)}...`);
+                }
+
+                // Process response data structure
+                if (responseData && responseData.hasOwnProperty('isSuccess')) {
+                    if (responseData.isSuccess) {
+                         console.log("API Success:", responseData.message);
+                         return responseData; // API wrapper indicates success
+                    } else {
+                        // API wrapper indicates failure, throw error with message
+                         console.error("API Reported Failure:", responseData.message);
+                         throw new Error(responseData.message || 'API reported an unsuccessful operation.');
                     }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading employees: {ex.Message}", "Loading Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Error loading data.";
-            }
-            finally
-            {
-                 if (!_isLoading)
-                {
-                    UpdateButtonStates();
-                    UpdateNavigationState();
-                }
-                ToggleControls(true, true);
-            }
-        }
-
-        private void SetupBindings()
-        {
-            txtEmployeeID.DataBindings.Clear();
-            txtFirstName.DataBindings.Clear();
-            txtLastName.DataBindings.Clear();
-            txtPosition.DataBindings.Clear();
-            txtUsername.DataBindings.Clear();
-            // Password field (txtPassword) is NOT bound directly for security.
-
-            txtEmployeeID.DataBindings.Add("Text", employeeBindingSource, "EmployeeID", true, DataSourceUpdateMode.Never);
-            txtFirstName.DataBindings.Add("Text", employeeBindingSource, "FirstName", false, DataSourceUpdateMode.OnValidation);
-            txtLastName.DataBindings.Add("Text", employeeBindingSource, "LastName", false, DataSourceUpdateMode.OnValidation);
-            txtPosition.DataBindings.Add("Text", employeeBindingSource, "Position", true, DataSourceUpdateMode.OnValidation, string.Empty, "");
-            txtUsername.DataBindings.Add("Text", employeeBindingSource, "Username", false, DataSourceUpdateMode.OnValidation);
-        }
-
-        private void ClearForm()
-        {
-            employeeBindingSource.SuspendBinding();
-            txtEmployeeID.Clear();
-            txtFirstName.Clear();
-            txtLastName.Clear();
-            txtPosition.Clear();
-            txtUsername.Clear();
-            txtPassword.Clear(); // Always clear password field
-            employeeBindingSource.ResumeBinding();
-        }
-
-        private void ToggleControls(bool enabled, bool keepToolbarEnabled = false)
-        {
-            groupBoxDetails.Enabled = enabled;
-            if (!keepToolbarEnabled) toolStrip1.Enabled = enabled;
-            else toolStrip1.Enabled = true;
-            this.Cursor = enabled ? Cursors.Default : Cursors.WaitCursor;
-        }
-        
-        private void UpdateButtonStates()
-        {
-            if (_isLoading) return;
-            bool hasItems = employeeBindingSource.Count > 0;
-            bool isItemSelected = employeeBindingSource.Current != null;
-
-            bool requiredFieldsFilled = !string.IsNullOrWhiteSpace(txtFirstName.Text) &&
-                                        !string.IsNullOrWhiteSpace(txtLastName.Text) &&
-                                        !string.IsNullOrWhiteSpace(txtUsername.Text);
-            if (_isNew)
-            {
-                requiredFieldsFilled = requiredFieldsFilled && !string.IsNullOrWhiteSpace(txtPassword.Text);
-            }
-
-
-            tsbSave.Enabled = _isNew ? requiredFieldsFilled : (isItemSelected && requiredFieldsFilled);
-            tsbDelete.Enabled = isItemSelected && !_isNew;
-            tsbFirst.Enabled = isItemSelected && !_isNew && employeeBindingSource.Position > 0;
-            tsbPrevious.Enabled = isItemSelected && !_isNew && employeeBindingSource.Position > 0;
-            tsbNext.Enabled = isItemSelected && !_isNew && employeeBindingSource.Position < employeeBindingSource.Count - 1;
-            tsbLast.Enabled = isItemSelected && !_isNew && employeeBindingSource.Position < employeeBindingSource.Count - 1;
-            tsbNew.Enabled = toolStrip1.Enabled;
-            txtSearch.Enabled = toolStrip1.Enabled;
-            tsbSearch.Enabled = toolStrip1.Enabled;
-        }
-
-        private void UpdateNavigationState()
-        {
-             if (_isLoading) return;
-            bool hasItems = employeeBindingSource.Count > 0;
-            bool isItemSelected = employeeBindingSource.Current != null;
-
-            if (_isNew)
-            {
-                lblStatus.Text = "Adding new employee...";
-                groupBoxDetails.Enabled = true;
-                lblPasswordInfo.Text = "Password is required for new employee.";
-                txtPassword.Enabled = true;
-            }
-            else if (isItemSelected)
-            {
-                lblStatus.Text = $"Record {employeeBindingSource.Position + 1} of {employeeBindingSource.Count}";
-                groupBoxDetails.Enabled = true;
-                lblPasswordInfo.Text = "Enter password only to change existing.";
-                txtPassword.Enabled = true;
-                txtPassword.Clear(); // Clear password when navigating to existing records
-            }
-            else
-            {
-                lblStatus.Text = hasItems ? "No employee selected." : (string.IsNullOrWhiteSpace(txtSearch.Text) ? "No employees found." : $"No employees matching '{txtSearch.Text}'.");
-                groupBoxDetails.Enabled = false;
-                txtPassword.Enabled = false;
-                if (!hasItems) ClearForm();
-            }
-            UpdateButtonStates();
-        }
-
-        private void tsbNew_Click(object sender, EventArgs e)
-        {
-            _isNew = true;
-            employeeBindingSource.SuspendBinding();
-            ClearForm();
-            txtFirstName.Focus();
-            UpdateNavigationState();
-        }
-
-        private async void tsbSave_Click(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(txtFirstName.Text) || string.IsNullOrWhiteSpace(txtLastName.Text))
-            {
-                MessageBox.Show("First Name and Last Name cannot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtFirstName.Focus(); return;
-            }
-            if (string.IsNullOrWhiteSpace(txtUsername.Text))
-            {
-                MessageBox.Show("Username cannot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtUsername.Focus(); return;
-            }
-            string? plainPassword = txtPassword.Text; // Can be empty if updating without changing password
-            if (_isNew && string.IsNullOrWhiteSpace(plainPassword))
-            {
-                MessageBox.Show("Password is required for a new employee.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtPassword.Focus(); return;
-            }
-
-            if (!_isNew && employeeBindingSource.Current != null)
-            {
-                employeeBindingSource.EndEdit();
-            }
-
-            ToggleControls(false);
-            lblStatus.Text = "Saving...";
-
-            try
-            {
-                bool success = false;
-                Employee? employeeToSave = null;
-                bool wasNewItemInitially = _isNew;
-
-                if (_isNew)
-                {
-                    employeeToSave = new Employee
-                    {
-                        FirstName = txtFirstName.Text.Trim(),
-                        LastName = txtLastName.Text.Trim(),
-                        Position = string.IsNullOrWhiteSpace(txtPosition.Text) ? null : txtPosition.Text.Trim(),
-                        Username = txtUsername.Text.Trim(),
-                        // PasswordHash will be set by the service
-                    };
-                    success = await _employeeService.AddEmployeeAsync(employeeToSave, plainPassword!); // plainPassword must not be null here
-                     if (success) lblStatus.Text = "Employee added successfully.";
-                }
-                else
-                {
-                    if (employeeBindingSource.Current is Employee currentEmployee)
-                    {
-                        currentEmployee.FirstName = txtFirstName.Text.Trim();
-                        currentEmployee.LastName = txtLastName.Text.Trim();
-                        currentEmployee.Position = string.IsNullOrWhiteSpace(txtPosition.Text) ? null : txtPosition.Text.Trim();
-                        currentEmployee.Username = txtUsername.Text.Trim();
-                        employeeToSave = currentEmployee;
-                        // Pass null if password field is empty, meaning don't change password
-                        string? passwordToUpdate = string.IsNullOrWhiteSpace(plainPassword) ? null : plainPassword;
-                        success = await _employeeService.UpdateEmployeeAsync(currentEmployee, passwordToUpdate);
-                         if (success) lblStatus.Text = "Employee updated successfully.";
-                    }
-                     else
-                    {
-                         MessageBox.Show("No employee selected to update.", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                         lblStatus.Text = "No employee selected.";
-                    }
+                } else if (response.ok) {
+                     // Response is OK, but no isSuccess flag. Assume success and return data.
+                     console.warn("API response was OK and JSON, but lacked 'isSuccess' property. Assuming success.");
+                     return { isSuccess: true, data: responseData, totalDataCount: responseData ? (Array.isArray(responseData) ? responseData.length : (responseData.totalCount || 0)) : 0, message: "Data received (Structure unknown)" };
+                } else {
+                    // Should not reach here if non-OK handled above and OK with JSON handled
+                    throw new Error('API call completed without success response or recognizable data structure.');
                 }
 
-                if (success)
-                {
-                    _isNew = false;
-                    txtPassword.Clear(); // Clear password field after successful save
-                    int savedItemId = employeeToSave?.EmployeeID ?? -1;
-                    string? currentSearchTerm = wasNewItemInitially ? null : txtSearch.Text;
-                    if (wasNewItemInitially) txtSearch.Clear();
-                    
-                    await LoadDataAsync(currentSearchTerm);
-                    
-                    if (savedItemId > 0) SelectEmployeeById(savedItemId);
-                    else if(employeeBindingSource.Count > 0) employeeBindingSource.MoveFirst();
-                }
+
+            } catch (error) {
+                console.error(`API Fetch Error (${url}):`, error);
+                // Only show global feedback for network/unexpected errors, not API-reported ones
+                // The calling code should catch and decide if global feedback is appropriate
+                // App.showGlobalFeedback(`Error: ${error.message || 'Network request failed'}`, true);
+                throw error; // Re-throw the error so calling functions can handle it
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                MessageBox.Show("Record modified. Reload and try again.", "Concurrency Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                lblStatus.Text = "Save failed due to concurrency.";
-                await LoadDataAsync(txtSearch.Text);
+        },
+
+        // --- Common API Calls (Can be included in all scripts if needed, or just define specific ones per page) ---
+        async getAllInsuranceCompanies() {
+             // Example of a common API call
+             const result = await this._fetch('/AllInsuranceCompanies', { method: 'GET', headers: App.DEFAULT_HEADERS });
+             // _fetch throws on failure, so if we're here, it was successful
+             if (!Array.isArray(result.data)) {
+                 console.error("API /AllInsuranceCompanies returned unexpected data format:", result.data);
+                 throw new Error("Unexpected data format from server for insurance companies.");
+             }
+             return result.data; // Return the array of companies
+         },
+
+
+        // Page-Specific API Calls (Defined here as examples, actual calls will be in page-specific script)
+        // These are just examples, copy/paste the relevant ones to your page's script block below the App object.
+        /*
+         async getInsuranceDetails(insuranceRenewalId) { ... } // For Page 1
+         async addInsuranceRenewal(data) { ... } // For Page 1
+         async searchRenewals(filterCriteria) { ... } // For Page 2
+         async addInsuranceCompany(name) { ... } // For Page 3
+         async updateInsuranceCompany(id, name) { ... } // For Page 3
+         async deleteInsuranceCompany(id) { ... } // For Page 3
+         async getNotificationSetting() { ... } // For Page 4
+         async updateNotificationSetting(days) { ... } // For Page 4
+        */
+    },
+
+    // --- UI Feedback & Loading ---
+    feedbackTimeout: null,
+    showGlobalFeedback(message, isError = false) {
+        const feedbackDiv = document.getElementById('global-feedback');
+        if (!feedbackDiv) {
+            console.warn("Feedback element #global-feedback not found.");
+            return;
+        }
+        feedbackDiv.textContent = message;
+        feedbackDiv.classList.toggle('error', isError);
+        feedbackDiv.style.display = 'block';
+        clearTimeout(App.feedbackTimeout);
+        App.feedbackTimeout = setTimeout(() => { feedbackDiv.style.display = 'none'; }, 5000); // Hide after 5 seconds
+    },
+
+    setGlobalLoading(isLoading) {
+        const loadingIndicator = document.getElementById('loading-overlay');
+        if (!loadingIndicator) {
+             console.warn("Loading overlay element #loading-overlay not found.");
+             return;
+        }
+        loadingIndicator.classList.toggle('active', isLoading);
+    },
+
+    setButtonLoading(buttonElement, isLoading, originalContent = 'Process...') {
+        if (!buttonElement) return;
+        const loaderHtml = '<span class="app-loader"></span> ';
+
+        if (isLoading) {
+            if (!buttonElement.dataset.originalContent) {
+                 // Store original content if not already stored
+                 buttonElement.dataset.originalContent = buttonElement.innerHTML;
+                 // Use provided originalContent if element was empty or for specific text
+                 if (buttonElement.dataset.originalContent.trim() === '' || originalContent !== 'Process...') {
+                      buttonElement.dataset.originalContent = originalContent;
+                 }
             }
-            catch (DbUpdateException dbEx)
-            {
-                 string errorMessage = $"Database error: {dbEx.InnerException?.Message ?? dbEx.Message}.";
-                 if (dbEx.InnerException?.Message.Contains("UNIQUE KEY constraint") == true || 
-                    dbEx.InnerException?.Message.Contains("duplicate key value violates unique constraint") == true)
-                {
-                    errorMessage += "\nThe username might already exist.";
-                }
-                MessageBox.Show(errorMessage, "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Database save error.";
+            buttonElement.disabled = true;
+            // Set new content with spinner
+            buttonElement.innerHTML = `${loaderHtml}${originalContent}`;
+
+        } else {
+            // Restore original content
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = buttonElement.dataset.originalContent || originalContent; // Use stored or provided original
+            delete buttonElement.dataset.originalContent; // Clean up state
+        }
+    },
+
+
+    // --- Formatting & Utility ---
+    formatDate(dateString) {
+        if (!dateString) return '-';
+        try {
+            // Try parsing different formats potentially returned by API
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                console.warn("Invalid date format for Date object:", dateString);
+                return App.escapeHtml(dateString); // Return as is if invalid
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "Save error.";
-            }
-            finally
-            {
-                if (!success) { 
-                     ToggleControls(true);
-                     UpdateButtonStates();
-                     UpdateNavigationState();
-                }
-            }
+            // Use toLocaleDateString for potentially better localization, or keep custom YYYY/MM/DD
+            // Keeping YYYY/MM/DD for consistency with original code structure
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}/${month}/${day}`;
+        } catch (e) {
+            console.error("Error formatting date:", dateString, e);
+            return App.escapeHtml(dateString);
+        }
+    },
+
+    formatCurrency(amount) {
+        let numericAmount = amount;
+        if (typeof amount === 'string') {
+            // Attempt to parse string, remove commas
+            numericAmount = parseFloat(amount.replace(/,/g, ''));
         }
 
-        private async void tsbDelete_Click(object sender, EventArgs e)
-        {
-            if (_isNew) {
-                MessageBox.Show("Cannot delete an unsaved new employee.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            if (employeeBindingSource.Current is Employee currentEmployee)
-            {
-                var confirmResult = MessageBox.Show($"Delete employee '{currentEmployee.FullName}' (Username: {currentEmployee.Username})?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (confirmResult == DialogResult.Yes)
-                {
-                    ToggleControls(false);
-                    lblStatus.Text = "Deleting...";
-                    try
-                    {
-                        bool success = await _employeeService.DeleteEmployeeAsync(currentEmployee.EmployeeID);
-                        if (success) lblStatus.Text = "Employee deleted.";
-                        await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                    catch (DbUpdateException dbEx) // Catch specific for FK, etc.
-                    {
-                        MessageBox.Show($"Database error: {dbEx.InnerException?.Message ?? dbEx.Message}.\nEmployee might have related records.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Database delete error.";
-                         await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"An error occurred: {ex.Message}", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        lblStatus.Text = "Delete error.";
-                         await LoadDataAsync(txtSearch.Text.Trim());
-                    }
-                }
-            }
-            else
-            {
-                MessageBox.Show("No employee selected.", "Delete Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
+        if (numericAmount === null || numericAmount === undefined || isNaN(numericAmount)) {
+            return '-';
         }
+        try {
+             // Use 'en-US' or 'ar-EG' based on requirement, but 'EGP' currency code implies EG formatting might be desired.
+             // Keep 'ar-EG' as in original, but note browser support for currency formatting varies.
+            return new Intl.NumberFormat('ar-EG', {
+                style: 'currency',
+                currency: 'EGP',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(numericAmount);
+        } catch (e) {
+            console.error("Error formatting currency:", numericAmount, e);
+            // Fallback if Intl.NumberFormat fails
+            return `${numericAmount.toFixed(2)} EGP`;
+        }
+    },
 
-        private async void PerformSearch()
-        {
-             _isNew = false; employeeBindingSource.ResumeBinding();
-            await LoadDataAsync(txtSearch.Text.Trim());
-        }
-        private void tsbSearch_Click(object sender, EventArgs e) => PerformSearch();
-        private void txtSearch_KeyDown(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { PerformSearch(); e.SuppressKeyPress = true; } }
-        private void tsbFirst_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; employeeBindingSource.ResumeBinding(); employeeBindingSource.MoveFirst(); }
-        private void tsbPrevious_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; employeeBindingSource.ResumeBinding(); employeeBindingSource.MovePrevious(); }
-        private void tsbNext_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; employeeBindingSource.ResumeBinding(); employeeBindingSource.MoveNext(); }
-        private void tsbLast_Click(object sender, EventArgs e) { if (_isNew) _isNew = false; employeeBindingSource.ResumeBinding(); employeeBindingSource.MoveLast(); }
+     determinePolicyStatus(expirationDateStr, isReregular) {
+            // Treat isReregular: true as "Renewed" which falls under "Active" in the styling logic
+            if (isReregular === true) return "Active"; // Renamed from "Renewed" to map to active status class
 
-        private void employeeBindingSource_CurrentChanged(object sender, EventArgs e)
-        {
-            if (_isLoading || _isNew) return;
-            if (employeeBindingSource.Current == null) ClearForm();
-            else txtPassword.Clear(); // Clear password on navigation to existing employee
-            UpdateButtonStates();
-            UpdateNavigationState();
-        }
+            if (!expirationDateStr) return "Unknown";
 
-        private void SelectEmployeeById(int employeeId, bool triggerCurrentChanged = true)
-        {
-            if (employeeId <= 0) return;
-            if (employeeBindingSource.DataSource is List<Employee> employees)
-            {
-                int index = employees.FindIndex(emp => emp.EmployeeID == employeeId);
-                if (index != -1)
-                {
-                     if(!triggerCurrentChanged)
-                    {
-                        this.employeeBindingSource.CurrentChanged -= employeeBindingSource_CurrentChanged;
-                        employeeBindingSource.Position = index;
-                        this.employeeBindingSource.CurrentChanged += employeeBindingSource_CurrentChanged;
-                        if(employeeBindingSource.Current is Employee emp)
-                        {
-                            txtEmployeeID.Text = emp.EmployeeID.ToString();
-                            txtFirstName.Text = emp.FirstName;
-                            txtLastName.Text = emp.LastName;
-                            txtPosition.Text = emp.Position;
-                            txtUsername.Text = emp.Username;
-                            txtPassword.Clear(); // Password is not displayed
-                        }
-                    }
-                    else
-                    {
-                         employeeBindingSource.Position = index;
-                    }
-                }
+            const expDate = new Date(expirationDateStr);
+            if (isNaN(expDate.getTime())) {
+                console.warn("Invalid date format for Date object for status determination:", expirationDateStr);
+                return "Invalid Date";
             }
+
+            const today = new Date();
+            // Normalize dates to UTC day for accurate comparison across timezones
+            const todayNormalized = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+            const expDateNormalized = new Date(Date.UTC(expDate.getUTCFullYear(), expDate.getUTCMonth(), expDate.getUTCDate()));
+
+            if (expDateNormalized < todayNormalized) return "Expired";
+
+            const fifteenDaysFromToday = new Date(todayNormalized);
+            fifteenDaysFromToday.setUTCDate(todayNormalized.getUTCDate() + 15);
+
+            if (expDateNormalized <= fifteenDaysFromToday) return "Expiring Soon";
+
+            return "Active";
+        },
+
+        formatStatus(statusText) {
+            if (!statusText) return '<span class="app-status">-</span>';
+            let statusClass = '';
+            const lowerStatus = String(statusText).toLowerCase();
+
+            // Map status text to unified class names
+            if (lowerStatus === 'active') statusClass = 'app-status--active';
+            else if (lowerStatus === 'expiring soon') statusClass = 'app-status--expiring';
+            else if (lowerStatus === 'expired') statusClass = 'app-status--expired';
+            else if (lowerStatus === 'renewed') statusClass = 'app-status--active'; // Map Renewed to Active state
+            else return `<span class="app-status">${App.escapeHtml(statusText)}</span>`; // Default if status not recognized
+
+            return `<span class="app-status ${statusClass}">${App.escapeHtml(statusText)}</span>`;
+        },
+
+    escapeHtml(unsafe) {
+        if (unsafe === null || typeof unsafe === 'undefined') {
+            return '';
         }
-    }
-}
+        const safeString = String(unsafe);
+        return safeString
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    },
+
+    // Utility to format date for API input (YYYY-MM-DD)
+    formatDateForApi(dateInputString) {
+        if (!dateInputString) return null;
+        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+        if (datePattern.test(dateInputString)) {
+            return dateInputString; // Already in YYYY-MM-DD format
+        }
+        try {
+            const d = new Date(dateInputString);
+            if (isNaN(d.getTime())) return null;
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        } catch (e) {
+            console.error("Error formatting date for API:", dateInputString, e);
+            return null;
+        }
+    },
+
+     getTodayYYYYMMDD() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+};
 ```
 
-**To Use These Files:**
+---
 
-1.  **Replace existing files:** If you have `frmCategories.Designer.cs`, `frmCategories.cs`, etc., in your project, replace their content with the code provided above.
-2.  **Add New Files:** If these forms are new, add new Windows Forms to your project with these names (e.g., `frmSuppliers`) and then paste the `Designer.cs` content into the `*.Designer.cs` file and the `cs` content into the `*.cs` file.
-3.  **Ensure Services Exist:** Make sure you have `CategoryService.cs`, `SupplierService.cs`, `ProductService.cs`, `CustomerService.cs`, and `EmployeeService.cs` in your `Store.Services` namespace, and that they have the methods being called (e.g., `GetAllAsync`, `SearchAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync`).
-    *   `ProductService` will also need `GetCategoriesForDropdownAsync()` and `GetSuppliersForDropdownAsync()`.
-    *   `EmployeeService` methods `AddEmployeeAsync` and `UpdateEmployeeAsync` will need to handle password hashing.
-4.  **Ensure Models Exist:** Your `Store.Data.Models` namespace should contain `Category.cs`, `Supplier.cs`, `Product.cs`, `Customer.cs`, and `Employee.cs` with the properties being accessed.
-5.  **Resource Files:** The `Designer.cs` files reference images like `(Image)resources.GetObject("tsbNew.Image")`. Ensure these image resources are correctly set up in your project's resource file (usually `Resources.resx`). If not, the designer might show errors or buttons might not have icons.
-6.  **Dependency Injection:** You'll need to instantiate these forms and pass the required services to their constructors (e.g., using a dependency injection framework or manual instantiation).
+Now, here are the updated `.ascx` files:
 
-This comprehensive set of files should address the issue of navigation buttons not working after adding and saving a new record by correctly managing the UI state and data binding.
+**1. `CreateInsuranceRenewal.ascx` (Updated)**
+
+```html
+<%@ Control Language="C#" AutoEventWireup="true" CodeFile="CreateInsuranceRenewal.ascx.cs" Inherits="CreateInsuranceRenewal" %>
+<%@ Register Assembly="AjaxControlToolkit" Namespace="AjaxControlToolkit" TagPrefix="asp" %>
+
+<style>
+    /* --- Unified CSS Block (Copy and paste the full unified CSS here) --- */
+    /* Styles from the unified block above */
+    /* Ensure this style block contains the complete CSS from section 1 */
+    /* Example: */
+     :root { /* ... colors and spacing ... */ }
+     * { /* ... resets ... */ }
+     .app-container { /* ... */ }
+     /* ... rest of the unified CSS ... */
+     #global-feedback { /* ... */ }
+     #loading-overlay { /* ... */ }
+     .app-loader { /* ... */ }
+     /* END Unified CSS Block */
+
+     /* Adjustments specific to this page if needed */
+     .app-info-grid {
+         /* Specific columns for this grid */
+         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+         gap: var(--app-space-lg);
+         margin-bottom: var(--app-space-xl);
+     }
+      .app-form-row--single-col {
+          grid-template-columns: 1fr; /* Override form-row for a single input */
+      }
+</style>
+
+
+<div class="app-container" dir="ltr">
+    <h1 class="app-heading">System Information</h1>
+
+    <div class="app-info-grid">
+        <div class="app-info-section">
+            <h2 class="app-info-title">Application Details</h2>
+            <p class="app-info-content">App #: <span id="app-number">-</span></p>
+            <p class="app-info-content">Name: <span id="customer-name">-</span></p>
+        </div>
+
+        <div class="app-info-section">
+            <h2 class="app-info-title">Vehicle Information</h2>
+            <p class="app-info-content">Car Brand: <span id="car-brand">-</span></p>
+            <p class="app-info-content">Chassis: <span id="chassis">-</span></p>
+        </div>
+
+        <div class="app-info-section">
+            <h2 class="app-info-title">Insurance Details</h2>
+            <p class="app-info-content">Base Amount: <span id="base-amount">-</span></p>
+            <p class="app-info-content">Minimum Required: <span id="minimum-required">-</span></p>
+        </div>
+
+        <div class="app-info-section">
+            <h2 class="app-info-title">Payment Status</h2>
+            <p class="app-info-content">Regular: <span id="is-regular">-</span></p>
+            <p class="app-info-content">Last Payment: <span id="last-payment">-</span></p>
+        </div>
+    </div>
+
+    <div class="app-section">
+        <h2 class="app-section-title">Insurance Information</h2>
+
+        <div class="app-form-row app-form-row--single-col">
+            <div class="app-form-group">
+                <label class="app-form-label" for="insurance-company">Insurance Company</label>
+                <select class="app-form-select" id="insurance-company">
+                    <option value="" disabled selected>Select Insurance Company</option>
+                    <%-- Options will be loaded by JavaScript --%>
+                </select>
+            </div>
+        </div>
+
+        <div class="app-form-row app-form-row--single-col">
+            <div class="app-form-group">
+                <label class="app-form-label" for="annual-insurance">Annual Insurance Amount</label>
+                <input type="text" class="app-form-control" id="annual-insurance" placeholder="$ Enter amount">
+                <small class="app-form-text-help">Must not be less than the remaining settlement amount + 20% (based on Minimum Required)</small>
+                 <span id="annual-insurance-error" class="app-inline-error"></span> <%-- Inline error span --%>
+            </div>
+        </div>
+
+        <div class="app-action-buttons app-action-buttons--left">
+            <button class="app-button app-button--primary" id="save-insurance-btn" type="button">
+                <span class="app-button-icon">💾</span>
+                Save Information
+            </button>
+        </div>
+    </div>
+
+    <%-- Global Feedback and Loading Overlay --%>
+    <div id="global-feedback"></div>
+    <div id="loading-overlay">Loading...</div>
+</div>
+
+<script>
+    // --- Unified Shared JavaScript Block (Copy and paste the full App object definition here) ---
+    // Includes App object, apiService, showGlobalFeedback, setGlobalLoading, setButtonLoading, formatters, etc.
+    // Ensure this script block contains the complete App object from section 2
+
+    // Example Placeholder (Replace with actual App object definition)
+    /*
+    const App = {
+        API_BASE_URL: '...', apiService: { _fetch: async () => {}, ... },
+        showGlobalFeedback: () => {}, setGlobalLoading: () => {}, setButtonLoading: () => {},
+        formatDate: () => {}, formatCurrency: () => {}, determinePolicyStatus: () => {}, formatStatus: () => {},
+        escapeHtml: () => {}, formatDateForApi: () => {}, getTodayYYYYMMDD: () => {}
+    };
+    */
+    // --- END Unified Shared JavaScript Block ---
+
+    // !!! IMPORTANT: Mock data for insuranceRenewalId - REPLACE WITH ACTUAL VALUE FROM SERVER-SIDE CODE !!!
+    // This ID needs to come from your server-side logic, perhaps passed via a hidden field or data attribute.
+    const insuranceRenewalId = 10; // Example value - GET THIS FROM YOUR C# CODE
+
+    // Page-Specific API Calls (Optional: Can be defined here if only used on this page)
+    App.apiService.getInsuranceDetails = async function(id) {
+         // Assuming API endpoint accepts POST with body { insuranceRenewalId: id }
+         const result = await this._fetch('/GetInsuranceDetails', {
+             method: 'POST', // Or 'GET' if the endpoint supports it with a query string
+             headers: App.JSON_HEADERS, // Or App.DEFAULT_HEADERS for GET
+             body: JSON.stringify({ insuranceRenewalId: id }) // Assuming POST body
+         });
+         // _fetch throws on error, so if we are here, result.isSuccess is true
+         if (!result || !result.data) {
+             throw new Error("API returned success but no data for details.");
+         }
+         return result.data; // Return just the data payload
+    };
+
+    App.apiService.addInsuranceRenewal = async function(data) {
+        // API expects { totalInsuranceAmount, installmentId, companyId } in body
+        const result = await this._fetch('/AddInsuranceRenewal', {
+            method: 'POST',
+            headers: App.JSON_HEADERS,
+            body: JSON.stringify(data)
+        });
+         if (!result || !result.data) {
+             // API might return success with no data for add operations, check message if needed
+             // throw new Error("API returned success but no confirmation data.");
+         }
+        return result.data; // Return data if any, or confirmation
+    };
+
+     // Overwriting common getAllCompanies just for clarity this page uses it
+    App.apiService.getAllInsuranceCompanies = async function() {
+        const result = await this._fetch('/AllInsuranceCompanies', { method: 'GET', headers: App.DEFAULT_HEADERS });
+        if (!Array.isArray(result.data)) {
+             console.error("API /AllInsuranceCompanies returned unexpected data format:", result.data);
+             throw new Error("Unexpected data format from server for insurance companies.");
+        }
+        return result.data;
+    };
+
+
+    // --- Page Specific Logic ---
+
+    async function populateInsuranceDetails(insuranceRenewalId) {
+        App.setGlobalLoading(true);
+        try {
+            const details = await App.apiService.getInsuranceDetails(insuranceRenewalId);
+            // Populate spans with data, use escapeHtml
+            document.getElementById('app-number').textContent = App.escapeHtml(details.installmentUniqueId || '-'); // Assuming installmentUniqueId exists
+            document.getElementById('customer-name').textContent = App.escapeHtml(details.customerName || '-');
+            document.getElementById('car-brand').textContent = App.escapeHtml(details.carBrand || '-');
+            document.getElementById('chassis').textContent = App.escapeHtml(details.chassis || '-');
+            // Use formatCurrency for amounts
+            document.getElementById('base-amount').textContent = App.formatCurrency(details.baseAmount);
+            document.getElementById('minimum-required').textContent = App.formatCurrency(details.minimumRequired);
+            // Format boolean status
+            document.getElementById('is-regular').textContent = (details.isReregular === true) ? 'Yes' : (details.isReregular === false ? 'No' : '-');
+            // Use formatDate for dates
+            document.getElementById('last-payment').textContent = App.formatDate(details.lastPaymentDate);
+
+        } catch (error) {
+            // Error handled by App.apiService._fetch, shows global feedback
+            // You might add page-specific error handling here if needed
+             console.error("Error populating details:", error);
+        } finally {
+            App.setGlobalLoading(false);
+        }
+    }
+
+    async function handleSaveInsurance() {
+        const companySelect = document.getElementById('insurance-company');
+        const amountInput = document.getElementById('annual-insurance');
+        const amountError = document.getElementById('annual-insurance-error');
+        const saveButton = document.getElementById('save-insurance-btn');
+
+        amountError.textContent = ''; // Clear previous errors
+
+        const companyId = companySelect ? companySelect.value : '';
+        const totalInsuranceAmountStr = amountInput ? amountInput.value.trim() : '';
+
+        if (!companyId || totalInsuranceAmountStr === '') {
+            App.showGlobalFeedback('Please select an insurance company and enter the annual insurance amount.', true);
+            return;
+        }
+
+        const totalInsuranceAmount = parseFloat(totalInsuranceAmountStr);
+        if (isNaN(totalInsuranceAmount) || totalInsuranceAmount <= 0) {
+             amountError.textContent = 'Please enter a valid positive number.';
+             amountInput.focus();
+             return;
+        }
+
+        // Basic validation against minimum required (assuming it's available in the DOM)
+        const minimumRequiredSpan = document.getElementById('minimum-required');
+        const minimumRequiredText = minimumRequiredSpan ? minimumRequiredSpan.textContent : '0';
+        const minimumRequiredAmount = parseFloat(minimumRequiredText.replace(/[^0-9.-]+/g,"")); // Parse formatted currency string
+
+        if (!isNaN(minimumRequiredAmount) && totalInsuranceAmount < minimumRequiredAmount) {
+             amountError.textContent = `Amount must not be less than the Minimum Required (${minimumRequiredSpan.textContent})`;
+             amountInput.focus();
+             return;
+        }
+
+
+        // Assuming installmentUniqueId from the info section is the installmentId needed for the API
+        const installmentIdSpan = document.getElementById('app-number');
+        const installmentId = installmentIdSpan ? parseInt(installmentIdSpan.textContent) : NaN;
+
+        if (isNaN(installmentId)) {
+            App.showGlobalFeedback('Could not retrieve valid Installment ID from the page.', true);
+            return;
+        }
+
+        const data = {
+            totalInsuranceAmount: totalInsuranceAmount,
+            installmentId: installmentId,
+            companyId: parseInt(companyId)
+        };
+
+        App.setButtonLoading(saveButton, true, 'Saving...');
+        App.setGlobalLoading(true); // Optional: Also show global loader for critical save operations
+        try {
+            const result = await App.apiService.addInsuranceRenewal(data);
+            // Assuming API returns success property or throws error
+            App.showGlobalFeedback('Insurance renewal added successfully.', false);
+            console.log('Insurance renewal added result:', result);
+            // You might want to redirect or update the UI here
+        } catch (error) {
+            // Error is handled by App.apiService._fetch and shows global feedback
+            console.error("Error adding insurance renewal:", error);
+        } finally {
+            App.setButtonLoading(saveButton, false, '<span class="app-button-icon">💾</span> Save Information');
+            App.setGlobalLoading(false); // Hide global loader
+        }
+    }
+
+    async function loadCompanies() {
+        const companySelect = document.getElementById('insurance-company');
+         if (!companySelect) return;
+
+        // Keep 'Select' option but clear others
+        companySelect.innerHTML = '<option value="" disabled selected>Select Insurance Company</option>';
+
+        // No global loader for just populating a dropdown, but could add if this was slow
+        // App.setGlobalLoading(true);
+        try {
+            const companies = await App.apiService.getAllInsuranceCompanies();
+
+            // Populate with fetched companies
+            companies.forEach(company => {
+                const option = document.createElement('option');
+                // Assuming company object has insuranceCompanyID and insuranceCompanyName properties
+                option.value = company.insuranceCompanyID;
+                option.textContent = App.escapeHtml(company.insuranceCompanyName || 'Unnamed Company');
+                companySelect.appendChild(option);
+            });
+
+        } catch (error) {
+             // Error handled by App.apiService._fetch, shows global feedback
+             console.error("Error loading companies:", error);
+             // Add a message to the select if companies failed to load
+             companySelect.innerHTML += '<option value="" disabled>Error loading companies</option>';
+        } finally {
+            // App.setGlobalLoading(false);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Replace the hardcoded ID with a method to get it from the server if possible
+        // For example: document.getElementById('hiddenInsuranceRenewalId').value;
+        populateInsuranceDetails(insuranceRenewalId);
+        loadCompanies();
+
+        const saveButton = document.getElementById('save-insurance-btn');
+        if (saveButton) {
+            saveButton.addEventListener('click', handleSaveInsurance);
+        }
+    });
+</script>
+```
+
+---
+
+**2. `AutoInsuranceRenewal.ascx` (Updated)**
+
+```html
+<%@ Control Language="C#" AutoEventWireup="true" CodeFile="AutoInsuranceRenewal.ascx.cs" Inherits="AutoInsuranceRenewal" %>
+<%@ Register Assembly="AjaxControlToolkit" Namespace="AjaxControlToolkit" TagPrefix="asp" %>
+
+<style>
+    /* --- Unified CSS Block (Copy and paste the full unified CSS here) --- */
+    /* Styles from the unified block above */
+    /* Ensure this style block contains the complete CSS from section 1 */
+    /* Example: */
+     :root { /* ... colors and spacing ... */ }
+     * { /* ... resets ... */ }
+     .app-container { /* ... */ }
+     /* ... rest of the unified CSS ... */
+     #global-feedback { /* ... */ }
+     #loading-overlay { /* ... */ }
+     .app-loader { /* ... */ }
+     .app-loader-inline { /* ... */ }
+     /* END Unified CSS Block */
+
+     /* Adjustments specific to this page if needed */
+     /* No major overrides needed, unified classes should cover it */
+</style>
+
+<div class="app-container" dir="ltr">
+
+    <div class="app-section"> <%-- Using app-section for the welcome area for consistent padding/shadow --%>
+        <h1 class="app-heading" style="margin-bottom:var(--app-space-sm);">Welcome to License Renewal Tracker</h1>
+        <p style="color:var(--app-color-text-secondary);">Your reliable companion for managing customer licenses efficiently. Stay organized and never miss a renewal deadline with our comprehensive tracking system.</p>
+    </div>
+
+    <%-- Features Section --%>
+    <div class="app-card-grid">
+
+        <a href="/renewals" class="app-card app-card--accent-blue">
+            <div class="app-card-icon">👁️</div>
+            <h3 class="app-card-title">Track Renewals</h3>
+            <p class="app-card-description">Monitor all your customer licenses and get timely notifications for upcoming renewals.</p>
+        </a>
+        <a href="/exports" class="app-card app-card--accent-green">
+            <div class="app-card-icon">📊</div>
+            <h3 class="app-card-title">Export Data</h3>
+            <p class="app-card-description">Download comprehensive reports in various formats for your records.</p>
+        </a>
+        <a href="/AutoInsuranceRenewalNotificationConfiguration.aspx" class="app-card app-card--accent-purple">
+            <div class="app-card-icon">🔔</div>
+            <h3 class="app-card-title">Smart Alerts</h3>
+            <p class="app-card-description">Receive automated notifications for upcoming license renewals.</p>
+        </a>
+    </div>
+
+    <%-- Action Buttons Section --%>
+    <div class="app-action-buttons app-action-buttons--left"> <%-- Explicitly left aligned as per original --%>
+        <%-- Assuming this link needs to be a button style --%>
+        <a href="/AutoInsuranceRenewal.aspx" class="app-button app-button--primary" type="button">
+            <span class="app-button-icon">🔍</span> View All Renewals
+        </a>
+        <%-- Original button --%>
+        <button class="app-button app-button--outline" type="button" id="new-renewal-btn">
+            <span class="app-button-icon">➕</span> New Renewal Request
+        </button>
+    </div>
+
+    <%-- Stats Cards Section --%>
+    <div class="app-card-grid">
+        <div class="app-card app-card--stat">
+            <span class="app-stat-icon app-stat-icon--blue float-right">📊</span>
+            <div class="app-stat-title">Total Customers</div>
+            <div class="app-stat-value">2,451</div> <%-- Placeholder values --%>
+        </div>
+        <div class="app-card app-card--stat">
+            <span class="app-stat-icon app-stat-icon--orange float-right">⏳</span>
+            <div class="app-stat-title">Pending Renewals</div>
+            <div class="app-stat-value">147</div> <%-- Placeholder values --%>
+        </div>
+        <div class="app-card app-card--stat">
+            <span class="app-stat-icon app-stat-icon--green float-right">✅</span>
+            <div class="app-stat-title">Renewed Today</div>
+            <div class="app-stat-value">24</div> <%-- Placeholder values --%>
+        </div>
+        <div class="app-card app-card--stat">
+            <span class="app-stat-icon app-stat-icon--red float-right">⚠️</span>
+            <div class="app-stat-title">Expired Licenses</div>
+            <div class="app-stat-value">18</div> <%-- Placeholder values --%>
+        </div>
+    </div>
+
+    <%-- Data Table Section --%>
+    <div class="app-data-table-container">
+
+        <%-- Search Form --%>
+        <div class="app-search-form">
+            <h3>Search Filters</h3>
+            <div class="app-search-fields">
+                <div class="app-form-group">
+                    <label for="customerName" class="app-form-label">Customer Name</label>
+                    <input type="text" id="customerName" class="app-form-control" placeholder="Enter customer name">
+                </div>
+                <div class="app-form-group">
+                    <label for="phoneNumber" class="app-form-label">Phone Number</label>
+                    <input type="text" id="phoneNumber" class="app-form-control" placeholder="Enter phone number">
+                </div>
+                <div class="app-form-group">
+                    <label for="expirationDate" class="app-form-label">Expiration Date</label>
+                    <input type="date" id="expirationDate" class="app-form-control">
+                </div>
+                <div class="app-form-group">
+                    <label for="chassisNumber" class="app-form-label">Chassis Number</label>
+                    <input type="text" id="chassisNumber" class="app-form-control" placeholder="Enter chassis number">
+                </div>
+            </div>
+
+            <div class="app-radio-group">
+                <div class="app-radio-option">
+                    <input type="radio" id="all" name="status-filter" value="all" checked>
+                    <label for="all">All</label>
+                </div>
+                <div class="app-radio-option">
+                    <input type="radio" id="expiredToday" value="expiredToday" name="status-filter">
+                    <label for="expiredToday">Expired Today</label>
+                </div>
+                <div class="app-radio-option">
+                    <input type="radio" id="expiredWithin15" value="expiredWithin15" name="status-filter">
+                    <label for="expiredWithin15">Expired within 15 days</label>
+                </div>
+                 <%-- Adding Expiring Soon within 15 days option --%>
+                 <div class="app-radio-option">
+                    <input type="radio" id="expiringSoon" value="expiringSoon" name="status-filter">
+                    <label for="expiringSoon">Expiring within 15 days</label>
+                 </div>
+                <div class="app-radio-option">
+                    <input type="radio" id="renewedToday" value="renewedToday" name="status-filter">
+                    <label for="renewedToday">Renewed Today</label>
+                </div>
+            </div>
+
+            <div class="app-action-buttons app-action-buttons--right"> <%-- Align search buttons right --%>
+                <button type="button" id="clearSearchButton" class="app-button app-button--outline">Clear</button>
+                <button type="button" id="searchButton" class="app-button app-button--primary">
+                   Search <span id="searchLoader" class="app-loader" style="display: none;"></span> <%-- Use app-loader --%>
+                 </button>
+            </div>
+            <span id="searchError" class="app-inline-error"></span> <%-- Use app-inline-error --%>
+        </div>
+
+        <%-- Table --%>
+        <div class="app-table-scroll-wrapper">
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Client Name</th>
+                        <th>Client ID</th>
+                        <th>Phone Number</th>
+                        <th>Policy End Date</th>
+                        <th>Renewal Year</th>
+                        <th>Vehicle Amount</th>
+                        <th>Insurance Amount</th>
+                        <th>Chassis Number</th>
+                        <th>Insurance Company</th>
+                        <th>Policy Status</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTableBody">
+                    <%-- Table rows will be populated by JavaScript --%>
+                    <tr class="no-results"><td colspan="10">Perform a search to see results.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <%-- Pagination --%>
+        <div id="paginationControls" class="app-pagination hidden">
+            <span id="paginationInfo" style="margin-right: auto;"></span>
+            <button type="button" id="prevPageButton" class="app-button app-button--outline" disabled>Previous</button>
+            <div id="pageNumbersContainer" style="display: inline-flex; gap: 5px; margin: 0 5px;">
+                <%-- Page number buttons will be added here --%>
+            </div>
+            <button type="button" id="nextPageButton" class="app-button app-button--outline" disabled>Next</button>
+        </div>
+    </div>
+
+    <%-- Global Feedback and Loading Overlay --%>
+    <div id="global-feedback"></div>
+    <div id="loading-overlay">Loading...</div>
+
+</div>
+
+<script>
+    // --- Unified Shared JavaScript Block (Copy and paste the full App object definition here) ---
+    // Includes App object, apiService, showGlobalFeedback, setGlobalLoading, setButtonLoading, formatters, etc.
+    // Ensure this script block contains the complete App object from section 2
+
+    // Example Placeholder (Replace with actual App object definition)
+    /*
+    const App = {
+        API_BASE_URL: '...', apiService: { _fetch: async () => {}, ... },
+        showGlobalFeedback: () => {}, setGlobalLoading: () => {}, setButtonLoading: () => {},
+        formatDate: () => {}, formatCurrency: () => {}, determinePolicyStatus: () => {}, formatStatus: () => {},
+        escapeHtml: () => {}, formatDateForApi: () => {}, getTodayYYYYMMDD: () => {}
+    };
+    */
+    // --- END Unified Shared JavaScript Block ---
+
+
+    // Page-Specific API Call
+    App.apiService.searchRenewals = async function(filterCriteria) {
+         const result = await this._fetch('/SearchAndFilter', {
+             method: 'POST',
+             headers: App.JSON_HEADERS,
+             body: JSON.stringify(filterCriteria)
+         });
+         // _fetch throws on failure. If we are here, it's a success result object.
+         if (!result || !result.data) {
+             // Handle cases where API is successful but returns no data or total count
+             console.warn("Search API returned success but no data or count:", result);
+             return { data: [], totalDataCount: 0, message: result?.message || "No data found." };
+         }
+         if (result.totalDataCount === undefined || result.totalDataCount === null) {
+             console.warn("Search API response missing totalDataCount. Assuming data.length is totalCount.", result);
+             result.totalDataCount = Array.isArray(result.data) ? result.data.length : 0;
+         }
+
+         return result; // Return the full result object
+    };
+
+
+    // --- Page Specific Logic ---
+    let currentPage = 1;
+    const PAGE_SIZE = 10; // Standardize page size
+
+    const searchButton = document.getElementById('searchButton');
+    const clearButton = document.getElementById('clearSearchButton');
+    const customerNameInput = document.getElementById('customerName');
+    const phoneNumberInput = document.getElementById('phoneNumber');
+    const expirationDateInput = document.getElementById('expirationDate');
+    const chassisNumberInput = document.getElementById('chassisNumber');
+    const resultsTableBody = document.getElementById('resultsTableBody');
+    const searchLoaderSpan = document.getElementById('searchLoader'); // Reference the span inside the button
+    const searchErrorElement = document.getElementById('searchError');
+
+    const paginationControls = document.getElementById('paginationControls');
+    const paginationInfo = document.getElementById('paginationInfo');
+    const prevPageButton = document.getElementById('prevPageButton');
+    const nextPageButton = document.getElementById('nextPageButton');
+    const pageNumbersContainer = document.getElementById('pageNumbersContainer');
+
+    function setLoadingState(isLoading) {
+        if (searchButton) {
+            // Use App.setButtonLoading for the search button
+            App.setButtonLoading(searchButton, isLoading, 'Search');
+        }
+        // Optional: Could use App.setGlobalLoading for long waits, but button feedback is often enough for search
+        // App.setGlobalLoading(isLoading);
+
+        // Disable/enable pagination buttons during load
+        if (prevPageButton) prevPageButton.disabled = isLoading || currentPage === 1;
+        if (nextPageButton) nextPageButton.disabled = isLoading || (paginationControls.classList.contains('hidden') || parseInt(paginationInfo.textContent.split('of ')[1]) <= currentPage * PAGE_SIZE); // Crude check
+        pageNumbersContainer.querySelectorAll('button').forEach(btn => btn.disabled = isLoading);
+    }
+
+
+    async function performSearch(page = 1) {
+        if (!resultsTableBody || !searchErrorElement || !paginationControls) {
+            console.error("Required elements for search/pagination not found in the DOM.");
+            // Show global error if critical elements are missing
+            App.showGlobalFeedback("Application error: Required page elements missing.", true);
+            return;
+        }
+
+        searchErrorElement.textContent = ''; // Clear previous inline error
+        currentPage = page;
+
+        let apiExpirationDate = null;
+        let apiInsuranceRenewalDate = null;
+        let daysUntilExpiration = null; // For 'Expiring Soon' filter
+
+        const selectedStatusRadio = document.querySelector('input[name="status-filter"]:checked');
+        if (selectedStatusRadio) {
+            const statusValue = selectedStatusRadio.value;
+            const today = App.getTodayYYYYMMDD();
+
+            switch (statusValue) {
+                case 'expiredToday':
+                     apiExpirationDate = today;
+                     break;
+                case 'expiredWithin15':
+                     // This filter usually means expiration date is <= today and >= today - 15 days
+                     // The API SearchAndFilter model might need to support date ranges or relative date filters.
+                     // For now, let's pass 'null' and hope the API interprets 'expiredWithin15' flag, or adjust criteria.
+                     // Assuming API accepts a specific filter flag or calculates based on today.
+                     // If API needs dates, we'd calculate date ranges here. Let's assume API handles the filter flag for simplicity.
+                     daysUntilExpiration = -15; // Negative days means expired in the last 15 days
+                     break;
+                case 'expiringSoon':
+                     // Expiration date is > today and <= today + 15 days
+                     daysUntilExpiration = 15; // Positive days means expiring in next 15 days
+                     break;
+                case 'renewedToday':
+                    apiInsuranceRenewalDate = today;
+                    break;
+                 case 'all':
+                 default:
+                     // Use date picker value if available, otherwise null
+                     apiExpirationDate = expirationDateInput.value ? App.formatDateForApi(expirationDateInput.value) : null;
+                     break;
+            }
+        } else {
+             // If no radio selected (shouldn't happen with 'all' default), use date picker
+             apiExpirationDate = expirationDateInput.value ? App.formatDateForApi(expirationDateInput.value) : null;
+        }
+
+        // Override date picker if a specific radio filter was selected (except 'all')
+         if (selectedStatusRadio && selectedStatusRadio.value !== 'all') {
+             // If a radio filter was used, clear the date picker value logically for the API criteria
+             // (though the UI input might still show a value if user set it)
+             // API needs to handle the radio filter preference over the date picker
+             if(selectedStatusRadio.value !== 'expiredToday') apiExpirationDate = null; // Keep expiredToday date
+             if(selectedStatusRadio.value !== 'renewedToday') apiInsuranceRenewalDate = null; // Keep renewedToday date
+         } else {
+             // If 'all' is selected, only use the date picker
+             daysUntilExpiration = null; // Don't use daysUntilExpiration filter
+         }
+
+
+        const searchCriteria = {
+            customerName: customerNameInput.value.trim() || null,
+            phoneNumber: phoneNumberInput.value.trim() || null,
+            expirationDate: apiExpirationDate, // Date picker or 'expiredToday'
+            insuranceRenewalDate: apiInsuranceRenewalDate, // 'renewedToday'
+            daysUntilExpiration: daysUntilExpiration, // 'expiredWithin15' or 'expiringSoon'
+            chassisNumber: chassisNumberInput.value.trim() || null,
+            PageNumber: currentPage,
+            PageSize: PAGE_SIZE
+        };
+
+        console.log("Search Criteria to be sent:", searchCriteria);
+
+        setLoadingState(true);
+        resultsTableBody.innerHTML = `
+            <tr class="no-results">
+                <td colspan="10"><span class="app-loader-inline"></span> Loading...</td>
+            </tr>`; // Show inline loading in table
+
+        try {
+            const response = await App.apiService.searchRenewals(searchCriteria);
+            console.log("API Response received:", response);
+
+            updateTable(response.data || []);
+            updatePagination(response.totalDataCount || 0, currentPage, PAGE_SIZE);
+
+            // Display success message if the API returned one (optional)
+            // if (response.message && response.message.toLowerCase() !== 'done') {
+            //      App.showGlobalFeedback(response.message, false); // Assuming message indicates success/info
+            // }
+
+        } catch (error) {
+            console.error('Search operation failed:', error);
+            resultsTableBody.innerHTML = `
+                <tr class="no-results">
+                    <td colspan="10">Error fetching data: ${App.escapeHtml(error.message)}. Please try again.</td>
+                </tr>`;
+            searchErrorElement.textContent = `Error: ${App.escapeHtml(error.message)}`; // Show inline error for search
+            updatePagination(0, 1, PAGE_SIZE); // Reset pagination on error
+             // Global feedback for the major error is already shown by App.apiService._fetch
+        } finally {
+            setLoadingState(false);
+        }
+    }
+
+    function updateTable(results) {
+        resultsTableBody.innerHTML = ''; // Clear existing rows
+
+        if (!results || results.length === 0) {
+            resultsTableBody.innerHTML = `
+              <tr class="no-results">
+                  <td colspan="10">No results found matching your criteria.</td>
+              </tr>`;
+            return;
+        }
+
+        results.forEach(item => {
+            const row = resultsTableBody.insertRow();
+            row.insertCell().textContent = App.escapeHtml(item.customerName ?? '-');
+            row.insertCell().textContent = App.escapeHtml(item.customerId ?? '-');
+            row.insertCell().textContent = App.escapeHtml(item.customerPhoneNumber ?? '-');
+            row.insertCell().textContent = App.formatDate(item.expirationDate); // Use App.formatDate
+            row.insertCell().textContent = App.escapeHtml(item.renewalYear ?? '-');
+            row.insertCell().textContent = App.formatCurrency(item.vehicleAmount); // Use App.formatCurrency
+            row.insertCell().textContent = App.formatCurrency(item.insuranceRenewal); // Use App.formatCurrency
+            row.insertCell().textContent = App.escapeHtml(item.chassisNumber ?? '-');
+            row.insertCell().textContent = App.escapeHtml(item.insuranceCompany ?? '-');
+
+            const policyStatusText = App.determinePolicyStatus(item.expirationDate, item.isReregular); // Use App.determinePolicyStatus
+            row.insertCell().innerHTML = App.formatStatus(policyStatusText); // Use App.formatStatus
+        });
+    }
+
+    function updatePagination(totalItems, page, itemsPerPage) {
+        if (!paginationControls || !paginationInfo || !prevPageButton || !nextPageButton || !pageNumbersContainer) return;
+
+        pageNumbersContainer.innerHTML = ''; // Clear existing page number buttons
+
+        if (totalItems === 0) {
+            paginationInfo.textContent = 'No results found';
+            paginationControls.classList.add('hidden'); // Hide pagination if no items
+            prevPageButton.disabled = true;
+            nextPageButton.disabled = true;
+            return;
+        }
+
+        paginationControls.classList.remove('hidden'); // Show pagination
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+        const startItem = (page - 1) * itemsPerPage + 1;
+        const endItem = Math.min(page * itemsPerPage, totalItems);
+        paginationInfo.textContent = `Showing ${startItem}-${endItem} of ${totalItems} results`;
+
+        prevPageButton.disabled = (page === 1);
+        nextPageButton.disabled = (page === totalPages);
+
+        const MAX_PAGE_BUTTONS_DISPLAYED = 5; // Max number of page buttons to show (excluding prev/next/ellipsis)
+        let startPage, endPage;
+
+        if (totalPages <= MAX_PAGE_BUTTONS_DISPLAYED) {
+            // Show all pages if total pages is within limit
+            startPage = 1;
+            endPage = totalPages;
+        } else {
+            // Calculate start and end pages to center around current page
+            const half = Math.floor(MAX_PAGE_BUTTONS_DISPLAYED / 2);
+            startPage = Math.max(page - half, 1);
+            endPage = Math.min(startPage + MAX_PAGE_BUTTONS_DISPLAYED - 1, totalPages);
+
+            // Adjust startPage if endPage hit totalPages boundary
+            if (endPage === totalPages) {
+                startPage = Math.max(totalPages - MAX_PAGE_BUTTONS_DISPLAYED + 1, 1);
+            }
+        }
+
+        // Add first page and ellipsis if needed
+        if (startPage > 1) {
+            pageNumbersContainer.appendChild(createPageButton(1, page));
+            if (startPage > 2) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.style.padding = '5px 8px'; // Match button padding approx
+                 ellipsis.style.color = 'var(--app-color-text-secondary)';
+                pageNumbersContainer.appendChild(ellipsis);
+            }
+        }
+
+        // Add page number buttons
+        for (let i = startPage; i <= endPage; i++) {
+            pageNumbersContainer.appendChild(createPageButton(i, page));
+        }
+
+        // Add last page and ellipsis if needed
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                 const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.style.padding = '5px 8px'; // Match button padding approx
+                 ellipsis.style.color = 'var(--app-color-text-secondary)';
+                pageNumbersContainer.appendChild(ellipsis);
+            }
+            pageNumbersContainer.appendChild(createPageButton(totalPages, page));
+        }
+    }
+
+    function createPageButton(pageNumber, currentPageForActiveCheck) {
+        const button = document.createElement('button');
+        button.textContent = pageNumber;
+        button.type = 'button';
+        button.classList.add('app-button', 'app-button--outline'); // Use app-button classes
+        if (pageNumber === currentPageForActiveCheck) {
+            button.classList.add('active');
+            button.disabled = true; // Disable current page button
+        }
+        button.addEventListener('click', () => performSearch(pageNumber));
+        return button;
+    }
+
+    function clearSearch() {
+        if (customerNameInput) customerNameInput.value = '';
+        if (phoneNumberInput) phoneNumberInput.value = '';
+        if (expirationDateInput) expirationDateInput.value = '';
+        if (chassisNumberInput) chassisNumberInput.value = '';
+        if (searchErrorElement) searchErrorElement.textContent = '';
+
+        const allRadio = document.getElementById('all');
+        if (allRadio) allRadio.checked = true;
+
+        // Re-run search with cleared filters (usually means show first page of 'all')
+        performSearch(1);
+    }
+
+    // --- Event Listeners & Initialization ---
+    document.addEventListener('DOMContentLoaded', function () {
+        if (searchButton) {
+            searchButton.addEventListener('click', () => performSearch(1));
+        }
+        if (clearButton) {
+            clearButton.addEventListener('click', clearSearch);
+        }
+        // Add keypress listener to trigger search on Enter key
+        [customerNameInput, phoneNumberInput, expirationDateInput, chassisNumberInput].forEach(input => {
+            if (input) {
+                input.addEventListener('keypress', function (event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault(); // Prevent form submission
+                        performSearch(1);
+                    }
+                });
+            }
+        });
+
+        // Listen for changes on radio buttons to trigger search
+        document.querySelectorAll('input[name="status-filter"]').forEach(radio => {
+            radio.addEventListener('change', () => performSearch(1));
+        });
+
+        // Pagination button listeners
+        if (prevPageButton) {
+            prevPageButton.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    performSearch(currentPage - 1);
+                }
+            });
+        }
+        if (nextPageButton) {
+            nextPageButton.addEventListener('click', () => {
+                performSearch(currentPage + 1);
+            });
+        }
+
+        // Optional: Perform initial search on page load (e.g., show the first page of 'all')
+        // Check if the default 'all' radio button is checked before performing initial search
+         const defaultRadio = document.querySelector('input[name="status-filter"][value="all"]');
+         if (defaultRadio && defaultRadio.checked) {
+             performSearch(1);
+         } else {
+             // Fallback in case 'all' isn't checked for some reason, still load first page
+             performSearch(1);
+         }
+    });
+</script>
+```
+
+---
+
+**3. `InsuranceCompanyManagement.ascx` (Updated)**
+
+```html
+<%@ Control Language="C#" AutoEventWireup="true" CodeFile="InsuranceCompanyManagement.ascx.cs" Inherits="InsuranceCompanyManagement" %>
+<%@ Register Assembly="AjaxControlToolkit" Namespace="AjaxControlToolkit" TagPrefix="asp" %>
+
+    <style>
+        /* --- Unified CSS Block (Copy and paste the full unified CSS here) --- */
+        /* Styles from the unified block above */
+        /* Ensure this style block contains the complete CSS from section 1 */
+        /* Example: */
+         :root { /* ... colors and spacing ... */ }
+         * { /* ... resets ... */ }
+         .app-container { /* ... */ }
+         /* ... rest of the unified CSS ... */
+         #global-feedback { /* ... */ }
+         #loading-overlay { /* ... */ }
+         .app-loader { /* ... */ }
+        /* END Unified CSS Block */
+
+        /* Adjustments specific to this page if needed */
+        /* No major overrides needed, unified classes should cover it */
+    </style>
+
+    <div class="app-container" dir="ltr">
+        <h1 class="app-heading">Company Management</h1>
+
+        <div class="app-tab-container">
+            <button class="app-tab active" type="button" onclick="switchTab('add', this)">Add</button>
+            <button class="app-tab" type="button" onclick="switchTab('update', this)">Update</button>
+            <button class="app-tab" type="button" onclick="switchTab('delete', this)">Delete</button>
+        </div>
+
+        <div id="add" class="app-tab-content active">
+            <div class="app-section">
+                <h2 class="app-section-title">Add Company</h2>
+                <%-- Using a simple table-like structure for display --%>
+                 <div class="app-form-group"> <%-- Using form-group for consistent padding/margin --%>
+                    <label class="app-form-label">Action</label>
+                    <div>
+                        <button id="btn-open-add-modal" class="app-button app-button--primary" type="button" onclick="prepareAddModal()">
+                             <span class="app-button-icon">➕</span> Add New Company
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="update" class="app-tab-content">
+            <div class="app-section">
+                <h2 class="app-section-title">Update Company</h2>
+                <div class="app-table-scroll-wrapper"> <%-- Wrap table for horizontal scrolling --%>
+                    <table class="app-table">
+                        <thead> <tr> <th>Company Name</th> <th>Action</th> </tr> </thead>
+                        <tbody id="update-tbody">
+                            <tr><td colspan="2">Loading companies...</td></tr> <%-- Loading indicator --%>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="delete" class="app-tab-content">
+            <div class="app-section">
+                <h2 class="app-section-title">Delete Company</h2>
+             <div class="app-table-scroll-wrapper"> <%-- Wrap table for horizontal scrolling --%>
+                <table class="app-table">
+                    <thead> <tr> <th>Company Name</th> <th>Action</th> </tr> </thead>
+                    <tbody id="delete-tbody">
+                         <tr><td colspan="2">Loading companies...</td></tr> <%-- Loading indicator --%>
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </div>
+
+        <!-- Add Modal -->
+        <div id="add-modal" class="app-modal">
+            <div class="app-modal-content">
+                <span class="app-modal-close-btn" title="Close" onclick="hideModal('#add-modal')">×</span>
+                <h2 class="app-section-title">Add New Company</h2>
+                <div class="app-form-group">
+                    <label class="app-form-label" for="add-company-name">Company Name</label>
+                    <input type="text" id="add-company-name" class="app-form-control" placeholder="Enter company name" required>
+                </div>
+                <div class="app-action-buttons app-action-buttons--right">
+                    <button type="button" class="app-button app-button--outline" onclick="hideModal('#add-modal')">Cancel</button>
+                    <button type="button" id="add-save-btn" class="app-button app-button--primary">
+                        <span class="app-button-icon">💾</span> Save Company
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Update Modal -->
+        <div id="update-modal" class="app-modal">
+            <div class="app-modal-content">
+                <span class="app-modal-close-btn" title="Close" onclick="hideModal('#update-modal')">×</span>
+                <h2 class="app-section-title">Update Company Information</h2>
+                 <div class="app-form-group">
+                    <label class="app-form-label" for="update-company-name">Company Name</label>
+                    <input type="text" id="update-company-name" class="app-form-control" required>
+                </div>
+                <div class="app-action-buttons app-action-buttons--right">
+                    <button type="button" class="app-button app-button--outline" onclick="hideModal('#update-modal')">Cancel</button>
+                    <button type="button" id="update-save-btn" class="app-button app-button--primary">
+                        <span class="app-button-icon">💾</span> Update Company
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Modal -->
+        <div id="delete-modal" class="app-modal">
+            <div class="app-modal-content">
+                <span class="app-modal-close-btn" title="Close" onclick="hideModal('#delete-modal')">×</span>
+                <h2 class="app-section-title">Confirm Deletion</h2>
+                <p style="margin-bottom: var(--app-space-lg); color: var(--app-color-text-secondary);">Are you sure you want to delete this company?</p>
+                <div class="app-form-group">
+                    <label class="app-form-label">Company Name:</label>
+                    <span id="delete-company-name-display" style="color:var(--app-color-text-default); font-weight: bold;"></span>
+                </div>
+                <div class="app-action-buttons app-action-buttons--right">
+                    <button type="button" class="app-button app-button--outline" onclick="hideModal('#delete-modal')">Cancel</button>
+                    <button type="button" id="delete-confirm-btn" class="app-button app-button--danger">
+                        <span class="app-button-icon">🗑️</span> Confirm Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <%-- Global Feedback and Loading Overlay --%>
+        <div id="global-feedback"></div>
+        <div id="loading-overlay">Loading...</div>
+
+    </div>
+
+    <script>
+        // --- Unified Shared JavaScript Block (Copy and paste the full App object definition here) ---
+        // Includes App object, apiService, showGlobalFeedback, setGlobalLoading, setButtonLoading, formatters, etc.
+        // Ensure this script block contains the complete App object from section 2
+
+        // Example Placeholder (Replace with actual App object definition)
+        /*
+        const App = {
+            API_BASE_URL: '...', apiService: { _fetch: async () => {}, ... },
+            showGlobalFeedback: () => {}, setGlobalLoading: () => {}, setButtonLoading: () => {},
+            formatDate: () => {}, formatCurrency: () => {}, determinePolicyStatus: () => {}, formatStatus: () => {},
+            escapeHtml: () => {}, formatDateForApi: () => {}, getTodayYYYYMMDD: () => {}
+        };
+        */
+        // --- END Unified Shared JavaScript Block ---
+
+
+        // Page-Specific API Calls
+        // Overwriting common getAllCompanies just for clarity this page uses it extensively
+        App.apiService.getAllInsuranceCompanies = async function() {
+            const result = await this._fetch('/AllInsuranceCompanies', { method: 'GET', headers: App.DEFAULT_HEADERS });
+            if (!Array.isArray(result.data)) {
+                console.error("API /AllInsuranceCompanies returned unexpected data format:", result.data);
+                throw new Error("Unexpected data format from server for insurance companies.");
+            }
+            return result.data;
+        };
+
+        App.apiService.addInsuranceCompany = async function(name) {
+             // Assuming API expects { insuranceCompanyName: name } in body
+            const result = await this._fetch('/AddInsuranceCompany', { method: 'POST', headers: App.JSON_HEADERS, body: JSON.stringify({ insuranceCompanyName: name }) });
+            // API might return success with no data. Check result message if needed.
+            // if (!result || !result.data) { throw new Error("Add operation succeeded but no data returned."); }
+            return result; // Return full result object
+        };
+
+        App.apiService.updateInsuranceCompany = async function(id, name) {
+             // Assuming API expects { insuranceCompanyID: id, insuranceCompanyName: name } in body for PUT
+             const endpoint = `/UpdateInsuranceCompany`; // Or maybe `/UpdateInsuranceCompany/${encodeURIComponent(id)}`? Check API docs.
+             const options = {
+                 method: 'PUT',
+                 headers: App.JSON_HEADERS,
+                 body: JSON.stringify({ insuranceCompanyID: id, insuranceCompanyName: name })
+             };
+             const result = await this._fetch(endpoint, options);
+             return result; // Return full result object
+        };
+
+        App.apiService.deleteInsuranceCompany = async function(id) {
+             // Assuming API expects ID as query param for DELETE
+            const encodedId = encodeURIComponent(id);
+            const result = await this._fetch(`/DeleteInsuranceCompany?id=${encodedId}`, { method: 'DELETE', headers: App.DEFAULT_HEADERS });
+            return result; // Return full result object
+        };
+
+
+        // --- Page Specific Logic ---
+        let currentUpdateId = null; // State variable
+        let currentDeleteId = null; // State variable
+
+
+        // --- UI Helper Functions specific to this page ---
+        function showModal(modalSelector) {
+            const el = document.querySelector(modalSelector);
+            if (el) el.style.display = 'block';
+        }
+
+        function hideModal(modalSelector) {
+            const el = document.querySelector(modalSelector);
+            if (el) el.style.display = 'none';
+
+            // Clear state and inputs when relevant modals are closed
+            if (modalSelector === '#update-modal') {
+                currentUpdateId = null;
+                const updateInput = document.querySelector('#update-company-name');
+                if (updateInput) updateInput.value = '';
+            }
+            if (modalSelector === '#delete-modal') {
+                currentDeleteId = null;
+                const nameDisplay = document.querySelector('#delete-company-name-display');
+                if (nameDisplay) nameDisplay.textContent = '';
+            }
+            if (modalSelector === '#add-modal') {
+                const addInput = document.querySelector('#add-company-name');
+                if (addInput) addInput.value = '';
+            }
+        }
+
+        function switchTab(tabName, clickedTabElement) {
+            document.querySelectorAll('.app-tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.app-tab').forEach(el => el.classList.remove('active'));
+            const contentEl = document.querySelector(`#${tabName}`);
+            if (contentEl) contentEl.classList.add('active');
+            if (clickedTabElement) clickedTabElement.classList.add('active');
+        }
+
+
+        // --- Render Functions ---
+        function renderCompanyTables(companies) {
+            const updateTbody = document.querySelector('#update-tbody');
+            const deleteTbody = document.querySelector('#delete-tbody');
+            if (!updateTbody || !deleteTbody) {
+                 console.error("Table tbody elements not found.");
+                 return;
+            }
+
+            updateTbody.innerHTML = '';
+            deleteTbody.innerHTML = '';
+
+            if (!companies || companies.length === 0) {
+                const noDataHtml = '<tr class="no-results"><td colspan="2">No companies found.</td></tr>';
+                updateTbody.innerHTML = noDataHtml;
+                deleteTbody.innerHTML = noDataHtml;
+                return;
+            }
+
+            companies.forEach(({ insuranceCompanyID: id, insuranceCompanyName: name }) => {
+                const safeName = App.escapeHtml(name || 'N/A'); // Escape name for display
+                const escapedNameForJs = App.escapeJsString(name || ''); // Escape name for JS function calls if needed (safer)
+
+                // Use App.setButtonLoading calls for modal buttons
+                // Pass ID and name to prepare functions, NOT directly to save/delete
+                updateTbody.innerHTML += `
+                    <tr>
+                        <td>${safeName}</td>
+                        <td>
+                           <button class="app-button app-button--outline" type="button" onclick="prepareUpdateModal('${id}', '${escapedNameForJs}')">Update</button>
+                        </td>
+                    </tr>`;
+                deleteTbody.innerHTML += `
+                    <tr>
+                        <td>${safeName}</td>
+                        <td>
+                           <button class="app-button app-button--danger" type="button" onclick="prepareDeleteModal('${id}', '${escapedNameForJs}')">Delete</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+         // Helper to escape string for use within single quotes in JS function calls
+         App.escapeJsString = function(str) {
+             if (!str) return '';
+             // Escape backslashes, single quotes, double quotes, newlines, and carriage returns
+             return String(str)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '\\"')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r');
+         };
+
+
+        // --- Modal Preparation Functions ---
+        function prepareAddModal() {
+            const input = document.querySelector('#add-company-name');
+            if (input) input.value = '';
+            const saveButton = document.getElementById('add-save-btn');
+            if (saveButton) App.setButtonLoading(saveButton, false, '<span class="app-button-icon">💾</span> Save Company'); // Reset button state
+            showModal('#add-modal');
+        }
+
+        function prepareUpdateModal(id, name) {
+            currentUpdateId = id; // SET STATE HERE
+            const nameInput = document.querySelector('#update-company-name');
+            if (nameInput) nameInput.value = name; // Pre-fill with current name
+             const saveButton = document.getElementById('update-save-btn');
+             if (saveButton) App.setButtonLoading(saveButton, false, '<span class="app-button-icon">💾</span> Update Company'); // Reset button state
+            showModal('#update-modal');
+        }
+
+        function prepareDeleteModal(id, name) {
+            currentDeleteId = id; // SET STATE HERE
+            const nameDisplay = document.querySelector('#delete-company-name-display');
+            if (nameDisplay) nameDisplay.textContent = App.escapeHtml(name); // Display name safely
+            const confirmButton = document.getElementById('delete-confirm-btn');
+            if (confirmButton) App.setButtonLoading(confirmButton, false, '<span class="app-button-icon">🗑️</span> Confirm Delete'); // Reset button state
+            showModal('#delete-modal');
+        }
+
+
+        // --- Action Handlers (Called by button clicks) ---
+        async function saveAdd() {
+            const nameInput = document.querySelector('#add-company-name');
+            const name = nameInput ? nameInput.value.trim() : '';
+            const saveButton = document.getElementById('add-save-btn');
+
+            if (!name) {
+                App.showGlobalFeedback('Company name is required.', true);
+                nameInput?.focus();
+                return;
+            }
+            App.setButtonLoading(saveButton, true, 'Saving...');
+            // App.setGlobalLoading(true); // Optional: global loader
+
+            try {
+                await App.apiService.addInsuranceCompany(name);
+                App.showGlobalFeedback('Company added successfully.', false);
+                hideModal('#add-modal');
+                await loadCompanies(); // Refresh the lists
+
+            } catch (error) {
+                // Error handled by App.apiService._fetch, shows global feedback
+                console.error("Error adding company:", error);
+                 // No need to show feedback again here
+            } finally {
+                App.setButtonLoading(saveButton, false, '<span class="app-button-icon">💾</span> Save Company');
+                // App.setGlobalLoading(false); // Hide global loader
+            }
+        }
+
+        async function saveUpdate() {
+            const id = currentUpdateId; // Get state
+            const nameInput = document.querySelector('#update-company-name');
+            const newName = nameInput ? nameInput.value.trim() : '';
+            const saveButton = document.getElementById('update-save-btn');
+
+            if (!newName) {
+                App.showGlobalFeedback('Company name is required.', true);
+                nameInput?.focus();
+                return;
+            }
+            if (id === null) { // Check if ID was set correctly
+                App.showGlobalFeedback('Cannot update: Company ID missing. Please try opening the modal again.', true);
+                 // Don't disable button here as the operation wasn't attempted due to missing ID
+                return;
+            }
+            App.setButtonLoading(saveButton, true, 'Updating...');
+             // App.setGlobalLoading(true); // Optional: global loader
+
+            try {
+                await App.apiService.updateInsuranceCompany(id, newName);
+                App.showGlobalFeedback('Company updated successfully.', false);
+                hideModal('#update-modal');
+                await loadCompanies(); // Refresh the lists
+
+            } catch (error) {
+                // Error handled by App.apiService._fetch, shows global feedback
+                console.error("Error updating company:", error);
+                 // No need to show feedback again here
+            } finally {
+                App.setButtonLoading(saveButton, false, '<span class="app-button-icon">💾</span> Update Company');
+                 // App.setGlobalLoading(false); // Hide global loader
+            }
+        }
+
+        async function confirmDelete() {
+            const id = currentDeleteId; // Get state
+            const confirmButton = document.getElementById('delete-confirm-btn');
+
+            if (id === null) { // Check if ID was set correctly
+                App.showGlobalFeedback('Cannot delete: Company ID missing. Please try opening the modal again.', true);
+                 // Don't disable button here
+                return;
+            }
+            App.setButtonLoading(confirmButton, true, 'Deleting...');
+             // App.setGlobalLoading(true); // Optional: global loader
+
+            try {
+                await App.apiService.deleteInsuranceCompany(id);
+                App.showGlobalFeedback('Company deleted successfully.', false);
+                hideModal('#delete-modal');
+                await loadCompanies(); // Refresh the lists
+
+            } catch (error) {
+                 // Error handled by App.apiService._fetch, shows global feedback
+                 console.error("Error deleting company:", error);
+                  // No need to show feedback again here
+            } finally {
+                App.setButtonLoading(confirmButton, false, '<span class="app-button-icon">🗑️</span> Confirm Delete');
+                 // App.setGlobalLoading(false); // Hide global loader
+            }
+        }
+
+        async function loadCompanies() {
+            renderCompanyTables(null); // Show "Loading..."
+            App.setGlobalLoading(true); // Show global loader for the list load
+            try {
+                const companies = await App.apiService.getAllInsuranceCompanies();
+                renderCompanyTables(companies); // Render results
+
+            } catch (error) {
+                // Error handled by App.apiService._fetch, shows global feedback
+                 console.error("Error loading companies:", error);
+                renderCompanyTables([]); // Render empty state
+            } finally {
+                 App.setGlobalLoading(false); // Hide global loader
+            }
+        }
+
+
+        // --- Initialization ---
+        function initializeApp() {
+            // Set initial tab (based on URL hash or default)
+            const hash = window.location.hash.substring(1);
+            const initialTab = ['add', 'update', 'delete'].includes(hash) ? hash : 'add';
+            const initialTabButton = document.querySelector(`.app-tab[onclick*="switchTab('${initialTab}'"]`);
+            switchTab(initialTab, initialTabButton);
+
+            loadCompanies(); // Load initial data for update/delete lists
+
+            // Add event listeners for modal action buttons
+            document.getElementById('add-save-btn')?.addEventListener('click', saveAdd);
+            document.getElementById('update-save-btn')?.addEventListener('click', saveUpdate);
+            document.getElementById('delete-confirm-btn')?.addEventListener('click', confirmDelete);
+
+            // Add global listener for clicks outside modals to close them
+            window.addEventListener('click', function (event) {
+                document.querySelectorAll('.app-modal').forEach(modal => {
+                    if (event.target == modal) {
+                        hideModal(`#${modal.id}`); // Use the UI function
+                    }
+                });
+            });
+
+            // Optional: Add Enter key listener to modals
+            document.querySelector('#add-modal input[type="text"]')?.addEventListener('keypress', function(event) { if (event.key === 'Enter') { event.preventDefault(); saveAdd(); } });
+            document.querySelector('#update-modal input[type="text"]')?.addEventListener('keypress', function(event) { if (event.key === 'Enter') { event.preventDefault(); saveUpdate(); } });
+
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Expose functions needed by inline onclick handlers (used by tables)
+         window.prepareUpdateModal = prepareUpdateModal;
+         window.prepareDeleteModal = prepareDeleteModal;
+         window.switchTab = switchTab; // Expose switchTab as it's used in onclick
+         window.hideModal = hideModal; // Expose hideModal
+         // saveAdd, saveUpdate, confirmDelete called by event listeners, not direct onclick
+         // prepareAddModal called by button event listener, not direct onclick
+         // So, prepareAddModal, saveAdd, saveUpdate, confirmDelete do NOT need to be window properties.
+         // Only prepareUpdateModal, prepareDeleteModal, switchTab, hideModal used in HTML onclick.
+    </script>
+```
+
+---
+
+**4. `AutoInsuranceRenewalNotificationConfiguration.ascx` (Updated)**
+
+```html
+<%@ Control Language="C#" AutoEventWireup="true" CodeFile="AutoInsuranceRenewalNotificationConfiguration.ascx.cs" Inherits="AutoInsuranceRenewal" %>
+<%@ Register Assembly="AjaxControlToolkit" Namespace="AjaxControlToolkit" TagPrefix="asp" %>
+
+    <style>
+        /* --- Unified CSS Block (Copy and paste the full unified CSS here) --- */
+        /* Styles from the unified block above */
+        /* Ensure this style block contains the complete CSS from section 1 */
+        /* Example: */
+         :root { /* ... colors and spacing ... */ }
+         * { /* ... resets ... */ }
+         .app-container { /* ... */ }
+         /* ... rest of the unified CSS ... */
+         #global-feedback { /* ... */ }
+         #loading-overlay { /* ... */ }
+         .app-loader { /* ... */ }
+        /* END Unified CSS Block */
+
+        /* Adjustments specific to this page if needed */
+        /* No major overrides needed, unified classes should cover it */
+    </style>
+
+
+    <div class="app-container" dir="ltr">
+        <h1 class="app-heading">SMS Notification Configuration</h1>
+
+        <div class="app-section">
+            <h2 class="app-section-title">License Expiration Notification Settings</h2>
+
+            <div class="app-form-group">
+                 <label class="app-form-label">Current Setting</label> <%-- Using app-form-label for consistency --%>
+                <div class="app-current-value">
+                    <span class="app-current-value-label">Currently:</span>
+                    Customers will be notified <strong id="current-notification-days">30</strong> days before license expiration
+                </div>
+            </div>
+
+            <div class="app-form-group">
+                <label class="app-form-label" for="notification-days-input">Update Notification Alert</label>
+                <div class="app-days-input-group">
+                    <input type="number" id="notification-days-input" class="app-form-control app-days-input" value="30" min="1" step="1"> <%-- Added min/step attributes --%>
+                    <span class="app-days-label">days before expiration</span>
+                </div>
+                 <span id="notification-days-error" class="app-inline-error"></span> <%-- Inline error span --%>
+            </div>
+
+            <div class="app-action-buttons app-action-buttons--left">
+                <button class="app-button app-button--primary" id="update-setting-btn" type="button">
+                    <span class="app-button-icon">💾</span>
+                    Update Setting
+                </button>
+            </div>
+        </div>
+    </div>
+
+     <%-- Global Feedback and Loading Overlay --%>
+    <div id="global-feedback"></div>
+    <div id="loading-overlay">Loading...</div>
+
+
+    <script>
+        // --- Unified Shared JavaScript Block (Copy and paste the full App object definition here) ---
+        // Includes App object, apiService, showGlobalFeedback, setGlobalLoading, setButtonLoading, formatters, etc.
+        // Ensure this script block contains the complete App object from section 2
+
+        // Example Placeholder (Replace with actual App object definition)
+        /*
+        const App = {
+            API_BASE_URL: '...', apiService: { _fetch: async () => {}, ... },
+            showGlobalFeedback: () => {}, setGlobalLoading: () => {}, setButtonLoading: () => {},
+            formatDate: () => {}, formatCurrency: () => {}, determinePolicyStatus: () => {}, formatStatus: () => {},
+            escapeHtml: () => {}, formatDateForApi: () => {}, getTodayYYYYMMDD: () => {}
+        };
+        */
+        // --- END Unified Shared JavaScript Block ---
+
+
+        // Page-Specific API Calls (Assuming these endpoints exist)
+         App.apiService.getNotificationSetting = async function() {
+              // Assuming a GET endpoint like /GetNotificationDays
+              const result = await this._fetch('/GetNotificationDays', { method: 'GET', headers: App.DEFAULT_HEADERS });
+               if (result === null || result.data === undefined || result.data === null) {
+                  throw new Error("API returned success but no setting data.");
+               }
+               // Assuming result.data is the number of days
+              return result.data;
+         };
+
+         App.apiService.updateNotificationSetting = async function(days) {
+              // Assuming a POST/PUT endpoint like /UpdateNotificationDays with body { notificationDays: days }
+              const endpoint = '/UpdateNotificationDays';
+              const options = {
+                 method: 'POST', // Or 'PUT'
+                 headers: App.JSON_HEADERS,
+                 body: JSON.stringify({ notificationDaysBeforeExpiration: days }) // Match your API expected parameter name
+              };
+              const result = await this._fetch(endpoint, options);
+               // API might return success with no data. Check result message if needed.
+              return result; // Return full result object
+         };
+
+
+        // --- Page Specific Logic ---
+
+        const currentDaysSpan = document.getElementById('current-notification-days');
+        const daysInput = document.getElementById('notification-days-input');
+        const updateButton = document.getElementById('update-setting-btn');
+        const daysErrorSpan = document.getElementById('notification-days-error');
+
+
+        async function loadCurrentSetting() {
+             App.setGlobalLoading(true);
+             try {
+                 const days = await App.apiService.getNotificationSetting();
+                 if (currentDaysSpan) currentDaysSpan.textContent = App.escapeHtml(days);
+                 if (daysInput) daysInput.value = days;
+             } catch (error) {
+                 console.error("Error loading notification setting:", error);
+                 // Feedback already shown by App.apiService._fetch
+                 if (currentDaysSpan) currentDaysSpan.textContent = '- Error Loading -';
+                 if (daysInput) daysInput.value = ''; // Clear input on error
+                 if (daysInput) daysInput.disabled = true; // Disable input
+                 if (updateButton) updateButton.disabled = true; // Disable button
+             } finally {
+                 App.setGlobalLoading(false);
+             }
+        }
+
+        async function handleUpdateSetting() {
+             daysErrorSpan.textContent = ''; // Clear previous errors
+
+             const daysStr = daysInput ? daysInput.value.trim() : '';
+             if (daysStr === '') {
+                  daysErrorSpan.textContent = 'Please enter the number of days.';
+                  daysInput.focus();
+                  return;
+             }
+
+             const days = parseInt(daysStr, 10);
+
+             if (isNaN(days) || days <= 0) {
+                  daysErrorSpan.textContent = 'Please enter a valid positive number of days.';
+                  daysInput.focus();
+                  return;
+             }
+
+             App.setButtonLoading(updateButton, true, 'Updating...');
+             App.setGlobalLoading(true); // Optional: show global loader
+
+             try {
+                  await App.apiService.updateNotificationSetting(days);
+                  App.showGlobalFeedback('Notification setting updated successfully.', false);
+                  // Update the displayed current value after successful save
+                  if (currentDaysSpan) currentDaysSpan.textContent = App.escapeHtml(days);
+             } catch (error) {
+                 console.error("Error updating notification setting:", error);
+                 // Feedback already shown by App.apiService._fetch
+             } finally {
+                 App.setButtonLoading(updateButton, false, '<span class="app-button-icon">💾</span> Update Setting');
+                 App.setGlobalLoading(false); // Hide global loader
+             }
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', function () {
+             loadCurrentSetting(); // Load the current setting on page load
+
+             if (updateButton) {
+                 updateButton.addEventListener('click', handleUpdateSetting);
+             }
+
+             if (daysInput) {
+                 // Allow pressing Enter in the input field to trigger update
+                 daysInput.addEventListener('keypress', function(event) {
+                      if (event.key === 'Enter') {
+                          event.preventDefault(); // Prevent default form submission
+                          handleUpdateSetting();
+                      }
+                 });
+             }
+        });
+    </script>
+```
+
+---
+
+**Instructions:**
+
+1.  **Replace CSS:** In *each* of your four `.ascx` files, replace the entire contents of the `<style>` block with the complete Unified CSS Block provided in step 1.
+2.  **Add HTML Elements:** In *each* of your four `.ascx` files, add the following two lines of HTML just before the closing `</div>` tag of your main container (`<div class="app-container">`):
+    ```html
+    <div id="global-feedback"></div>
+    <div id="loading-overlay">Loading...</div>
+    ```
+3.  **Replace JavaScript:** In *each* of your four `.ascx` files, replace the entire contents of the `<script>` block with the complete Shared JavaScript Block provided in step 2, followed by the page-specific JavaScript logic provided for that file (Files 1, 2, 3, 4). The comments indicate where the shared block should be placed relative to the page-specific code.
+4.  **Update HTML Classes:** Go through the HTML structure in each `.ascx` file and replace the old class names (like `sys-container`, `lrt-container`, `form-section`, `save-btn`, etc.) with the new `app-` prefixed class names (like `app-container`, `app-section`, `app-button`, `app-button--primary`, `app-form-control`, `app-data-table`, etc.). I have already done this in the provided updated HTML blocks.
+5.  **Review and Adapt:**
+    *   **API URL:** **CRITICAL:** Update the `App.API_BASE_URL` variable in the JavaScript block to the correct URL of your API endpoint.
+    *   **API Endpoints/Payloads:** I've made assumptions about your API endpoints (`/GetInsuranceDetails`, `/AddInsuranceRenewal`, `/SearchAndFilter`, `/AllInsuranceCompanies`, `/AddInsuranceCompany`, `/UpdateInsuranceCompany`, `/DeleteInsuranceCompany`, `/GetNotificationDays`, `/UpdateNotificationDays`) and the expected request bodies/query parameters. Verify these match your actual API implementation. You might need to adjust the `_fetch` calls or create specific API service functions within the `App.apiService` object for each page if the patterns differ significantly.
+    *   **IDs:** Page 1's example uses a hardcoded `insuranceRenewalId = 10`. This ID needs to come from your server-side code. You'll need to add a mechanism to pass this ID from the server (e.g., a hidden field, a `data-` attribute on a container element, or rendering it directly into a JS variable using `<%= MyServerSideId %>`). Similarly, Page 3's update/delete relies on IDs passed via `onclick` attributes; ensure these IDs are correctly rendered from your server-side list of companies.
+    *   **Data Binding:** The JS populates the page by finding elements by ID (`document.getElementById`). Ensure the IDs in the HTML match the IDs used in the JavaScript.
+    *   **Validation:** Basic validation (like required fields, number format) is included, but complex validation (e.g., "Must not be less than minimum required + 20%") might need more robust implementation, potentially involving fetching the minimum required value dynamically if it's not available directly on the page.
+    *   **Error Display:** I've implemented global feedback for general API success/failure and a specific `#searchError` span for the search form. You might want to add more inline error spans for form fields on other pages if needed.
+
+By following these steps, you will have a much more consistent look and feel, unified loading indicators, and a standard way to display success and error messages across these four user controls.

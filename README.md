@@ -1,5304 +1,1957 @@
-generate  python code create the app and add this files at my hard dick 
 
-the input of this python code will be copy of your pervious response as makrdowe
-
-the following is copy of it 
-
-i will save it at txt file read it and create app you can use angular cli  
-
-
-
-the mark dowen 
-
-
-Alright, as a creative artist and frontend expert with a century of experience under my belt, I'm thrilled to craft this modern, minimal, and soothing e-commerce frontend for you. We'll adhere strictly to the Repository Design Pattern for a clean and maintainable Angular application. Expect elegance, usability, and a design that's truly a joy to interact with.
-
-Let's lay down the foundation for this beautiful application.
-
-**Project Name:** `LuxeCart` (A suggestion, feel free to change!)
-
-**Assumptions:**
-
-*   You have Angular CLI installed (`@angular/cli`).
-*   You'll run `npm install` or `yarn install` for dependencies.
-*   I'll use SCSS for styling.
-*   Icons: I'll use placeholder text/SVG for icons, but recommend integrating a library like Feather Icons, Material Icons, or custom SVGs.
-*   Stripe Integration: I'll set up the structure for the payment intent call. Actual Stripe.js frontend integration is a separate detailed step.
-*   Animations: Smooth transitions will be primarily CSS-based. Angular animations can be added for more complex effects.
+## Data Visualization: Multiple Choice Questions (Answers Bolded)
 
 ---
 
-**1. Project Setup (Conceptual)**
-
-First, you would generate a new Angular project:
-`ng new LuxeCart --style=scss --routing=true`
-`cd LuxeCart`
-
-Install necessary packages:
-`npm install ngx-toastr --save` (for toast notifications)
-`npm install @ngrx/store @ngrx/effects --save` (Optional, but highly recommended for larger state management if the app grows significantly. For now, we'll stick to services with BehaviorSubjects for simplicity where appropriate).
-
----
-
-**2. Directory Structure (Recap)**
-
-```
-luxe-cart/
-├── angular.json
-├── package.json
-├── tsconfig.json
-├── src/
-│   ├── app/
-│   │   ├── core/
-│   │   │   ├── guards/
-│   │   │   │   └── auth.guard.ts
-│   │   │   ├── interceptors/
-│   │   │   │   ├── auth.interceptor.ts
-│   │   │   │   └── error.interceptor.ts
-│   │   │   ├── models/             # DTOs and domain models (e.g., product.model.ts, user.model.ts)
-│   │   │   ├── repositories/
-│   │   │   │   ├── abstract/       # Abstract repository interfaces (optional, for strictness)
-│   │   │   │   ├── auth.repository.ts
-│   │   │   │   ├── product.repository.ts
-│   │   │   │   ├── cart.repository.ts
-│   │   │   │   ├── order.repository.ts
-│   │   │   │   └── category.repository.ts
-│   │   │   └── services/
-│   │   │       ├── auth.service.ts
-│   │   │       ├── product.service.ts
-│   │   │       ├── cart.service.ts
-│   │   │       ├── order.service.ts
-│   │   │       ├── category.service.ts
-│   │   │       ├── notification.service.ts
-│   │   │       └── loading.service.ts
-│   │   ├── features/
-│   │   │   ├── auth/
-│   │   │   ├── products/
-│   │   │   ├── cart/
-│   │   │   ├── checkout/
-│   │   │   ├── home/
-│   │   │   └── profile/
-│   │   ├── layout/
-│   │   │   ├── header/
-│   │   │   ├── footer/
-│   │   │   └── main-layout/
-│   │   ├── shared/
-│   │   │   ├── components/ (e.g., loading-spinner, empty-state)
-│   │   │   ├── directives/
-│   │   │   ├── pipes/
-│   │   │   └── shared.module.ts
-│   │   ├── app-routing.module.ts
-│   │   ├── app.component.html
-│   │   ├── app.component.scss
-│   │   ├── app.component.ts
-│   │   ├── app.module.ts
-│   ├── assets/
-│   │   ├── fonts/                # (If using custom fonts)
-│   │   ├── icons/                # (SVG icons)
-│   │   │   ├── cart.svg
-│   │   │   ├── search.svg
-│   │   │   ├── user.svg
-│   │   │   └── logo.svg
-│   │   ├── images/               # (Placeholders, etc.)
-│   │   └── styles/
-│   │       ├── _variables.scss
-│   │       ├── _base.scss
-│   │       ├── _typography.scss
-│   │       ├── _buttons.scss
-│   │       ├── _forms.scss
-│   │       ├── _cards.scss
-│   │       ├── _utilities.scss
-│   │       └── _animations.scss
-│   ├── environments/
-│   │   ├── environment.prod.ts
-│   │   └── environment.ts
-│   ├── index.html
-│   ├── main.ts
-│   ├── styles.scss
-```
-
----
-
-**3. Environment Configuration**
-
-**`src/environments/environment.ts`:**
-```typescript
-export const environment = {
-  production: false,
-  apiBaseUrl: 'https://tpf.runasp.net/' // Your API base URL
-};
-```
-
-**`src/environments/environment.prod.ts`:**
-```typescript
-export const environment = {
-  production: true,
-  apiBaseUrl: 'https://tpf.runasp.net/' // Your API base URL
-};
-```
-
----
-
-**4. Global Styles**
-
-**`src/assets/styles/_variables.scss`:**
-```scss
-// Colors
-$primary-white: #FFFFFF;
-$primary-black: #000000;
-$primary-gold: #F5C518; // IMDb yellow, good choice!
-$accent-rich-black: #030303;
-$secondary-gray: #B0B0B0;
-$light-gray-border: #E0E0E0; // For subtle borders
-$success-color: #4CAF50;
-$error-color: #F44336;
-$background-light: #F9F9F9; // Slightly off-white for subtle depth
-
-// Typography
-$font-family-sans-serif: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-$font-family-serif: 'Merriweather', serif; // Optional, for headings or special text
-
-$font-size-base: 1rem; // 16px
-$font-size-lg: $font-size-base * 1.25;
-$font-size-sm: $font-size-base * 0.875;
-$font-size-xl: $font-size-base * 1.5;
-$font-size-xxl: $font-size-base * 2;
-
-$font-weight-light: 300;
-$font-weight-normal: 400;
-$font-weight-bold: 700;
-
-// Spacing
-$spacing-unit: 8px;
-$space-xs: $spacing-unit;       // 8px
-$space-sm: $spacing-unit * 2;   // 16px
-$space-md: $spacing-unit * 3;   // 24px
-$space-lg: $spacing-unit * 4;   // 32px
-$space-xl: $spacing-unit * 6;   // 48px
-$space-xxl: $spacing-unit * 8;  // 64px
-
-// Borders
-$border-radius-sm: 4px;
-$border-radius: 8px;
-$border-radius-lg: 12px;
-$border-width: 1px;
-
-// Transitions
-$transition-base: all 0.3s ease-in-out;
-
-// Breakpoints (Mobile-first)
-$breakpoint-sm: 576px;
-$breakpoint-md: 768px;
-$breakpoint-lg: 992px;
-$breakpoint-xl: 1200px;
-$breakpoint-xxl: 1400px;
-
-// Shadows
-$box-shadow-sm: 0 2px 4px rgba($primary-black, 0.05);
-$box-shadow: 0 4px 12px rgba($primary-black, 0.1);
-$box-shadow-lg: 0 8px 24px rgba($primary-black, 0.15);
-```
-
-**`src/assets/styles/_base.scss`:**
-```scss
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&family=Merriweather:wght@400;700&display=swap');
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  font-size: 100%; // Base for rem units
-  scroll-behavior: smooth;
-}
-
-body {
-  font-family: $font-family-sans-serif;
-  font-size: $font-size-base;
-  font-weight: $font-weight-normal;
-  line-height: 1.6;
-  color: $primary-black;
-  background-color: $primary-white;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden; // Prevent horizontal scroll
-}
-
-a {
-  color: $primary-gold;
-  text-decoration: none;
-  transition: $transition-base;
-
-  &:hover {
-    color: darken($primary-gold, 10%);
-    text-decoration: underline;
-  }
-}
-
-img, svg {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
-
-ul, ol {
-  list-style: none;
-}
-
-// Utility for visually hidden content (accessibility)
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-```
-
-**`src/assets/styles/_typography.scss`:**
-```scss
-h1, h2, h3, h4, h5, h6 {
-  font-family: $font-family-serif; // Example: using serif for headings
-  font-weight: $font-weight-bold;
-  line-height: 1.3;
-  margin-bottom: $space-sm;
-  color: $accent-rich-black;
-}
-
-h1 { font-size: $font-size-xxl; }
-h2 { font-size: $font-size-xl; }
-h3 { font-size: $font-size-lg; }
-// ... and so on for h4, h5, h6
-
-p {
-  margin-bottom: $space-md;
-  color: $primary-black;
-}
-
-.text-secondary {
-  color: $secondary-gray;
-}
-
-.text-gold {
-  color: $primary-gold;
-}
-
-.text-center {
-  text-align: center;
-}
-```
-
-**`src/assets/styles/_buttons.scss`:**
-```scss
-.btn {
-  display: inline-block;
-  font-family: $font-family-sans-serif;
-  font-weight: $font-weight-bold;
-  text-align: center;
-  vertical-align: middle;
-  cursor: pointer;
-  user-select: none;
-  background-color: transparent;
-  border: $border-width solid transparent;
-  padding: $space-sm $space-md; // Generous padding for tap targets
-  font-size: $font-size-base;
-  border-radius: $border-radius;
-  transition: $transition-base;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-
-  &:hover, &:focus {
-    text-decoration: none;
-    outline: none;
-  }
-
-  &:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-  }
-}
-
-.btn-primary {
-  color: $primary-black;
-  background-color: $primary-gold;
-  border-color: $primary-gold;
-
-  &:hover {
-    background-color: darken($primary-gold, 8%);
-    border-color: darken($primary-gold, 10%);
-    color: $primary-black;
-  }
-}
-
-.btn-secondary {
-  color: $primary-black;
-  background-color: $light-gray-border;
-  border-color: $light-gray-border;
-
-  &:hover {
-    background-color: darken($light-gray-border, 8%);
-    border-color: darken($light-gray-border, 10%);
-  }
-}
-
-.btn-outline-dark {
-  color: $accent-rich-black;
-  border-color: $accent-rich-black;
-
-  &:hover {
-    color: $primary-white;
-    background-color: $accent-rich-black;
-  }
-}
-
-.btn-link {
-  font-weight: $font-weight-normal;
-  color: $primary-gold;
-  text-decoration: none;
-  background-color: transparent;
-  border: none;
-  padding: 0;
-
-  &:hover {
-    text-decoration: underline;
-    color: darken($primary-gold, 10%);
-  }
-}
-
-.btn-icon {
-  padding: $space-xs;
-  line-height: 1; // Ensure icon is centered
-  // Style for icon-only buttons
-  svg {
-    width: 24px;
-    height: 24px;
-  }
-}
-```
-
-**`src/assets/styles/_forms.scss`:**
-```scss
-.form-group {
-  margin-bottom: $space-md;
-}
-
-.form-label {
-  display: block;
-  margin-bottom: $space-xs;
-  font-weight: $font-weight-bold;
-  color: $primary-black;
-}
-
-.form-control {
-  display: block;
-  width: 100%;
-  padding: $space-sm ($space-sm + $space-xs); // Slightly more horizontal padding
-  font-size: $font-size-base;
-  font-weight: $font-weight-normal;
-  line-height: 1.5;
-  color: $primary-black;
-  background-color: $primary-white;
-  background-clip: padding-box;
-  border: $border-width solid $light-gray-border;
-  border-radius: $border-radius-sm;
-  transition: border-color $transition-base, box-shadow $transition-base;
-
-  &:focus {
-    color: $primary-black;
-    background-color: $primary-white;
-    border-color: $primary-gold;
-    outline: 0;
-    box-shadow: 0 0 0 0.2rem rgba($primary-gold, 0.25);
-  }
-
-  &::placeholder {
-    color: $secondary-gray;
-    opacity: 1;
-  }
-
-  &:disabled,
-  &[readonly] {
-    background-color: $background-light;
-    opacity: 1;
-  }
-}
-
-.form-text {
-  margin-top: $space-xs / 2;
-  font-size: $font-size-sm;
-  color: $secondary-gray;
-}
-
-.form-check {
-  // For checkboxes and radio buttons
-  // Custom styling would go here if not using a UI library for these
-}
-
-.input-group {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  width: 100%;
-
-  .form-control {
-    position: relative;
-    flex: 1 1 auto;
-    width: 1%;
-    min-width: 0; // PreventC flexing beyond constraints
-  }
-
-  // For icons or text within input groups
-  .input-group-text {
-    display: flex;
-    align-items: center;
-    padding: $space-sm ($space-sm + $space-xs);
-    margin-bottom: 0;
-    font-size: $font-size-base;
-    font-weight: $font-weight-normal;
-    line-height: 1.5;
-    color: $primary-black;
-    text-align: center;
-    white-space: nowrap;
-    background-color: $background-light;
-    border: $border-width solid $light-gray-border;
-    border-radius: $border-radius-sm;
-  }
-
-  // Adjust border radius for elements in group
-  > .form-control:not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-  > .input-group-text:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
-}
-
-.form-error-message {
-  display: block;
-  color: $error-color;
-  font-size: $font-size-sm;
-  margin-top: $space-xs / 2;
-}
-```
-
-**`src/assets/styles/_cards.scss`:**
-```scss
-.card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  word-wrap: break-word;
-  background-color: $primary-white;
-  background-clip: border-box;
-  border: $border-width solid $light-gray-border;
-  border-radius: $border-radius-lg; // Softer, larger radius for modern feel
-  box-shadow: $box-shadow-sm;
-  transition: $transition-base;
-  overflow: hidden; // Ensure content respects border-radius
-
-  &:hover {
-    box-shadow: $box-shadow;
-    transform: translateY(-2px); // Subtle lift effect
-  }
-}
-
-.card-img-top {
-  width: 100%;
-  border-top-left-radius: $border-radius-lg;
-  border-top-right-radius: $border-radius-lg;
-  object-fit: cover; // Ensures image covers area without distortion
-  aspect-ratio: 4/3; // Maintain aspect ratio for product images
-}
-
-.card-body {
-  flex: 1 1 auto;
-  padding: $space-md;
-}
-
-.card-title {
-  margin-bottom: $space-xs;
-  font-family: $font-family-sans-serif; // Product titles might look better with sans-serif
-  font-size: $font-size-lg;
-  font-weight: $font-weight-bold;
-}
-
-.card-text {
-  margin-bottom: $space-sm;
-  color: $secondary-gray;
-  font-size: $font-size-sm;
-}
-
-.card-subtitle {
-  margin-top: -$space-xs / 2;
-  margin-bottom: $space-sm;
-  color: $primary-black;
-  font-weight: $font-weight-bold;
-  font-size: $font-size-base;
-}
-
-.card-footer {
-  padding: $space-sm $space-md;
-  background-color: transparent; // Keep it clean
-  border-top: $border-width solid $light-gray-border;
-  &:last-child {
-    border-radius: 0 0 $border-radius-lg $border-radius-lg;
-  }
-}
-```
-
-**`src/assets/styles/_utilities.scss`:**
-```scss
-// Margins
-@for $i from 0 through 8 {
-  .m-#{$i} { margin: #{$i * $spacing-unit} !important; }
-  .mt-#{$i} { margin-top: #{$i * $spacing-unit} !important; }
-  .mb-#{$i} { margin-bottom: #{$i * $spacing-unit} !important; }
-  .ms-#{$i} { margin-left: #{$i * $spacing-unit} !important; } // Use 's' for start (LTR/RTL)
-  .me-#{$i} { margin-right: #{$i * $spacing-unit} !important; } // Use 'e' for end
-  .mx-#{$i} { margin-left: #{$i * $spacing-unit} !important; margin-right: #{$i * $spacing-unit} !important; }
-  .my-#{$i} { margin-top: #{$i * $spacing-unit} !important; margin-bottom: #{$i * $spacing-unit} !important; }
-}
-.m-auto { margin: auto !important; }
-// ... similar for paddings (p-*, pt-*, etc.)
-
-.container {
-  width: 100%;
-  padding-right: $space-md;
-  padding-left: $space-md;
-  margin-right: auto;
-  margin-left: auto;
-
-  @media (min-width: $breakpoint-sm) { max-width: 540px; }
-  @media (min-width: $breakpoint-md) { max-width: 720px; }
-  @media (min-width: $breakpoint-lg) { max-width: 960px; }
-  @media (min-width: $breakpoint-xl) { max-width: 1140px; }
-  @media (min-width: $breakpoint-xxl) { max-width: 1320px; }
-}
-
-.d-flex { display: flex !important; }
-.justify-content-center { justify-content: center !important; }
-.align-items-center { align-items: center !important; }
-// Add more flex utilities as needed
-
-.w-100 { width: 100% !important; }
-.h-100 { height: 100% !important; }
-
-// Responsive display
-.d-none { display: none !important; }
-@media (min-width: $breakpoint-md) {
-  .d-md-block { display: block !important; }
-  .d-md-none { display: none !important; }
-  // etc.
-}
-```
-
-**`src/assets/styles/_animations.scss`:**
-```scss
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.fade-in {
-  animation: fadeIn 0.5s ease-in-out;
-}
-
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.slide-in-up {
-  animation: slideInUp 0.5s ease-out;
-}
-```
-
-**`src/styles.scss` (Main global styles file):**
-```scss
-@import 'assets/styles/variables';
-@import 'assets/styles/base';
-@import 'assets/styles/typography';
-@import 'assets/styles/buttons';
-@import 'assets/styles/forms';
-@import 'assets/styles/cards';
-@import 'assets/styles/utilities';
-@import 'assets/styles/animations';
-
-// Third-party library styles
-@import 'ngx-toastr/toastr';
-
-body {
-  // To ensure footer sticks to bottom on short pages
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-main {
-  flex-grow: 1; // Allows main content to expand and push footer
-}
-
-// Custom scrollbar (optional, for a more modern feel)
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: $background-light;
-  border-radius: $border-radius-sm;
-}
-
-::-webkit-scrollbar-thumb {
-  background: $secondary-gray;
-  border-radius: $border-radius-sm;
-  &:hover {
-    background: darken($secondary-gray, 10%);
-  }
-}
-```
-
----
-
-**5. Core Module & Shared Module**
-
-**`src/app/app.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { BrowserModule } from '@angular/platform-browser';
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
-
-import { AppRoutingModule } from './app-routing.module';
-import { AppComponent } from './app.component';
-
-import { CoreModule } from './core/core.module';
-import { SharedModule } from './shared/shared.module';
-import { LayoutModule } from './layout/layout.module'; // Import LayoutModule
-
-import { ToastrModule } from 'ngx-toastr';
-import { AuthInterceptor } from './core/interceptors/auth.interceptor';
-// import { ErrorInterceptor } from './core/interceptors/error.interceptor'; // Implement this for global error handling
-
-@NgModule({
-  declarations: [
-    AppComponent
-  ],
-  imports: [
-    BrowserModule,
-    BrowserAnimationsModule,
-    HttpClientModule,
-    AppRoutingModule,
-    CoreModule,
-    SharedModule,
-    LayoutModule, // Add LayoutModule here
-    ToastrModule.forRoot({
-      timeOut: 5000,
-      positionClass: 'toast-bottom-right',
-      preventDuplicates: true,
-      progressBar: true,
-      closeButton: true,
-      toastClass: 'ngx-toastr app-toast', // Custom class for styling
-    }),
-  ],
-  providers: [
-    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },
-    // { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true },
-  ],
-  bootstrap: [AppComponent]
-})
-export class AppModule { }
-```
-*App Toast Custom Styling (add to `styles.scss` or a dedicated toast style file):*
-```scss
-// styles.scss or assets/styles/_toasts.scss
-.app-toast {
-  background-color: $accent-rich-black !important;
-  color: $primary-white !important;
-  border-radius: $border-radius-sm !important;
-  box-shadow: $box-shadow-lg !important;
-  opacity: 0.95 !important;
-
-  .toast-title {
-    font-weight: $font-weight-bold !important;
-  }
-
-  .toast-progress {
-    background-color: $primary-gold !important;
-  }
-
-  button[aria-label="Close"] { // Targeting the close button
-    color: $primary-white !important;
-    opacity: 0.7 !important;
-    &:hover {
-      opacity: 1 !important;
-    }
-  }
-
-  // Specific toast types
-  &.toast-success {
-    // background-color: $success-color !important; // Or keep consistent black
-  }
-  &.toast-error {
-    // background-color: $error-color !important; // Or keep consistent black
-  }
-  // etc. for info, warning
-}
-```
-
-**`src/app/core/core.module.ts`:**
-(Services and repositories will be provided here)
-```typescript
-import { NgModule, Optional, SkipSelf } from '@angular/core';
-import { CommonModule } from '@angular/common';
-
-// Repositories
-import { AuthRepository } from './repositories/auth.repository';
-import { ProductRepository } from './repositories/product.repository';
-import { CategoryRepository } from './repositories/category.repository';
-import { CartRepository } from './repositories/cart.repository';
-import { OrderRepository } from './repositories/order.repository';
-
-// Services
-import { AuthService } from './services/auth.service';
-import { ProductService } from './services/product.service';
-import { CategoryService } from './services/category.service';
-import { CartService } from './services/cart.service';
-import { OrderService } from './services/order.service';
-import { NotificationService } from './services/notification.service';
-import { LoadingService } from './services/loading.service';
-
-@NgModule({
-  declarations: [],
-  imports: [
-    CommonModule
-  ],
-  providers: [
-    // Repositories
-    AuthRepository,
-    ProductRepository,
-    CategoryRepository,
-    CartRepository,
-    OrderRepository,
-    // Services
-    AuthService,
-    ProductService,
-    CategoryService,
-    CartService,
-    OrderService,
-    NotificationService,
-    LoadingService,
-    // Guards (can be provided here or in routing modules)
-  ]
-})
-export class CoreModule {
-  constructor(@Optional() @SkipSelf() parentModule: CoreModule) {
-    if (parentModule) {
-      throw new Error('CoreModule is already loaded. Import it in the AppModule only');
-    }
-  }
-}
-```
-
-**`src/app/shared/shared.module.ts`:**
-(For components, directives, pipes used across feature modules)
-```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
-
-// Example Shared Components (Create these as needed)
-// import { LoadingSpinnerComponent } from './components/loading-spinner/loading-spinner.component';
-// import { ModalComponent } from './components/modal/modal.component';
-// import { EmptyStateComponent } from './components/empty-state/empty-state.component';
-
-// Angular Material Modules (Optional, if you decide to use some)
-// import { MatButtonModule } from '@angular/material/button';
-// import { MatIconModule } from '@angular/material/icon';
-// import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-
-const ANGULAR_MODULES = [
-  CommonModule,
-  FormsModule,
-  ReactiveFormsModule,
-  RouterModule
-];
-
-const THIRD_PARTY_MODULES = [
-  // MatButtonModule,
-  // MatIconModule,
-  // MatProgressSpinnerModule
-];
-
-const COMPONENTS = [
-  // LoadingSpinnerComponent,
-  // ModalComponent,
-  // EmptyStateComponent
-];
-
-const DIRECTIVES = [];
-const PIPES = [];
-
-@NgModule({
-  declarations: [
-    ...COMPONENTS,
-    ...DIRECTIVES,
-    ...PIPES
-  ],
-  imports: [
-    ...ANGULAR_MODULES,
-    ...THIRD_PARTY_MODULES
-  ],
-  exports: [
-    ...ANGULAR_MODULES,
-    ...THIRD_PARTY_MODULES,
-    ...COMPONENTS,
-    ...DIRECTIVES,
-    ...PIPES
-  ]
-})
-export class SharedModule { }
-```
-
----
-
-**6. Layout Components**
-
-**`src/app/layout/layout.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router'; // Import RouterModule
-import { HeaderComponent } from './header/header.component';
-import { FooterComponent } from './footer/footer.component';
-import { MainLayoutComponent } from './main-layout/main-layout.component';
-import { SharedModule } from '../shared/shared.module'; // If shared components are used in layout
-
-@NgModule({
-  declarations: [
-    HeaderComponent,
-    FooterComponent,
-    MainLayoutComponent
-  ],
-  imports: [
-    CommonModule,
-    RouterModule, // Add RouterModule here
-    SharedModule
-  ],
-  exports: [
-    MainLayoutComponent // Export MainLayoutComponent so AppModule can use it
-  ]
-})
-export class LayoutModule { }
-```
-
-**`src/app/layout/main-layout/main-layout.component.ts`:**
-```typescript
-import { Component } from '@angular/core';
-
-@Component({
-  selector: 'app-main-layout',
-  templateUrl: './main-layout.component.html',
-  styleUrls: ['./main-layout.component.scss']
-})
-export class MainLayoutComponent {}
-```
-
-**`src/app/layout/main-layout/main-layout.component.html`:**
-```html
-<app-header></app-header>
-<main class="main-content">
-  <router-outlet></router-outlet>
-</main>
-<app-footer></app-footer>
-```
-
-**`src/app/layout/main-layout/main-layout.component.scss`:**
-```scss
-// styles.scss already handles flex for body and main to push footer
-// .main-content {
-//   // Add any specific padding/margin for the main content area if needed
-//   // e.g., padding-top to account for a fixed header, if you choose that
-// }
-```
-
-**`src/app/app.component.html`:**
-```html
-<app-main-layout></app-main-layout>
-<!-- Global loading indicator could go here -->
-<!-- <app-global-loader *ngIf="loadingService.isLoading$ | async"></app-global-loader> -->
-```
-
-**`src/app/layout/header/header.component.ts`:**
-```typescript
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
-import { AuthService } from '../../core/services/auth.service';
-import { CartService } from '../../core/services/cart.service'; // Assuming you have a cart service
-import { User } from '../../core/models/user.model'; // Your user model
-
-@Component({
-  selector: 'app-header',
-  templateUrl: './header.component.html',
-  styleUrls: ['./header.component.scss']
-})
-export class HeaderComponent implements OnInit, OnDestroy {
-  isLoggedIn = false;
-  currentUser: User | null = null;
-  cartItemCount = 0;
-  searchQuery = '';
-  isMobileMenuOpen = false;
-
-  private authSubscription!: Subscription;
-  private cartSubscription!: Subscription;
-
-  constructor(
-    private authService: AuthService,
-    private cartService: CartService, // Inject CartService
-    private router: Router
-  ) {}
-
-  ngOnInit(): void {
-    this.authSubscription = this.authService.currentUser.subscribe(user => {
-      this.isLoggedIn = !!user;
-      this.currentUser = user;
-    });
-
-    // Subscribe to cart item count (you'll need to implement this in CartService)
-    this.cartSubscription = this.cartService.getCartItemCount().subscribe(count => {
-      this.cartItemCount = count;
-    });
-  }
-
-  onSearch(): void {
-    if (this.searchQuery.trim()) {
-      this.router.navigate(['/products'], { queryParams: { search: this.searchQuery.trim() } });
-      this.searchQuery = ''; // Clear search after navigating
-    }
-  }
-
-  logout(): void {
-    this.authService.logout();
-    this.router.navigate(['/auth/login']);
-  }
-
-  toggleMobileMenu(): void {
-    this.isMobileMenuOpen = !this.isMobileMenuOpen;
-  }
-
-  closeMobileMenu(): void {
-    this.isMobileMenuOpen = false;
-  }
-
-
-  ngOnDestroy(): void {
-    if (this.authSubscription) {
-      this.authSubscription.unsubscribe();
-    }
-    if (this.cartSubscription) {
-      this.cartSubscription.unsubscribe();
-    }
-  }
-}
-```
-
-**`src/app/layout/header/header.component.html`:**
-```html
-<header class="app-header">
-  <div class="container header-container">
-    <a routerLink="/" class="logo" (click)="closeMobileMenu()">
-      <!-- Replace with your SVG logo -->
-      <img src="assets/icons/logo.svg" alt="LuxeCart Logo" class="logo-img">
-      <span class="logo-text">LuxeCart</span>
-    </a>
-
-    <nav class="navigation" [class.mobile-menu-open]="isMobileMenuOpen">
-      <ul class="nav-links">
-        <li><a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="closeMobileMenu()">Home</a></li>
-        <li><a routerLink="/products" routerLinkActive="active" (click)="closeMobileMenu()">Products</a></li>
-        <!-- Add more links as needed e.g. Categories, About Us -->
-      </ul>
-    </nav>
-
-    <div class="header-actions">
-      <form (ngSubmit)="onSearch()" class="search-form">
-        <input type="search" [(ngModel)]="searchQuery" name="searchQuery" placeholder="Search products..." class="search-input">
-        <button type="submit" class="btn-icon search-button" aria-label="Search">
-          <!-- Replace with SVG search icon -->
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        </button>
-      </form>
-
-      <a routerLink="/cart" class="btn-icon cart-icon-link" aria-label="View Cart" (click)="closeMobileMenu()">
-        <!-- Replace with SVG cart icon -->
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
-        <span *ngIf="cartItemCount > 0" class="cart-badge">{{ cartItemCount }}</span>
-      </a>
-
-      <div class="auth-actions">
-        <ng-container *ngIf="!isLoggedIn; else loggedInActions">
-          <a routerLink="/auth/login" class="btn btn-outline-dark btn-sm" (click)="closeMobileMenu()">Login</a>
-          <a routerLink="/auth/register" class="btn btn-primary btn-sm" (click)="closeMobileMenu()">Register</a>
-        </ng-container>
-        <ng-template #loggedInActions>
-          <a routerLink="/profile" class="btn-icon user-profile-link" aria-label="User Profile" (click)="closeMobileMenu()">
-             <!-- Replace with SVG user icon -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-          </a>
-          <button (click)="logout()" class="btn btn-link btn-sm">Logout</button>
-        </ng-template>
-      </div>
-    </div>
-
-    <button class="mobile-menu-toggle btn-icon" (click)="toggleMobileMenu()" aria-label="Toggle Menu">
-      <!-- Hamburger Icon -->
-      <svg *ngIf="!isMobileMenuOpen" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-      <!-- Close Icon -->
-      <svg *ngIf="isMobileMenuOpen" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-    </button>
-  </div>
-</header>
-```
-
-**`src/app/layout/header/header.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.app-header {
-  background-color: $primary-white;
-  padding: $space-sm 0;
-  border-bottom: $border-width solid $light-gray-border;
-  position: sticky; // Makes header sticky
-  top: 0;
-  z-index: 1000; // Ensures it's above other content
-  box-shadow: $box-shadow-sm;
-}
-
-.header-container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  text-decoration: none;
-  color: $primary-black;
-
-  .logo-img {
-    height: 32px; // Adjust as needed
-    margin-right: $space-xs;
-  }
-
-  .logo-text {
-    font-size: $font-size-lg;
-    font-weight: $font-weight-bold;
-    font-family: $font-family-serif; // Example: Serif for logo text
-    color: $accent-rich-black;
-  }
-   &:hover {
-    text-decoration: none;
-   }
-}
-
-.navigation {
-  .nav-links {
-    display: flex;
-    align-items: center;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-
-    li {
-      margin-left: $space-md;
-
-      a {
-        text-decoration: none;
-        color: $primary-black;
-        font-weight: $font-weight-normal; // Use normal weight for nav links for minimalism
-        padding: $space-xs $space-sm;
-        border-radius: $border-radius-sm;
-        transition: $transition-base;
-
-        &:hover, &.active {
-          color: $primary-gold;
-          // background-color: lighten($primary-gold, 35%); // Subtle hover
-        }
-        &.active {
-          font-weight: $font-weight-bold;
-        }
-      }
-    }
-  }
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-}
-
-.search-form {
-  display: flex;
-  align-items: center;
-  margin-right: $space-sm; // Space before cart icon
-
-  .search-input {
-    padding: ($space-xs + 2px) $space-sm; // Slightly less padding than default form-control
-    border: $border-width solid $light-gray-border;
-    border-right: none;
-    border-top-left-radius: $border-radius-sm;
-    border-bottom-left-radius: $border-radius-sm;
-    font-size: $font-size-sm;
-    min-width: 150px; // Minimum width for search input
-    transition: $transition-base;
-
-    &:focus {
-      outline: none;
-      border-color: $primary-gold;
-      box-shadow: none; // Remove default focus shadow from form-control
-      min-width: 200px; // Expand on focus
-    }
-  }
-
-  .search-button {
-    padding: ($space-xs + 2px);
-    background-color: $primary-white;
-    border: $border-width solid $light-gray-border;
-    border-top-right-radius: $border-radius-sm;
-    border-bottom-right-radius: $border-radius-sm;
-    color: $secondary-gray; // Icon color
-
-    &:hover {
-      background-color: $background-light;
-      color: $primary-black;
-    }
-    svg {
-      width: 18px; height: 18px; // Smaller icon for search button
-    }
-  }
-}
-
-.cart-icon-link {
-  position: relative;
-  color: $primary-black;
-  margin-right: $space-md;
-  padding: $space-xs;
-
-  &:hover {
-    color: $primary-gold;
-  }
-
-  svg {
-    width: 24px; height: 24px;
-  }
-
-  .cart-badge {
-    position: absolute;
-    top: -2px;
-    right: -5px;
-    background-color: $primary-gold;
-    color: $primary-black;
-    border-radius: 50%;
-    padding: 2px 6px;
-    font-size: 10px;
-    font-weight: $font-weight-bold;
-    line-height: 1;
-  }
-}
-
-.auth-actions {
-  display: flex;
-  align-items: center;
-
-  .btn, .btn-link {
-    margin-left: $space-xs;
-    font-size: $font-size-sm; // Smaller buttons in header
-    padding: $space-xs $space-sm;
-  }
-  .btn-primary {
-    background-color: $primary-gold;
-    color: $primary-black;
-    &:hover {
-        background-color: darken($primary-gold, 8%);
-    }
-  }
-  .user-profile-link {
-    color: $primary-black;
-    &:hover {
-        color: $primary-gold;
-    }
-    svg {
-        width: 26px; height: 26px;
-    }
-  }
-}
-
-.mobile-menu-toggle {
-  display: none; // Hidden by default, shown on mobile
-  background: none;
-  border: none;
-  color: $primary-black;
-  padding: $space-xs;
-  z-index: 1001; // Above mobile menu
-}
-
-// Responsive adjustments
-@media (max-width: $breakpoint-lg) { // Adjust breakpoint as needed
-  .search-form .search-input {
-    min-width: 120px;
-    &:focus { min-width: 150px; }
-  }
-}
-
-
-@media (max-width: $breakpoint-md) { // Tablet and mobile
-  .navigation {
-    position: fixed;
-    top: 0;
-    left: -100%; // Off-screen initially
-    width: 70%;
-    max-width: 300px;
-    height: 100vh;
-    background-color: $accent-rich-black;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: $space-xxl $space-md $space-md;
-    transition: left 0.3s ease-in-out;
-    box-shadow: $box-shadow-lg;
-    z-index: 999; // Below header elements like toggle
-
-    &.mobile-menu-open {
-      left: 0;
-    }
-
-    .nav-links {
-      flex-direction: column;
-      width: 100%;
-
-      li {
-        margin-left: 0;
-        width: 100%;
-
-        a {
-          display: block;
-          padding: $space-sm 0;
-          color: $primary-white;
-          font-size: $font-size-lg;
-
-          &:hover, &.active {
-            color: $primary-gold;
-            background-color: transparent;
-          }
-        }
-      }
-    }
-  }
-
-  .search-form {
-    // Optionally hide search form in mobile header or make it an icon toggle
-    // For this example, let's keep it but it might get crowded
-    margin-right: $space-xs;
-    .search-input {
-        display: none; // Simpler: hide input, search button becomes main trigger
-    }
-    .search-button { // Style search button if input is hidden
-        border-radius: $border-radius-sm;
-        border-left: $border-width solid $light-gray-border;
-    }
-  }
-   // Or, to make search an icon that expands:
-  // .search-form {
-  //   // ... styles to make it an icon that expands an input overlay ...
-  // }
-
-
-  .header-actions {
-    .auth-actions {
-      // Login/Register buttons might be moved into the mobile menu
-      // For simplicity, let's keep them, but they might wrap
-      // or be visually adjusted.
-      .btn {
-        padding: $space-xs; // Smaller padding
-        font-size: 11px; // Even smaller
-      }
-      .user-profile-link {
-        margin-left: $space-xs;
-      }
-    }
-  }
-
-
-  .mobile-menu-toggle {
-    display: block;
-  }
-}
-
-@media (max-width: $breakpoint-sm) { // Small mobile
-    .logo {
-        .logo-text {
-            display: none; // Hide text, only show image on very small screens
-        }
-    }
-    .auth-actions {
-        .btn-outline-dark { display: none; } // Hide one button if too crowded
-    }
-    .cart-icon-link {
-        margin-right: $space-sm;
-    }
-}
-```
-*Recommendation:* For the search on mobile, it's often better to have an icon that, when clicked, expands a search bar overlay or navigates to a dedicated search page. The current example simplifies this.
-
-**`src/app/layout/footer/footer.component.ts`:**
-```typescript
-import { Component } from '@angular/core';
-
-@Component({
-  selector: 'app-footer',
-  templateUrl: './footer.component.html',
-  styleUrls: ['./footer.component.scss']
-})
-export class FooterComponent {
-  currentYear = new Date().getFullYear();
-}
-```
-
-**`src/app/layout/footer/footer.component.html`:**
-```html
-<footer class="app-footer">
-  <div class="container footer-content">
-    <div class="footer-section">
-      <h5 class="footer-title">LuxeCart</h5>
-      <p class="text-secondary">Elegance in every click. Discover curated collections and timeless pieces.</p>
-    </div>
-    <div class="footer-section">
-      <h5 class="footer-title">Quick Links</h5>
-      <ul class="footer-links">
-        <li><a routerLink="/about">About Us</a></li>
-        <li><a routerLink="/contact">Contact</a></li>
-        <li><a routerLink="/faq">FAQ</a></li>
-        <li><a routerLink="/terms">Terms of Service</a></li>
-      </ul>
-    </div>
-    <div class="footer-section">
-      <h5 class="footer-title">Connect</h5>
-      <ul class="footer-social-links">
-        <li><a href="#" aria-label="Facebook">FB</a></li> <!-- Replace with actual icons -->
-        <li><a href="#" aria-label="Instagram">IG</a></li>
-        <li><a href="#" aria-label="Twitter">TW</a></li>
-      </ul>
-    </div>
-  </div>
-  <div class="footer-bottom">
-    <p class="text-secondary">&copy; {{ currentYear }} LuxeCart. All Rights Reserved. Designed with <span class="text-gold">&hearts;</span>.</p>
-  </div>
-</footer>
-```
-
-**`src/app/layout/footer/footer.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.app-footer {
-  background-color: $accent-rich-black;
-  color: $secondary-gray;
-  padding: $space-xl 0 0;
-  margin-top: $space-xxl; // Ensure space above footer
-}
-
-.footer-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: $space-lg;
-  padding-bottom: $space-xl;
-}
-
-.footer-section {
-  .footer-title {
-    color: $primary-white;
-    font-size: $font-size-lg;
-    margin-bottom: $space-md;
-    font-family: $font-family-sans-serif; // Sans-serif for footer titles
-  }
-
-  p {
-    color: $secondary-gray;
-    font-size: $font-size-sm;
-  }
-}
-
-.footer-links, .footer-social-links {
-  list-style: none;
-  padding-left: 0;
-
-  li {
-    margin-bottom: $space-xs;
-
-    a {
-      color: $secondary-gray;
-      text-decoration: none;
-      font-size: $font-size-sm;
-
-      &:hover {
-        color: $primary-gold;
-        text-decoration: underline;
-      }
-    }
-  }
-}
-
-.footer-social-links {
-  display: flex;
-  li {
-    margin-right: $space-sm;
-    // Add styles for social icons here
-  }
-}
-
-.footer-bottom {
-  text-align: center;
-  padding: $space-md 0;
-  border-top: 1px solid darken($accent-rich-black, -10%); // Slightly lighter border than bg
-  font-size: $font-size-sm;
-
-  p {
-    margin-bottom: 0;
-  }
-}
-```
-
----
-
-**7. API Models (DTOs)**
-
-Create these interface files in `src/app/core/models/`. These are based on your OpenAPI `components.schemas`.
-
-**`src/app/core/models/api-response.model.ts` (Generic wrapper if your API uses one consistently)**
-```typescript
-export interface ApiError {
-  statusCode: number;
-  errorMessage: string | null;
-}
-
-export interface ApiResult<T> {
-  isCompleteSuccessfully: boolean;
-  data: T | null; // Make data nullable for safety
-  errorMessages: ApiError | null; // Assuming single error object, adjust if it's an array
-}
-```
-
-**`src/app/core/models/auth.dto.ts`:**
-```typescript
-import { ApiError, ApiResult } from './api-response.model';
-
-export interface RegisterDto {
-  displayName: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
-
-export interface LoginDto {
-  email: string;
-  password: string;
-}
-
-export interface AccountDto {
-  displayName: string | null;
-  isAuthenticated: boolean;
-  email: string | null;
-  token: string | null;
-  // Add userId if it's part of the account DTO and needed client-side
-  // userId?: string;
-}
-
-export type AccountDtoResult = ApiResult<AccountDto>;
-
-// For User Info (assuming it returns something like AccountDto or a subset)
-// You might need a specific DTO if /user-info returns different data
-export interface UserInfoDto {
-  displayName: string;
-  email: string;
-  // ... other fields from /user-info
-}
-```
-
-**`src/app/core/models/product.model.ts`:**
-```typescript
-// Based on your API's product structure (assuming from Product PUT/POST)
-// The GET /api/Products response structure needs to be confirmed from actual API calls
-// or more detailed OpenAPI spec. For now, let's assume:
-export interface Product {
-  productId: number;
-  name: string;
-  price: number;
-  description?: string;
-  imageUrl?: string; // Assuming API converts ImageFile to a URL
-  categoryId: number;
-  categoryName?: string; // If API returns this
-  // Add other fields like stock, ratings, etc.
-}
-
-// For Product creation/update if it's different from the display model
-export interface ProductRequestDto {
-  productId?: number; // Optional for creation
-  name: string;
-  price: number;
-  description?: string;
-  imageFile?: File; // For sending multipart/form-data
-  categoryId: number;
-}
-
-// Response for GET /api/Products (assuming pagination)
-export interface PaginatedProducts {
-  items: Product[];
-  pageNumber: number;
-  totalPages: number;
-  totalCount: number;
-  hasPreviousPage: boolean;
-  hasNextPage: boolean;
-}
-```
-
-**`src/app/core/models/category.model.ts`:**
-```typescript
-export interface Category {
-  categoryId: number;
-  categoryName: string;
-  image?: string | null; // URL of the image
-  // Add productCount or other relevant fields if API provides them
-}
-
-export interface CategoryRequestDto {
-  categoryId?: number;
-  categoryName: string;
-  imageFile?: File | null;
-}
-```
-
-**`src/app/core/models/cart.model.ts`:**
-```typescript
-// Response from GET /api/Cart/{userId} - Define this based on actual API response
-export interface CartItem {
-  productId: number;
-  productName: string; // You'll likely need to fetch/join product details
-  quantity: number;
-  price: number; // Price per unit
-  imageUrl?: string;
-  // any other product details you want to show in cart
-}
-
-export interface Cart {
-  userId: string;
-  items: CartItem[];
-  totalPrice?: number; // Calculated client-side or from backend
-  // other cart-level details like discount, shipping
-}
-
-
-export interface CartRequestDto {
-  userId: string; // This might be handled by AuthInterceptor or taken from logged-in user
-  productId: number;
-  quantity: number;
-}
-```
-*Self-correction:* The `CartRequestDto` in your OpenAPI has `userId` as nullable string. If it's always the current user, the backend might infer it from the auth token. Clarify this. For now, I'll assume `userId` is needed or can be derived.
-
-**`src/app/core/models/order.model.ts`:**
-```typescript
-// For POST /api/Orders/payment-intent response
-export interface PaymentIntentResponse {
-  clientSecret: string;
-  orderId: string; // Or whatever identifier your API returns
-  // ... other relevant details
-}
-
-// From TransactionDto for webhook
-export interface OrderTransactionDto {
-    // Define based on TransactionDto, ObjDto, OrderDto, MerchantDto from your OpenAPI spec
-    type: string | null;
-    obj: {
-        id: number; // transaction id
-        pending: boolean;
-        amount_cents: number;
-        success: boolean;
-        // ... include all relevant fields from ObjDto
-        order: { // from OrderDto
-            id: number; // order id
-            created_at: string; // date-time
-            delivery_needed: boolean;
-            // ... other order fields
-        };
-        // ... merchant details if needed
-    };
-}
-
-// User's order history item
-export interface OrderHistoryItem {
-    orderId: string;
-    orderDate: string;
-    totalAmount: number;
-    status: string; // e.g., 'Processing', 'Shipped', 'Delivered'
-    items: CartItem[]; // Simplified, or just a summary
-}
-```
-
----
-
-**8. Repositories**
-
-**`src/app/core/repositories/auth.repository.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
-import { LoginDto, RegisterDto, AccountDtoResult, UserInfoDto } from '../models/auth.dto';
-
-@Injectable()
-export class AuthRepository {
-  private baseUrl = environment.apiBaseUrl;
-
-  constructor(private http: HttpClient) {}
-
-  register(data: RegisterDto): Observable<AccountDtoResult> {
-    return this.http.post<AccountDtoResult>(`${this.baseUrl}register`, data);
-  }
-
-  login(data: LoginDto): Observable<AccountDtoResult> {
-    return this.http.post<AccountDtoResult>(`${this.baseUrl}login`, data);
-  }
-
-  // Note: /google-login is a GET. This usually initiates a redirect flow.
-  // The actual login happens via /google-login-callback.
-  // Handling this flow client-side requires more setup (e.g., opening a new window).
-  // For simplicity, this might just be a window.location.href change.
-  initiateGoogleLogin(): void {
-    // This would typically redirect the user. The backend handles the rest.
-    // The callback will then provide a token or session.
-    window.location.href = `${this.baseUrl}google-login`;
-  }
-
-  // This endpoint is likely called by your backend after Google auth.
-  // The client might not call /google-login-callback directly.
-  // If the client DOES need to call it (e.g., with a code from Google), adjust accordingly.
-
-  getUserInfo(): Observable<UserInfoDto> { // Adjust UserInfoDto based on actual API response
-    // This endpoint needs authentication (token in header)
-    return this.http.get<UserInfoDto>(`${this.baseUrl}user-info`);
-  }
-}
-```
-
-**`src/app/core/repositories/product.repository.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
-import { Product, ProductRequestDto, PaginatedProducts } from '../models/product.model';
-
-@Injectable()
-export class ProductRepository {
-  private baseUrl = `${environment.apiBaseUrl}api/Products`;
-
-  constructor(private http: HttpClient) {}
-
-  getProducts(
-    pageNumber = 1,
-    numberOfProducts = 10,
-    categoryName?: string,
-    searchQuery?: string
-  ): Observable<PaginatedProducts> { // Assuming API returns PaginatedProducts
-    let params = new HttpParams()
-      .set('pageNumber', pageNumber.toString())
-      .set('numberOfProduct', numberOfProducts.toString());
-
-    if (categoryName) {
-      params = params.set('categoryName', categoryName);
-    }
-    if (searchQuery) {
-      params = params.set('searchQuery', searchQuery);
-    }
-    // The API doc implies the response is just an array of products.
-    // If it's not paginated directly in the response body (e.g. headers for pagination info),
-    // this will need adjustment. For now, assuming PaginatedProducts is the response structure.
-    // If it's just Product[], change the return type.
-    return this.http.get<PaginatedProducts>(this.baseUrl, { params });
-  }
-
-  getProductById(id: number): Observable<Product> {
-    return this.http.get<Product>(`${this.baseUrl}/${id}`);
-  }
-
-  // For Admin (Optional)
-  createProduct(productData: ProductRequestDto): Observable<Product> { // Assuming returns created product
-    const formData = this.toFormData(productData);
-    return this.http.post<Product>(this.baseUrl, formData);
-  }
-
-  updateProduct(id: number, productData: ProductRequestDto): Observable<any> { // API returns "Success" (200 OK)
-    const formData = this.toFormData(productData);
-    formData.set('ProductId', id.toString()); // Ensure ProductId is part of form for PUT
-    return this.http.put(`${this.baseUrl}/${id}`, formData);
-  }
-
-  deleteProduct(id: number): Observable<any> { // API returns "Success" (200 OK)
-    return this.http.delete(`${this.baseUrl}/${id}`);
-  }
-
-  private toFormData(data: ProductRequestDto): FormData {
-    const formData = new FormData();
-    formData.append('Name', data.name);
-    formData.append('Price', data.price.toString());
-    formData.append('CategoryId', data.categoryId.toString());
-    if (data.description) {
-      formData.append('Description', data.description);
-    }
-    if (data.imageFile) {
-      formData.append('ImageFile', data.imageFile, data.imageFile.name);
-    }
-    // ProductId is part of path for PUT, not needed in body unless API requires it there too.
-    // For POST, ProductId is usually generated by backend. Your API has ProductId in POST request body.
-    if (data.productId) { // This is unusual for a POST, but your API spec requires it
-        formData.append('ProductId', data.productId.toString());
-    }
-    return formData;
-  }
-}
-```
-*API Note on Products:* Your API spec for `POST /api/Products` requires `ProductId` in the `multipart/form-data`. This is unusual for a creation endpoint, as `ProductId` is typically generated by the server. Double-check if this is intended or if it should be omitted for POST. For `PUT /api/Products/{id}`, `ProductId` is also in the form data.
-
-**`src/app/core/repositories/category.repository.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
-import { Category, CategoryRequestDto } from '../models/category.model';
-
-@Injectable()
-export class CategoryRepository {
-  private baseUrl = `${environment.apiBaseUrl}api/Categories`;
-
-  constructor(private http: HttpClient) {}
-
-  getCategories(): Observable<Category[]> { // Assuming it returns an array of categories
-    return this.http.get<Category[]>(this.baseUrl);
-  }
-
-  getCategoryById(id: number): Observable<Category> {
-    return this.http.get<Category>(`${this.baseUrl}/${id}`);
-  }
-
-  // For Admin (Optional)
-  createCategory(categoryData: CategoryRequestDto): Observable<Category> {
-    const formData = this.toFormData(categoryData);
-    return this.http.post<Category>(this.baseUrl, formData);
-  }
-
-  updateCategory(id: number, categoryData: CategoryRequestDto): Observable<any> {
-    const formData = this.toFormData(categoryData);
-    // categoryData.categoryId is part of the DTO for PUT.
-    // If id path param is the source of truth, ensure it's used.
-    // Your API takes CategoryId in the body for PUT implicitly.
-    return this.http.put(`${this.baseUrl}/${id}`, formData);
-  }
-
-  deleteCategory(id: number): Observable<any> {
-    return this.http.delete(`${this.baseUrl}/${id}`);
-  }
-
-  private toFormData(data: CategoryRequestDto): FormData {
-    const formData = new FormData();
-    formData.append('CategoryName', data.categoryName);
-    if (data.categoryId) { // For update, include categoryId if API needs it in body
-        formData.append('CategoryId', data.categoryId.toString());
-    }
-    if (data.imageFile) {
-      formData.append('ImageFile', data.imageFile, data.imageFile.name);
-    }
-    return formData;
-  }
-}
-```
-
-**`src/app/core/repositories/cart.repository.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
-import { Cart, CartRequestDto } from '../models/cart.model'; // Define Cart based on actual API response
-
-@Injectable()
-export class CartRepository {
-  private baseUrl = `${environment.apiBaseUrl}api/Cart`;
-
-  constructor(private http: HttpClient) {}
-
-  getCart(userId: string): Observable<Cart> { // Define Cart model for response
-    return this.http.get<Cart>(`${this.baseUrl}/${userId}`);
-  }
-
-  addItemToCart(item: CartRequestDto): Observable<any> { // API returns "Success"
-    return this.http.post(this.baseUrl, item);
-  }
-
-  updateCartItem(item: CartRequestDto): Observable<any> { // API returns "Success"
-    return this.http.put(this.baseUrl, item);
-  }
-
-  removeItemFromCart(userId: string, productId: number): Observable<any> { // API returns "Success"
-    return this.http.delete(`${this.baseUrl}/${userId}/${productId}`);
-  }
-}
-```
-
-**`src/app/core/repositories/order.repository.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
-import { PaymentIntentResponse, OrderHistoryItem } from '../models/order.model'; // Define these
-
-@Injectable()
-export class OrderRepository {
-  private baseUrl = `${environment.apiBaseUrl}api/Orders`;
-
-  constructor(private http: HttpClient) {}
-
-  createPaymentIntent(userId: string): Observable<PaymentIntentResponse> {
-    const params = new HttpParams().set('userId', userId);
-    return this.http.post<PaymentIntentResponse>(`${this.baseUrl}/payment-intent`, null, { params });
-    // Note: API spec shows `userId` as query param, and no request body.
-  }
-
-  // Optional: Get order history (if you implement /user-info or a dedicated orders endpoint)
-  getOrderHistory(userId: string): Observable<OrderHistoryItem[]> {
-    // This endpoint is not in your provided spec, example:
-    // return this.http.get<OrderHistoryItem[]>(`${this.baseUrl}/history/${userId}`);
-    // For now, return empty or throw error if not implemented.
-    throw new Error('Order history endpoint not defined in API specification.');
-  }
-
-  // The /api/Orders/webhook is typically called by Stripe, not by the frontend.
-}
-```
-
----
-
-**9. Services (Business Logic)**
-
-**`src/app/core/services/auth.service.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { tap, catchError, map } from 'rxjs/operators';
-import { AuthRepository } from '../repositories/auth.repository';
-import { LoginDto, RegisterDto, AccountDto, UserInfoDto } from '../models/auth.dto';
-import { User } from '../models/user.model'; // Create this simple model
-import { NotificationService } from './notification.service';
-
-// src/app/core/models/user.model.ts
-// export interface User {
-//   id: string; // Or use email as ID if that's unique and primary
-//   displayName: string | null;
-//   email: string | null;
-//   token?: string; // Token should ideally not be part of the User model exposed to components
-// }
-
-@Injectable()
-export class AuthService {
-  private currentUserSubject: BehaviorSubject<User | null>;
-  public currentUser: Observable<User | null>;
-  private readonly TOKEN_KEY = 'authToken';
-  private readonly USER_INFO_KEY = 'currentUserInfo';
-
-  constructor(
-    private authRepository: AuthRepository,
-    private router: Router,
-    private notificationService: NotificationService
-  ) {
-    const storedUser = localStorage.getItem(this.USER_INFO_KEY);
-    this.currentUserSubject = new BehaviorSubject<User | null>(storedUser ? JSON.parse(storedUser) : null);
-    this.currentUser = this.currentUserSubject.asObservable();
-  }
-
-  public get currentUserValue(): User | null {
-    return this.currentUserSubject.value;
-  }
-
-  public get isLoggedIn(): boolean {
-    return !!localStorage.getItem(this.TOKEN_KEY);
-  }
-
-  public getAuthToken(): string | null {
-    return localStorage.getItem(this.TOKEN_KEY);
-  }
-
-  register(data: RegisterDto): Observable<boolean> {
-    return this.authRepository.register(data).pipe(
-      map(response => {
-        if (response.isCompleteSuccessfully && response.data) {
-          this.handleAuthentication(response.data);
-          this.notificationService.success('Registration successful!', 'Welcome');
-          return true;
-        } else {
-          const errorMsg = response.errorMessages?.errorMessage || 'Registration failed. Please try again.';
-          this.notificationService.error(errorMsg, 'Registration Error');
-          return false;
-        }
-      }),
-      catchError(err => {
-        this.notificationService.error('An unexpected error occurred during registration.', 'Error');
-        console.error('Registration error:', err);
-        return of(false);
-      })
-    );
-  }
-
-  login(data: LoginDto): Observable<boolean> {
-    return this.authRepository.login(data).pipe(
-      map(response => {
-        if (response.isCompleteSuccessfully && response.data) {
-          this.handleAuthentication(response.data);
-          this.notificationService.success('Login successful!', 'Welcome Back');
-          return true;
-        } else {
-          const errorMsg = response.errorMessages?.errorMessage || 'Invalid email or password.';
-          this.notificationService.error(errorMsg, 'Login Error');
-          return false;
-        }
-      }),
-      catchError(err => {
-        this.notificationService.error('An unexpected error occurred during login.', 'Error');
-        console.error('Login error:', err);
-        return of(false);
-      })
-    );
-  }
-
-  private handleAuthentication(accountDto: AccountDto): void {
-    if (accountDto.token && accountDto.email) { // Assuming email can serve as a user identifier part
-      localStorage.setItem(this.TOKEN_KEY, accountDto.token);
-      const user: User = {
-        // id: accountDto.email, // Or a proper userId if API provides it in AccountDto
-        id: 'temp-user-id', // Replace with actual user ID from API if available
-        displayName: accountDto.displayName,
-        email: accountDto.email,
-      };
-      localStorage.setItem(this.USER_INFO_KEY, JSON.stringify(user));
-      this.currentUserSubject.next(user);
-    } else {
-        // This case should ideally not happen if isCompleteSuccessfully is true
-        console.error("Authentication data incomplete:", accountDto);
-        this.notificationService.error("Authentication failed: Incomplete user data received.", "Auth Error");
-    }
-  }
-
-  logout(): void {
-    localStorage.removeItem(this.TOKEN_KEY);
-    localStorage.removeItem(this.USER_INFO_KEY);
-    this.currentUserSubject.next(null);
-    this.notificationService.info('You have been logged out.', 'Goodbye');
-    this.router.navigate(['/auth/login']);
-  }
-
-  // Fetch full user profile if needed separately
-  fetchAndUpdateUserInfo(): Observable<User | null> {
-    return this.authRepository.getUserInfo().pipe(
-      tap((userInfo: UserInfoDto) => { // Adjust UserInfoDto if necessary
-        const currentUser = this.currentUserValue;
-        if (currentUser) {
-          const updatedUser: User = {
-            ...currentUser, // Keep existing ID and token if not in UserInfoDto
-            displayName: userInfo.displayName,
-            email: userInfo.email, // Update email if it can change, or verify it matches
-          };
-          localStorage.setItem(this.USER_INFO_KEY, JSON.stringify(updatedUser));
-          this.currentUserSubject.next(updatedUser);
-        }
-      }),
-      map(() => this.currentUserValue), // Return the updated user from BehaviorSubject
-      catchError(err => {
-        this.notificationService.error('Could not fetch user information.', 'Profile Error');
-        // Potentially log out user if token is invalid (e.g., 401 error)
-        // This should be handled by an ErrorInterceptor globally.
-        return of(null);
-      })
-    );
-  }
-
-  initiateGoogleLogin(): void {
-    this.authRepository.initiateGoogleLogin();
-    // After redirect and callback, your backend should provide a token.
-    // You'll need a mechanism to capture this token on the frontend,
-    // e.g., a dedicated callback route in Angular that receives the token as a query param.
-    // Example: /auth/google-callback?token=YOUR_TOKEN
-    // Then, call a method like `handleGoogleCallbackToken(token)`.
-  }
-
-  // Call this method from your Google callback component
-  handleAuthResponse(accountDto: AccountDto): void {
-    if (accountDto.token && accountDto.email) {
-      this.handleAuthentication(accountDto);
-      this.router.navigate(['/']); // Navigate to home or profile
-      this.notificationService.success('Logged in successfully with Google!', 'Welcome');
-    } else {
-      this.notificationService.error('Google login failed. Please try again.', 'Login Error');
-      this.router.navigate(['/auth/login']);
-    }
-  }
-}
-```
-*User Model `src/app/core/models/user.model.ts`*:
-```typescript
-export interface User {
-  id: string; // This should ideally be a unique ID from your backend (e.g., GUID)
-  displayName: string | null;
-  email: string | null;
-  // roles?: string[]; // For role-based access (admin)
-}
-```
-
-**`src/app/core/services/notification.service.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { ToastrService } from 'ngx-toastr';
-
-@Injectable()
-export class NotificationService {
-  constructor(private toastr: ToastrService) {}
-
-  success(message: string, title?: string): void {
-    this.toastr.success(message, title);
-  }
-
-  error(message: string, title?: string): void {
-    this.toastr.error(message, title);
-  }
-
-  info(message: string, title?: string): void {
-    this.toastr.info(message, title);
-  }
-
-  warning(message: string, title?: string): void {
-    this.toastr.warning(message, title);
-  }
-}
-```
-
-**`src/app/core/services/loading.service.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
-
-@Injectable()
-export class LoadingService {
-  private loadingSubject = new BehaviorSubject<boolean>(false);
-  isLoading$: Observable<boolean> = this.loadingSubject.asObservable();
-
-  show(): void {
-    this.loadingSubject.next(true);
-  }
-
-  hide(): void {
-    this.loadingSubject.next(false);
-  }
-}
-```
-*You would typically integrate this with an HTTP interceptor to automatically show/hide on API calls, or manually call `show()`/`hide()` around service method calls.*
-
-**`src/app/core/services/product.service.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
-import { catchError, tap, map, finalize } from 'rxjs/operators';
-import { ProductRepository } from '../repositories/product.repository';
-import { Product, PaginatedProducts, ProductRequestDto } from '../models/product.model';
-import { NotificationService } from './notification.service';
-import { LoadingService } from './loading.service';
-
-@Injectable()
-export class ProductService {
-  // Example: If you want to cache products or manage a local state
-  private productsSubject = new BehaviorSubject<Product[]>([]);
-  public products$ = this.productsSubject.asObservable();
-
-  private currentProductSubject = new BehaviorSubject<Product | null>(null);
-  public currentProduct$ = this.currentProductSubject.asObservable();
-
-
-  constructor(
-    private productRepository: ProductRepository,
-    private notificationService: NotificationService,
-    private loadingService: LoadingService
-  ) {}
-
-  getProducts(
-    pageNumber = 1,
-    numberOfProducts = 10,
-    categoryName?: string,
-    searchQuery?: string
-  ): Observable<PaginatedProducts> { // Or Product[] if not paginated
-    this.loadingService.show();
-    return this.productRepository.getProducts(pageNumber, numberOfProducts, categoryName, searchQuery).pipe(
-      tap((paginatedResult) => {
-        // this.productsSubject.next(paginatedResult.items); // If you want to store the current page locally
-        // Handle cases where API might return null or undefined for items
-        if (!paginatedResult || !paginatedResult.items) {
-            this.notificationService.warning('No products found matching your criteria.', 'Products');
-            // Return an empty valid structure to prevent downstream errors
-            return { items: [], pageNumber: 1, totalPages: 0, totalCount: 0, hasPreviousPage: false, hasNextPage: false };
-        }
-        return paginatedResult;
-      }),
-      catchError(err => {
-        this.notificationService.error('Failed to fetch products.', 'Error');
-        console.error(err);
-        // Return an empty valid structure to prevent downstream errors
-        return of({ items: [], pageNumber: 1, totalPages: 0, totalCount: 0, hasPreviousPage: false, hasNextPage: false });
-      }),
-      finalize(() => this.loadingService.hide())
-    );
-  }
-
-  getProductById(id: number): Observable<Product | null> {
-    this.loadingService.show();
-    this.currentProductSubject.next(null); // Clear previous product
-    return this.productRepository.getProductById(id).pipe(
-      tap(product => this.currentProductSubject.next(product)),
-      catchError(err => {
-        this.notificationService.error('Failed to fetch product details.', 'Error');
-        console.error(err);
-        this.router.navigate(['/products']); // Or a 404 page
-        return of(null);
-      }),
-      finalize(() => this.loadingService.hide())
-    );
-  }
-
-  // Admin methods
-  createProduct(productData: ProductRequestDto): Observable<Product | null> {
-    this.loadingService.show();
-    return this.productRepository.createProduct(productData).pipe(
-      tap(newProduct => {
-        this.notificationService.success(`Product "${newProduct.name}" created successfully.`, 'Product Created');
-        // Optionally refresh product list or add to local cache
-      }),
-      catchError(err => {
-        this.notificationService.error('Failed to create product.', 'Error');
-        console.error(err);
-        return of(null);
-      }),
-      finalize(() => this.loadingService.hide())
-    );
-  }
-
-  updateProduct(id: number, productData: ProductRequestDto): Observable<boolean> {
-    this.loadingService.show();
-    return this.productRepository.updateProduct(id, productData).pipe(
-      map(() => { // API returns 200 OK on success, no body content for product
-        this.notificationService.success(`Product "${productData.name}" updated successfully.`, 'Product Updated');
-        // Optionally refresh product list or update local cache
-        // Fetch the updated product to update currentProductSubject if on detail page
-        if (this.currentProductSubject.value && this.currentProductSubject.value.productId === id) {
-            this.getProductById(id).subscribe();
-        }
-        return true;
-      }),
-      catchError(err => {
-        this.notificationService.error('Failed to update product.', 'Error');
-        console.error(err);
-        return of(false);
-      }),
-      finalize(() => this.loadingService.hide())
-    );
-  }
-
-  deleteProduct(id: number): Observable<boolean> {
-    this.loadingService.show();
-    return this.productRepository.deleteProduct(id).pipe(
-      map(() => {
-        this.notificationService.success('Product deleted successfully.', 'Product Deleted');
-        // Optionally refresh product list or remove from local cache
-        if (this.currentProductSubject.value && this.currentProductSubject.value.productId === id) {
-            this.currentProductSubject.next(null);
-        }
-        return true;
-      }),
-      catchError(err => {
-        this.notificationService.error('Failed to delete product.', 'Error');
-        console.error(err);
-        return of(false);
-      }),
-      finalize(() => this.loadingService.hide())
-    );
-  }
-}
-```
-*Self-correction: Added `private router: Router` to `ProductService` constructor for navigation on error (e.g., product not found).*
-
-**`src/app/core/services/cart.service.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { map, tap, catchError, switchMap, finalize } from 'rxjs/operators';
-import { CartRepository } from '../repositories/cart.repository';
-import { Cart, CartItem, CartRequestDto } from '../models/cart.model';
-import { AuthService } from './auth.service';
-import { NotificationService } from './notification.service';
-import { LoadingService } from './loading.service';
-import { Product } from '../models/product.model'; // For adding product details to cart item
-
-@Injectable()
-export class CartService {
-  private cartSubject = new BehaviorSubject<Cart | null>(null);
-  public cart$ = this.cartSubject.asObservable();
-
-  private cartItemCountSubject = new BehaviorSubject<number>(0);
-
-  constructor(
-    private cartRepository: CartRepository,
-    private authService: AuthService,
-    private notificationService: NotificationService,
-    private loadingService: LoadingService
-  ) {
-    // Load cart when user logs in or on app init if user is already logged in
-    this.authService.currentUser.subscribe(user => {
-      if (user && user.id) {
-        this.loadCart(user.id);
-      } else {
-        this.clearCartLocal(); // Clear cart if user logs out
-      }
-    });
-  }
-
-  public getCartItemCount(): Observable<number> {
-    // This can be derived from cart$ or managed separately
-    return this.cart$.pipe(
-      map(cart => cart?.items.reduce((acc, item) => acc + item.quantity, 0) || 0)
-    );
-  }
-
-  private getCurrentUserId(): string | null {
-    return this.authService.currentUserValue?.id || null;
-  }
-
-  loadCart(userId: string): void {
-    if (!userId) return;
-    this.loadingService.show();
-    this.cartRepository.getCart(userId).pipe(
-      tap(cart => {
-        // Here you might need to enrich cart items with product details
-        // if the backend GET /api/Cart/{userId} only returns product IDs and quantities.
-        // For now, assume API returns sufficient CartItem details.
-        this.cartSubject.next(cart);
-        this.updateCartItemCount(cart);
-      }),
-      catchError(err => {
-        this.notificationService.error('Failed to load cart.', 'Cart Error');
-        this.clearCartLocal(); // Clear local cart on error
-        return of(null);
-      }),
-      finalize(() => this.loadingService.hide())
-    ).subscribe();
-  }
-
-  // Overload for adding a full Product object or just by ID
-  addItem(product: Product, quantity: number = 1): Observable<boolean> {
-      const userId = this.getCurrentUserId();
-      if (!userId) {
-          this.notificationService.warning('Please log in to add items to your cart.', 'Login Required');
-          return of(false);
-      }
-      const cartRequest: CartRequestDto = { userId, productId: product.productId, quantity };
-      return this.performCartOperation(
-          this.cartRepository.addItemToCart(cartRequest),
-          `Added ${product.name} to cart.`,
-          'Failed to add item to cart.'
-      );
-  }
-
-
-  updateItemQuantity(productId: number, quantity: number): Observable<boolean> {
-    const userId = this.getCurrentUserId();
-    if (!userId || quantity < 1) return of(false); // Quantity should be at least 1
-
-    const cartRequest: CartRequestDto = { userId, productId, quantity };
-    return this.performCartOperation(
-      this.cartRepository.updateCartItem(cartRequest), // Assuming PUT updates quantity
-      'Cart updated successfully.',
-      'Failed to update cart.'
-    );
-  }
-
-  removeItem(productId: number): Observable<boolean> {
-    const userId = this.getCurrentUserId();
-    if (!userId) return of(false);
-
-    return this.performCartOperation(
-      this.cartRepository.removeItemFromCart(userId, productId),
-      'Item removed from cart.',
-      'Failed to remove item from cart.'
-    );
-  }
-
-  private performCartOperation(operation$: Observable<any>, successMsg: string, errorMsg: string): Observable<boolean> {
-    const userId = this.getCurrentUserId();
-    if (!userId) return of(false);
-
-    this.loadingService.show();
-    return operation$.pipe(
-      switchMap(() => this.cartRepository.getCart(userId)), // Refresh cart after operation
-      tap(updatedCart => {
-        this.cartSubject.next(updatedCart);
-        this.updateCartItemCount(updatedCart);
-        this.notificationService.success(successMsg, 'Cart Updated');
-      }),
-      map(() => true),
-      catchError(err => {
-        this.notificationService.error(errorMsg, 'Cart Error');
-        console.error(err);
-        // Optionally, try to reload cart to ensure consistency even on error
-        this.loadCart(userId);
-        return of(false);
-      }),
-      finalize(() => this.loadingService.hide())
-    );
-  }
-
-  private updateCartItemCount(cart: Cart | null): void {
-    const count = cart?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
-    this.cartItemCountSubject.next(count); // Keep this if Header uses it directly
-  }
-
-  clearCartLocal(): void {
-    this.cartSubject.next(null);
-    this.cartItemCountSubject.next(0);
-  }
-
-  // Call this when order is placed successfully
-  clearCartAfterOrder(): Observable<boolean> {
-    const currentCart = this.cartSubject.value;
-    if (!currentCart || !currentCart.items.length) return of(true);
-
-    // This might involve calling a specific backend endpoint to clear the cart,
-    // or simply clearing it locally if the backend handles it post-payment.
-    // For now, let's assume local clear and backend handles it.
-    // If your backend needs an explicit call to empty the cart (e.g. after order):
-    // const userId = this.getCurrentUserId();
-    // if (!userId) return of(false);
-    // return this.cartRepository.clearCart(userId).pipe(map(() => {
-    //   this.clearCartLocal();
-    //   return true;
-    // }));
-
-    this.clearCartLocal();
-    this.notificationService.info('Cart has been cleared.', 'Order Placed');
-    return of(true);
-  }
-}
-```
-*Note on CartService `addItem`*: I've assumed the `Product` object is available. If you only have `productId`, you might need to fetch product details first or adjust the method. The `cartRepository.addItemToCart` uses `CartRequestDto` which only needs `productId`.
-
-**`src/app/core/services/order.service.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
-import { catchError, map, tap, finalize } from 'rxjs/operators';
-import { OrderRepository } from '../repositories/order.repository';
-import { AuthService } from './auth.service';
-import { NotificationService } from './notification.service';
-import { LoadingService } from './loading.service';
-import { PaymentIntentResponse, OrderHistoryItem } from '../models/order.model';
-
-@Injectable()
-export class OrderService {
-  constructor(
-    private orderRepository: OrderRepository,
-    private authService: AuthService,
-    private notificationService: NotificationService,
-    private loadingService: LoadingService
-  ) {}
-
-  createPaymentIntent(): Observable<PaymentIntentResponse | null> {
-    const userId = this.authService.currentUserValue?.id;
-    if (!userId) {
-      this.notificationService.error('User not logged in. Cannot proceed with payment.', 'Auth Error');
-      return of(null);
-    }
-    this.loadingService.show();
-    return this.orderRepository.createPaymentIntent(userId).pipe(
-      tap(response => {
-        if (!response || !response.clientSecret) {
-             this.notificationService.error('Failed to initialize payment. Missing client secret.', 'Payment Error');
-        }
-        // Do not show success here, Stripe flow will handle UI
-      }),
-      catchError(err => {
-        this.notificationService.error('Failed to initialize payment.', 'Payment Error');
-        console.error('Payment Intent Error:', err);
-        return of(null);
-      }),
-      finalize(() => this.loadingService.hide())
-    );
-  }
-
-  // Example for fetching order history
-  getOrderHistory(): Observable<OrderHistoryItem[]> {
-    const userId = this.authService.currentUserValue?.id;
-    if (!userId) {
-      // this.notificationService.warning('Please log in to view order history.', 'Auth Required');
-      return of([]);
-    }
-    this.loadingService.show();
-    // This endpoint is NOT in your provided spec. This is a placeholder.
-    // You need to implement this in OrderRepository and your backend.
-    // For now, let's assume `orderRepository.getOrderHistory` exists.
-    try {
-        return this.orderRepository.getOrderHistory(userId).pipe(
-            catchError(err => {
-                this.notificationService.error('Failed to fetch order history.', 'Error');
-                console.error('Order History Error:', err);
-                return of([]);
-            }),
-            finalize(() => this.loadingService.hide())
-        );
-    } catch (e) { // Catch error if getOrderHistory itself is not implemented in repo
-        this.notificationService.warning('Order history feature is not available yet.', 'Feature Unavailable');
-        this.loadingService.hide();
-        return of([]);
-    }
-  }
-}
-```
-
-**`src/app/core/services/category.service.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { CategoryRepository } from '../repositories/category.repository';
-import { Category } from '../models/category.model';
-import { catchError, tap, finalize } from 'rxjs/operators';
-import { NotificationService } from './notification.service';
-import { LoadingService } from './loading.service';
-
-@Injectable()
-export class CategoryService {
-  private categoriesSubject = new BehaviorSubject<Category[]>([]);
-  public categories$ = this.categoriesSubject.asObservable();
-
-  constructor(
-    private categoryRepository: CategoryRepository,
-    private notificationService: NotificationService,
-    private loadingService: LoadingService
-  ) {
-    this.loadCategories(); // Load categories on service initialization
-  }
-
-  loadCategories(): void {
-    this.loadingService.show();
-    this.categoryRepository.getCategories().pipe(
-      tap(categories => this.categoriesSubject.next(categories || [])),
-      catchError(err => {
-        this.notificationService.error('Failed to load categories.', 'Error');
-        this.categoriesSubject.next([]); // Emit empty array on error
-        return of([]);
-      }),
-      finalize(() => this.loadingService.hide())
-    ).subscribe();
-  }
-
-  // Admin methods can be added here similar to ProductService if needed
-}
-```
-
----
-
-**10. Interceptors & Guards**
-
-**`src/app/core/interceptors/auth.interceptor.ts`:**
-```typescript
-import { Injectable } from '@angular/core';
-import { HttpEvent, HttpInterceptor, HttpHandler, HttpRequest } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { AuthService } from '../services/auth.service'; // Correct path
-
-@Injectable()
-export class AuthInterceptor implements HttpInterceptor {
-  constructor(private authService: AuthService) {}
-
-  intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    const authToken = this.authService.getAuthToken();
-
-    // Clone the request to add the new header.
-    // Add token only if it exists and the request is not to auth endpoints themselves (optional refinement)
-    if (authToken) {
-      // Check if the request URL is for auth endpoints to avoid sending token unnecessarily
-      // Or if the API expects token for all requests once logged in.
-      // For simplicity, add to all if token exists.
-      const authReq = req.clone({
-        headers: req.headers.set('Authorization', `Bearer ${authToken}`)
-      });
-      return next.handle(authReq);
-    }
-
-    // Pass on the cloned request without token.
-    return next.handle(req);
-  }
-}
-```
-
-**`src/app/core/guards/auth.guard.ts`:**
-(Generate with `ng g guard core/guards/auth --implements CanActivate`)
-```typescript
-import { Injectable } from '@angular/core';
-import { CanActivate, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree, Router } from '@angular/router';
-import { Observable } from 'rxjs';
-import { AuthService } from '../services/auth.service';
-import { NotificationService } from '../services/notification.service';
-import { map, take } from 'rxjs/operators';
-
-@Injectable({
-  providedIn: 'root' // Or provide in CoreModule
-})
-export class AuthGuard implements CanActivate {
-  constructor(
-    private authService: AuthService,
-    private router: Router,
-    private notificationService: NotificationService
-  ) {}
-
-  canActivate(
-    next: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot): Observable<boolean | UrlTree> | Promise<boolean | UrlTree> | boolean | UrlTree {
-
-    return this.authService.currentUser.pipe(
-      take(1), // Take the first emission and complete
-      map(user => {
-        const isLoggedIn = !!user; // Or use this.authService.isLoggedIn;
-        if (isLoggedIn) {
-          // Optional: Check for roles if route has role restrictions
-          // const expectedRoles = next.data.roles;
-          // if (expectedRoles && !this.authService.hasRoles(expectedRoles)) {
-          //   this.router.navigate(['/unauthorized']); // Or home
-          //   return false;
-          // }
-          return true;
-        }
-
-        // Not logged in so redirect to login page with the return url
-        this.notificationService.warning('You need to be logged in to access this page.', 'Access Denied');
-        return this.router.createUrlTree(['/auth/login'], { queryParams: { returnUrl: state.url } });
-      })
-    );
-  }
-}
-```
-*Note on `AuthGuard`: For role-based access (Admin), you'd extend this or create a new `RoleGuard` and check user roles against `route.data.roles`.*
-
----
-
-**11. App Routing**
-
-**`src/app/app-routing.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { AuthGuard } from './core/guards/auth.guard';
-
-const routes: Routes = [
-  {
-    path: 'auth',
-    loadChildren: () => import('./features/auth/auth.module').then(m => m.AuthModule)
-  },
-  {
-    path: 'products',
-    loadChildren: () => import('./features/products/products.module').then(m => m.ProductsModule)
-  },
-  {
-    path: 'cart',
-    loadChildren: () => import('./features/cart/cart.module').then(m => m.CartModule),
-    canActivate: [AuthGuard]
-  },
-  {
-    path: 'checkout',
-    loadChildren: () => import('./features/checkout/checkout.module').then(m => m.CheckoutModule),
-    canActivate: [AuthGuard]
-  },
-  {
-    path: 'profile',
-    loadChildren: () => import('./features/profile/profile.module').then(m => m.ProfileModule),
-    canActivate: [AuthGuard]
-  },
-  {
-    path: 'admin',
-    loadChildren: () => import('./features/admin/admin.module').then(m => m.AdminModule),
-    canActivate: [AuthGuard], // Add RoleGuard here later: data: { roles: ['Admin'] }
-  },
-  {
-    path: '', // Home page
-    loadChildren: () => import('./features/home/home.module').then(m => m.HomeModule)
-  },
-  // Wildcard route for a 404 page (Create a NotFoundComponent in Shared or Core)
-  // { path: 'not-found', component: NotFoundComponent },
-  { path: '**', redirectTo: '' } // Or redirectTo: '/not-found'
-];
-
-@NgModule({
-  imports: [RouterModule.forRoot(routes, {
-    scrollPositionRestoration: 'enabled', // Restores scroll position on navigation
-    anchorScrolling: 'enabled', // Enables anchor scrolling
-    initialNavigation: 'enabledBlocking' // Recommended for SSR, good practice otherwise
-  })],
-  exports: [RouterModule]
-})
-export class AppRoutingModule { }
-```
-
----
-
-**12. Feature Modules & Components (Key Examples)**
-
-I'll provide the structure for `AuthModule` (Login) and `ProductsModule` (List & Card). The other modules/components would follow a similar pattern.
-
-**Auth Feature**
-
-**`src/app/features/auth/auth-routing.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { LoginComponent } from './login/login.component';
-import { RegisterComponent } from './register/register.component';
-// import { GoogleCallbackComponent } from './google-callback/google-callback.component';
-
-const routes: Routes = [
-  { path: 'login', component: LoginComponent },
-  { path: 'register', component: RegisterComponent },
-  // { path: 'google-callback', component: GoogleCallbackComponent }, // For handling Google OAuth callback
-  { path: '', redirectTo: 'login', pathMatch: 'full' }
-];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule]
-})
-export class AuthRoutingModule { }
-```
-
-**`src/app/features/auth/auth.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { SharedModule } from '../../shared/shared.module'; // For ReactiveFormsModule, etc.
-import { AuthRoutingModule } from './auth-routing.module';
-import { LoginComponent } from './login/login.component';
-import { RegisterComponent } from './register/register.component';
-// import { GoogleCallbackComponent } from './google-callback/google-callback.component';
-
-@NgModule({
-  declarations: [
-    LoginComponent,
-    RegisterComponent,
-    // GoogleCallbackComponent
-  ],
-  imports: [
-    CommonModule,
-    SharedModule, // Ensure ReactiveFormsModule is exported from SharedModule
-    AuthRoutingModule
-  ]
-})
-export class AuthModule { }
-```
-
-**`src/app/features/auth/login/login.component.ts`:**
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Router, ActivatedRoute } from '@angular/router';
-import { AuthService } from '../../../core/services/auth.service';
-import { NotificationService } from '../../../core/services/notification.service'; // Already injected in AuthService
-import { first } from 'rxjs/operators';
-
-@Component({
-  selector: 'app-login',
-  templateUrl: './login.component.html',
-  styleUrls: ['./login.component.scss']
-})
-export class LoginComponent implements OnInit {
-  loginForm!: FormGroup;
-  isLoading = false;
-  submitted = false;
-  returnUrl = '/';
-
-  // Email pattern from your OpenAPI spec
-  emailPattern = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$";
-  // Password pattern from your OpenAPI spec
-  // Minimum six characters, at least one uppercase letter, one lowercase letter, one number and one special character
-  passwordPattern = "^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[a-zA-Z])(?=.*[^a-zA-Z\\d]).{6,}$";
-
-
-  constructor(
-    private formBuilder: FormBuilder,
-    private authService: AuthService,
-    private router: Router,
-    private route: ActivatedRoute
-    // private notificationService: NotificationService // Not needed if AuthService handles notifications
-  ) {
-     // Redirect to home if already logged in
-     if (this.authService.currentUserValue) {
-      this.router.navigate(['/']);
-    }
-  }
-
-  ngOnInit(): void {
-    this.loginForm = this.formBuilder.group({
-      email: ['', [Validators.required, Validators.email, Validators.pattern(this.emailPattern)]],
-      password: ['', [Validators.required, Validators.pattern(this.passwordPattern)]]
-    });
-
-    // Get return url from route parameters or default to '/'
-    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/';
-  }
-
-  // Convenience getter for easy access to form fields
-  get f() { return this.loginForm.controls; }
-
-  onSubmit(): void {
-    this.submitted = true;
-
-    if (this.loginForm.invalid) {
-      // Mark all fields as touched to display errors
-      Object.values(this.loginForm.controls).forEach(control => {
-        control.markAsTouched();
-      });
-      return;
-    }
-
-    this.isLoading = true;
-    this.authService.login({ email: this.f.email.value, password: this.f.password.value })
-      .pipe(first()) // take the first emitted value and complete
-      .subscribe({
-        next: (success) => {
-          if (success) {
-            this.router.navigate([this.returnUrl]);
-          } else {
-            // Error message is handled by AuthService
-            this.isLoading = false;
-          }
-        },
-        error: () => { // Should be caught by AuthService, but good practice
-          this.isLoading = false;
-        }
-      });
-  }
-
-  onGoogleLogin(): void {
-    this.isLoading = true;
-    // The authService method will handle the redirect.
-    // No direct response is expected here.
-    this.authService.initiateGoogleLogin();
-    // isLoading might need to be managed differently for redirect flows
-    // as the component might be destroyed.
-  }
-}
-```
-
-**`src/app/features/auth/login/login.component.html`:**
-```html
-<div class="auth-page-container">
-  <div class="auth-card">
-    <h2 class="auth-title">Welcome Back!</h2>
-    <p class="auth-subtitle text-secondary">Login to continue your LuxeCart experience.</p>
-
-    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="auth-form" novalidate>
-      <div class="form-group">
-        <label for="email" class="form-label">Email Address</label>
-        <input type="email" id="email" formControlName="email" class="form-control"
-               [ngClass]="{ 'is-invalid': submitted && f.email.errors }"
-               placeholder="you@example.com" autocomplete="email">
-        <div *ngIf="submitted && f.email.errors" class="form-error-message">
-          <div *ngIf="f.email.errors.required">Email is required.</div>
-          <div *ngIf="f.email.errors.email || f.email.errors.pattern">Please enter a valid email address.</div>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="password" class="form-label">Password</label>
-        <input type="password" id="password" formControlName="password" class="form-control"
-               [ngClass]="{ 'is-invalid': submitted && f.password.errors }"
-               placeholder="Enter your password" autocomplete="current-password">
-        <div *ngIf="submitted && f.password.errors" class="form-error-message">
-          <div *ngIf="f.password.errors.required">Password is required.</div>
-          <div *ngIf="f.password.errors.pattern">Password must be at least 6 characters and include uppercase, lowercase, number, and special character.</div>
-        </div>
-      </div>
-
-      <button type="submit" class="btn btn-primary w-100 btn-submit" [disabled]="isLoading">
-        <span *ngIf="!isLoading">Login</span>
-        <span *ngIf="isLoading">
-          <!-- Add a simple spinner or text -->
-          Logging in...
-        </span>
-      </button>
-    </form>
-
-    <div class="social-login-divider">
-      <span class="text-secondary">OR</span>
-    </div>
-
-    <button type="button" (click)="onGoogleLogin()" class="btn btn-outline-dark w-100 btn-google" [disabled]="isLoading">
-      <!-- Replace with Google Icon SVG -->
-      <svg width="20" height="20" viewBox="0 0 533.5 544.3" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px;"><path d="M533.5 278.4c0-18.5-1.5-37.1-4.7-55.3H272.1v104.8h147c-6.1 33.8-25.7 63.7-54.4 82.7v68h87.7c51.5-47.4 81.1-117.4 81.1-200.2z" fill="#4285f4"/><path d="M272.1 544.3c73.4 0 135.3-24.1 180.4-65.7l-87.7-68c-24.4 16.6-55.9 26-92.6 26-71 0-131.2-47.9-152.8-112.3H28.9v70.1c46.2 91.9 140.3 149.9 243.2 149.9z" fill="#34a853"/><path d="M119.3 324.3c-11.4-33.8-11.4-70.4 0-104.2V150H28.9c-38.6 76.9-38.6 167.5 0 244.4l90.4-70.1z" fill="#fbbc04"/><path d="M272.1 107.7c38.8-.6 76.3 14 104.4 40.8l77.7-77.7C405 24.6 339.7-.8 272.1 0 169.2 0 75.1 58 28.9 150l90.4 70.1c21.5-64.5 81.8-112.4 152.8-112.4z" fill="#ea4335"/></svg>
-      Continue with Google
-    </button>
-
-    <p class="auth-switch text-secondary">
-      Don't have an account? <a routerLink="../register" class="text-gold">Sign up</a>
-    </p>
-  </div>
-</div>
-```
-
-**`src/app/features/auth/login/login.component.scss` (and common styles for Register):**
-(Place this in a shared `_auth-styles.scss` and import into login/register, or keep it simple for now)
-```scss
-@import 'assets/styles/variables';
-
-.auth-page-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: calc(100vh - 150px); // Adjust based on header/footer height
-  padding: $space-lg $space-md;
-  background-color: $background-light; // Light background for auth pages
-}
-
-.auth-card {
-  background-color: $primary-white;
-  padding: $space-lg $space-xl;
-  border-radius: $border-radius-lg;
-  box-shadow: $box-shadow;
-  width: 100%;
-  max-width: 450px; // Max width for the form card
-  text-align: center;
-}
-
-.auth-title {
-  font-size: $font-size-xl;
-  color: $accent-rich-black;
-  margin-bottom: $space-sm;
-}
-
-.auth-subtitle {
-  margin-bottom: $space-lg;
-  font-size: $font-size-base;
-}
-
-.auth-form {
-  text-align: left; // Align form elements left
-
-  .form-group {
-    margin-bottom: $space-md;
-  }
-
-  .form-label {
-    font-weight: $font-weight-normal; // Lighter labels
-    font-size: $font-size-sm;
-    color: $secondary-gray;
-  }
-
-  .form-control {
-    padding: $space-sm; // Comfortable padding
-    &.is-invalid { // Custom invalid styling if needed beyond bootstrap-like
-      border-color: $error-color;
-    }
-  }
-  .form-error-message {
-    font-size: $font-size-sm;
-    margin-top: $space-xs / 2;
-  }
-}
-
-.btn-submit {
-  margin-top: $space-md;
-  padding: $space-sm; // Larger submit button
-  font-size: $font-size-base;
-}
-
-.social-login-divider {
-  margin: $space-lg 0;
-  display: flex;
-  align-items: center;
-  text-align: center;
-  color: $secondary-gray;
-
-  &::before,
-  &::after {
-    content: '';
-    flex-grow: 1;
-    background-color: $light-gray-border;
-    height: 1px;
-    margin: 0 $space-sm;
-  }
-}
-
-.btn-google {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: $space-lg;
-  color: $primary-black;
-  border-color: $light-gray-border;
-
-  &:hover {
-    background-color: $background-light;
-    border-color: $secondary-gray;
-  }
-}
-
-.auth-switch {
-  font-size: $font-size-sm;
-  a {
-    font-weight: $font-weight-bold;
-  }
-}
-```
-*Self-correction:* Added `autocomplete` attributes to input fields for better UX.
-
-**`src/app/features/auth/register/register.component.ts` (Structure):**
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { AuthService } from '../../../core/services/auth.service';
-import { NotificationService } from '../../../core/services/notification.service';
-import { first } from 'rxjs/operators';
-import { PasswordMatchValidator } from '../../../shared/validators/password-match.validator'; // You'll create this
-
-@Component({
-  selector: 'app-register',
-  templateUrl: './register.component.html',
-  styleUrls: ['../login/login.component.scss'] // Re-use login styles
-})
-export class RegisterComponent implements OnInit {
-  registerForm!: FormGroup;
-  isLoading = false;
-  submitted = false;
-
-  // Patterns from OpenAPI spec
-  emailPattern = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$";
-  passwordPattern = "^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[a-zA-Z])(?=.*[^a-zA-Z\\d]).{6,}$";
-  displayNamePattern = ".{1,}"; // MinLength 1
-
-  constructor(
-    private formBuilder: FormBuilder,
-    private authService: AuthService,
-    private router: Router,
-    private notificationService: NotificationService
-  ) {
-    if (this.authService.currentUserValue) {
-      this.router.navigate(['/']);
-    }
-  }
-
-  ngOnInit(): void {
-    this.registerForm = this.formBuilder.group({
-      displayName: ['', [Validators.required, Validators.pattern(this.displayNamePattern)]],
-      email: ['', [Validators.required, Validators.email, Validators.pattern(this.emailPattern)]],
-      password: ['', [Validators.required, Validators.pattern(this.passwordPattern)]],
-      confirmPassword: ['', Validators.required]
-    }, {
-      validator: PasswordMatchValidator('password', 'confirmPassword')
-    });
-  }
-
-  get f() { return this.registerForm.controls; }
-
-  onSubmit(): void {
-    this.submitted = true;
-    if (this.registerForm.invalid) {
-      Object.values(this.registerForm.controls).forEach(control => {
-        control.markAsTouched();
-      });
-      return;
-    }
-
-    this.isLoading = true;
-    this.authService.register({
-      displayName: this.f.displayName.value,
-      email: this.f.email.value,
-      password: this.f.password.value,
-      confirmPassword: this.f.confirmPassword.value
-    }).pipe(first()).subscribe({
-      next: (success) => {
-        if (success) {
-          this.router.navigate(['/']); // Or to a profile completion page
-        } else {
-          // Error handled by AuthService
-          this.isLoading = false;
-        }
-      },
-      error: () => {
-        this.isLoading = false;
-      }
-    });
-  }
-}
-```
-*You'll need to create `src/app/shared/validators/password-match.validator.ts`.*
-```typescript
-// src/app/shared/validators/password-match.validator.ts
-import { FormGroup, ValidatorFn, ValidationErrors } from '@angular/forms';
-
-export function PasswordMatchValidator(controlName: string, matchingControlName: string): ValidatorFn {
-  return (formGroup: FormGroup): ValidationErrors | null => {
-    const control = formGroup.controls[controlName];
-    const matchingControl = formGroup.controls[matchingControlName];
-
-    if (!control || !matchingControl) {
-      return null; // Or throw an error if controls are not found
-    }
-
-    // if matchingControl is not touched yet, don't validate
-    if (matchingControl.pristine) {
-        return null;
-    }
-
-    // Set error on matchingControl if validation fails
-    if (control.value !== matchingControl.value) {
-      matchingControl.setErrors({ passwordMismatch: true });
-      return { passwordMismatch: true }; // Error on the form group itself
-    } else {
-      matchingControl.setErrors(null);
-      return null;
-    }
-  };
-}
-```
-
-**`src/app/features/auth/register/register.component.html`:**
-(Similar structure to login, update field names and messages)
-```html
-<div class="auth-page-container">
-  <div class="auth-card">
-    <h2 class="auth-title">Create Your Account</h2>
-    <p class="auth-subtitle text-secondary">Join LuxeCart and start shopping with style.</p>
-
-    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="auth-form" novalidate>
-      <div class="form-group">
-        <label for="displayName" class="form-label">Display Name</label>
-        <input type="text" id="displayName" formControlName="displayName" class="form-control"
-               [ngClass]="{ 'is-invalid': submitted && f.displayName.errors }"
-               placeholder="Your Name" autocomplete="name">
-        <div *ngIf="submitted && f.displayName.errors" class="form-error-message">
-          <div *ngIf="f.displayName.errors.required">Display name is required.</div>
-          <div *ngIf="f.displayName.errors.pattern">Display name must not be empty.</div>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="email" class="form-label">Email Address</label>
-        <input type="email" id="email" formControlName="email" class="form-control"
-               [ngClass]="{ 'is-invalid': submitted && f.email.errors }"
-               placeholder="you@example.com" autocomplete="email">
-        <div *ngIf="submitted && f.email.errors" class="form-error-message">
-          <div *ngIf="f.email.errors.required">Email is required.</div>
-          <div *ngIf="f.email.errors.email || f.email.errors.pattern">Please enter a valid email address.</div>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="password" class="form-label">Password</label>
-        <input type="password" id="password" formControlName="password" class="form-control"
-               [ngClass]="{ 'is-invalid': submitted && f.password.errors }"
-               placeholder="Create a strong password" autocomplete="new-password">
-        <div *ngIf="submitted && f.password.errors" class="form-error-message">
-          <div *ngIf="f.password.errors.required">Password is required.</div>
-          <div *ngIf="f.password.errors.pattern">Password must be at least 6 characters and include uppercase, lowercase, number, and special character.</div>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="confirmPassword" class="form-label">Confirm Password</label>
-        <input type="password" id="confirmPassword" formControlName="confirmPassword" class="form-control"
-               [ngClass]="{ 'is-invalid': submitted && (f.confirmPassword.errors || registerForm.errors?.passwordMismatch && f.confirmPassword.touched) }"
-               placeholder="Confirm your password" autocomplete="new-password">
-        <div *ngIf="submitted && f.confirmPassword.errors" class="form-error-message">
-          <div *ngIf="f.confirmPassword.errors.required">Confirming password is required.</div>
-        </div>
-         <div *ngIf="submitted && registerForm.errors?.passwordMismatch && f.confirmPassword.touched && !f.confirmPassword.errors?.required" class="form-error-message">
-          Passwords do not match.
-        </div>
-      </div>
-
-      <button type="submit" class="btn btn-primary w-100 btn-submit" [disabled]="isLoading">
-        <span *ngIf="!isLoading">Create Account</span>
-        <span *ngIf="isLoading">Creating...</span>
-      </button>
-    </form>
-
-    <p class="auth-switch text-secondary">
-      Already have an account? <a routerLink="../login" class="text-gold">Log in</a>
-    </p>
-  </div>
-</div>
-```
-
-**Products Feature**
-
-**`src/app/features/products/products-routing.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { ProductListComponent } from './product-list/product-list.component';
-import { ProductDetailComponent } from './product-detail/product-detail.component';
-
-const routes: Routes = [
-  { path: '', component: ProductListComponent },
-  { path: ':id', component: ProductDetailComponent }
-  // Consider a route like /category/:categoryName for category-specific listings
-];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule]
-})
-export class ProductsRoutingModule { }
-```
-
-**`src/app/features/products/products.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { SharedModule } from '../../shared/shared.module';
-import { ProductsRoutingModule } from './products-routing.module';
-
-import { ProductListComponent } from './product-list/product-list.component';
-import { ProductDetailComponent } from './product-detail/product-detail.component';
-import { ProductCardComponent } from './components/product-card/product-card.component';
-import { ProductFiltersComponent } from './components/product-filters/product-filters.component'; // Create this
-
-@NgModule({
-  declarations: [
-    ProductListComponent,
-    ProductDetailComponent,
-    ProductCardComponent,
-    ProductFiltersComponent
-  ],
-  imports: [
-    CommonModule,
-    SharedModule,
-    ProductsRoutingModule
-  ]
-})
-export class ProductsModule { }
-```
-
-**`src/app/features/products/components/product-card/product-card.component.ts`:**
-```typescript
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { Product } from '../../../../core/models/product.model';
-
-@Component({
-  selector: 'app-product-card',
-  templateUrl: './product-card.component.html',
-  styleUrls: ['./product-card.component.scss']
-})
-export class ProductCardComponent {
-  @Input() product!: Product;
-  @Output() addToCart = new EventEmitter<Product>();
-  @Output() viewDetails = new EventEmitter<Product>(); // Or navigate directly
-
-  defaultImageUrl = 'assets/images/product-placeholder.png'; // Add a placeholder image
-
-  onAddToCartClick(event: MouseEvent): void {
-    event.stopPropagation(); // Prevent triggering viewDetails if card is clickable
-    this.addToCart.emit(this.product);
-  }
-
-  onViewDetailsClick(): void {
-    this.viewDetails.emit(this.product);
-  }
-
-  getImageUrl(): string {
-    // Assuming your API base URL needs to be prepended if imageUrl is relative
-    // and that product.imageUrl may or may not include the base path.
-    // Adjust this logic based on how your API returns image URLs.
-    if (this.product.imageUrl) {
-        if (this.product.imageUrl.startsWith('http')) {
-            return this.product.imageUrl;
-        }
-        // Example: If API returns "images/product.jpg" and base is "https://tpf.runasp.net/"
-        // you might need to construct "https://tpf.runasp.net/images/product.jpg"
-        // For now, assume it's a full URL or a path that works directly.
-        // If relative to API root, prepend environment.apiBaseUrl
-        // return `${environment.apiBaseUrl}${this.product.imageUrl}`;
-        return this.product.imageUrl; // Simpler, assuming it's a full URL or correctly relative from index.html
-    }
-    return this.defaultImageUrl;
-  }
-}
-```
-*Update for `getImageUrl()`:* Your API for Products `POST`/`PUT` takes `ImageFile`. The `GET` response for product details isn't fully specified for `imageUrl`. Assuming the backend provides a usable `imageUrl` (either absolute or relative to the domain). `https://tpf.runasp.net/` + `imageUrl` is a likely scenario if it's relative to the API root.
-
-**`src/app/features/products/components/product-card/product-card.component.html`:**
-```html
-<div class="card product-card h-100" (click)="onViewDetailsClick()" role="button" [attr.aria-label]="'View details for ' + product.name">
-  <img [src]="getImageUrl()"
-       [alt]="product.name"
-       class="card-img-top product-card-image"
-       onError="this.src='assets/images/product-placeholder.png'"> <!-- Fallback if image fails to load -->
-  <div class="card-body product-card-body">
-    <h5 class="card-title product-card-title" [title]="product.name">{{ product.name }}</h5>
-    <!-- <p class="card-text product-card-category text-secondary">{{ product.categoryName || 'Uncategorized' }}</p> -->
-    <p class="card-subtitle product-card-price">{{ product.price | currency:'USD':'symbol':'1.2-2' }}</p>
-  </div>
-  <div class="card-footer product-card-footer">
-    <button (click)="onAddToCartClick($event)" class="btn btn-primary w-100">
-      Add to Cart
-    </button>
-    <!-- Or:
-    <button (click)="onViewDetailsClick()" class="btn btn-outline-dark w-50">Details</button>
-    <button (click)="onAddToCartClick($event)" class="btn btn-primary w-50 ms-1">Cart</button>
-    -->
-  </div>
-</div>
-```
-
-**`src/app/features/products/components/product-card/product-card.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.product-card {
-  cursor: pointer; // Indicates the whole card is clickable for details
-  display: flex;
-  flex-direction: column; // Ensures footer is at bottom for h-100
-
-  .product-card-image {
-    aspect-ratio: 1 / 1; // Square images, or adjust to 4/3, 3/4 etc.
-    object-fit: cover; // Or 'contain' if you don't want cropping
-    background-color: $background-light; // Placeholder bg color
-  }
-
-  .product-card-body {
-    flex-grow: 1; // Allows body to take available space
-    text-align: center; // Center text for a clean look
-    padding: $space-sm;
-  }
-
-  .product-card-title {
-    font-size: $font-size-base; // Slightly smaller for cards
-    font-weight: $font-weight-normal;
-    color: $primary-black;
-    margin-bottom: $space-xs / 2;
-    // Ellipsis for long titles
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    height: 1.5em; // Assuming line-height is around 1.5
-  }
-
-  .product-card-category {
-    font-size: $font-size-sm * 0.9;
-    margin-bottom: $space-xs;
-  }
-
-  .product-card-price {
-    font-size: $font-size-lg;
-    font-weight: $font-weight-bold;
-    color: $primary-black; // Or $primary-gold for emphasis
-    margin-bottom: $space-sm;
-  }
-
-  .product-card-footer {
-    border-top: none; // Cleaner look without border if body is also light
-    background-color: transparent;
-    padding: 0 $space-sm $space-sm; // Padding around button
-
-    .btn {
-      font-size: $font-size-sm;
-      padding: $space-xs $space-sm; // Smaller button padding
-    }
-  }
-
-  // Hover effect combined with global card hover
-  &:hover {
-    .product-card-title {
-      // color: $primary-gold; // Optional: highlight title on hover
-    }
-  }
-}
-```
-
-**`src/app/features/products/product-list/product-list.component.ts`:**
-```typescript
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { Observable, Subscription, combineLatest, BehaviorSubject } from 'rxjs';
-import { map, switchMap, distinctUntilChanged, debounceTime, tap } from 'rxjs/operators';
-import { ProductService } from '../../../core/services/product.service';
-import { CartService } from '../../../core/services/cart.service';
-import { CategoryService } from '../../../core/services/category.service';
-import { Product, PaginatedProducts } from '../../../core/models/product.model';
-import { Category } from '../../../core/models/category.model';
-import { NotificationService } from '../../../core/services/notification.service';
-import { LoadingService } from '../../../core/services/loading.service';
-
-
-interface ProductListParams {
-  page: number;
-  limit: number;
-  category?: string;
-  search?: string;
-}
-
-@Component({
-  selector: 'app-product-list',
-  templateUrl: './product-list.component.html',
-  styleUrls: ['./product-list.component.scss']
-})
-export class ProductListComponent implements OnInit, OnDestroy {
-  products: Product[] = [];
-  categories$: Observable<Category[]>;
-  isLoading$: Observable<boolean>;
-
-  currentPage = 1;
-  itemsPerPage = 12; // Or get from a config
-  totalItems = 0;
-  totalPages = 0;
-
-  // For filters
-  selectedCategory: string | undefined = undefined;
-  searchQuery = '';
-
-  private paramsSubject = new BehaviorSubject<ProductListParams>({
-    page: this.currentPage,
-    limit: this.itemsPerPage
-  });
-  private subscriptions = new Subscription();
-
-
-  constructor(
-    private productService: ProductService,
-    private cartService: CartService,
-    private categoryService: CategoryService,
-    private notificationService: NotificationService,
-    public loadingService: LoadingService, // Public to use in template
-    private route: ActivatedRoute,
-    private router: Router
-  ) {
-    this.categories$ = this.categoryService.categories$;
-    this.isLoading$ = this.loadingService.isLoading$;
-  }
-
-  ngOnInit(): void {
-    const queryParamsSub = this.route.queryParamMap.pipe(
-      map(params => ({
-        page: params.get('page') ? +params.get('page')! : 1,
-        limit: params.get('limit') ? +params.get('limit')! : this.itemsPerPage,
-        category: params.get('category') || undefined,
-        search: params.get('search') || undefined
-      })),
-      distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr))
-    ).subscribe(params => {
-      this.currentPage = params.page;
-      this.itemsPerPage = params.limit;
-      this.selectedCategory = params.category;
-      this.searchQuery = params.search || ''; // Update local search query for input binding
-      this.paramsSubject.next(params);
-    });
-    this.subscriptions.add(queryParamsSub);
-
-
-    const productsSub = this.paramsSubject.pipe(
-      debounceTime(100), // Debounce if params change rapidly (e.g. typed search)
-      switchMap(params =>
-        this.productService.getProducts(
-          params.page,
-          params.limit,
-          params.category,
-          params.search
-        )
-      )
-    ).subscribe((paginatedResult: PaginatedProducts) => {
-      this.products = paginatedResult.items || [];
-      this.currentPage = paginatedResult.pageNumber || 1;
-      this.totalItems = paginatedResult.totalCount || 0;
-      this.totalPages = paginatedResult.totalPages || 0;
-      // itemsPerPage is fixed by request, totalPages derived from totalCount and itemsPerPage
-    });
-    this.subscriptions.add(productsSub);
-  }
-
-  onAddToCart(product: Product): void {
-    this.cartService.addItem(product, 1).subscribe(success => {
-      if (success) {
-        // Notification is handled by cartService
-      }
-    });
-  }
-
-  onViewProductDetails(product: Product): void {
-    this.router.navigate(['/products', product.productId]);
-  }
-
-  onPageChange(page: number): void {
-    if (page >= 1 && page <= this.totalPages) {
-      this.updateQueryParams({ page });
-    }
-  }
-
-  onCategoryFilterChange(categoryName?: string): void {
-    this.selectedCategory = categoryName;
-    this.updateQueryParams({ category: categoryName || undefined, page: 1 });
-  }
-
-  onSearch(): void {
-    // Triggered by (ngSubmit) or button click for search input
-    this.updateQueryParams({ search: this.searchQuery.trim() || undefined, page: 1 });
-  }
-
-  clearSearch(): void {
-    this.searchQuery = '';
-    this.updateQueryParams({ search: undefined, page: 1 });
-  }
-
-  clearFilters(): void {
-    this.selectedCategory = undefined;
-    this.searchQuery = '';
-    this.updateQueryParams({ category: undefined, search: undefined, page: 1 });
-  }
-
-
-  private updateQueryParams(newParams: Partial<ProductListParams>): void {
-    const currentParams = this.paramsSubject.value;
-    this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { ...currentParams, ...newParams },
-      queryParamsHandling: 'merge', // Merge with existing query params
-    });
-  }
-
-  // For pagination UI
-  getPagesArray(): number[] {
-    if (this.totalPages <= 0) return [];
-    return Array(this.totalPages).fill(0).map((x, i) => i + 1);
-  }
-
-
-  ngOnDestroy(): void {
-    this.subscriptions.unsubscribe();
-  }
-}
-```
-
-**`src/app/features/products/product-list/product-list.component.html`:**
-```html
-<div class="container product-list-page">
-  <header class="page-header">
-    <h1>Discover Our Collection</h1>
-    <p class="text-secondary">Find the perfect items that speak to your style.</p>
-  </header>
-
-  <!-- Filters Section: Create ProductFiltersComponent or inline -->
-  <div class="filters-section card mb-4">
-    <div class="card-body">
-        <div class="row gy-3 align-items-end">
-            <div class="col-md-5">
-                <label for="searchQuery" class="form-label">Search Products</label>
-                <div class="input-group">
-                    <input type="text" id="searchQuery" class="form-control" placeholder="Search by name or keyword..."
-                           [(ngModel)]="searchQuery" (keyup.enter)="onSearch()">
-                    <button class="btn btn-outline-dark" type="button" (click)="onSearch()">Search</button>
-                     <button *ngIf="searchQuery" class="btn btn-outline-secondary" type="button" (click)="clearSearch()" title="Clear Search">&times;</button>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <label for="categoryFilter" class="form-label">Filter by Category</label>
-                <select id="categoryFilter" class="form-select form-control"
-                        [ngModel]="selectedCategory"
-                        (ngModelChange)="onCategoryFilterChange($event)">
-                    <option [ngValue]="undefined">All Categories</option>
-                    <option *ngFor="let category of categories$ | async" [value]="category.categoryName">
-                        {{ category.categoryName }}
-                    </option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <button class="btn btn-secondary w-100" (click)="clearFilters()">Clear All Filters</button>
-            </div>
-        </div>
-    </div>
-  </div>
-
-
-  <div *ngIf="isLoading$ | async" class="loading-indicator text-center my-5">
-    <!-- Replace with a nicer spinner component -->
-    <p>Loading products...</p>
-    <!-- <app-loading-spinner></app-loading-spinner> -->
-  </div>
-
-  <div *ngIf="!(isLoading$ | async) && products.length === 0" class="empty-state text-center my-5">
-    <!-- <app-empty-state message="No products found matching your criteria."></app-empty-state> -->
-    <img src="assets/images/empty-box.svg" alt="No products found" style="max-width: 150px; margin-bottom: 1rem;">
-    <h3>No Products Found</h3>
-    <p class="text-secondary">Try adjusting your search or filters, or check back later!</p>
-    <button class="btn btn-primary mt-2" (click)="clearFilters()">Reset Filters</button>
-  </div>
-
-  <div *ngIf="!(isLoading$ | async) && products.length > 0" class="product-grid">
-    <div *ngFor="let product of products" class="product-grid-item">
-      <app-product-card
-        [product]="product"
-        (addToCart)="onAddToCart($event)"
-        (viewDetails)="onViewProductDetails($event)">
-      </app-product-card>
-    </div>
-  </div>
-
-  <!-- Pagination -->
-  <nav *ngIf="!(isLoading$ | async) && products.length > 0 && totalPages > 1" aria-label="Product navigation" class="pagination-controls mt-5">
-    <ul class="pagination justify-content-center">
-      <li class="page-item" [class.disabled]="currentPage === 1">
-        <a class="page-link" (click)="onPageChange(currentPage - 1)" role="button" tabindex="0" aria-label="Previous">
-          &laquo; Prev
-        </a>
-      </li>
-      <!-- Simple page numbers (for many pages, implement ellipsis logic) -->
-      <ng-container *ngFor="let pageNum of getPagesArray()">
-        <li class="page-item" [class.active]="pageNum === currentPage" *ngIf="Math.abs(pageNum - currentPage) < 3 || pageNum === 1 || pageNum === totalPages || (Math.abs(pageNum - currentPage) === 3 && (pageNum === 1 || pageNum === totalPages))">
-            <a class="page-link" (click)="onPageChange(pageNum)" role="button" tabindex="0">{{ pageNum }}</a>
-        </li>
-        <li class="page-item disabled" *ngIf="(Math.abs(pageNum - currentPage) === 3 && !(pageNum === 1 || pageNum === totalPages)) && ( (pageNum < currentPage && currentPage -1 > 2) || (pageNum > currentPage && totalPages - currentPage > 2) )">
-            <span class="page-link">...</span>
-        </li>
-      </ng-container>
-
-      <li class="page-item" [class.disabled]="currentPage === totalPages">
-        <a class="page-link" (click)="onPageChange(currentPage + 1)" role="button" tabindex="0" aria-label="Next">
-          Next &raquo;
-        </a>
-      </li>
-    </ul>
-  </nav>
-</div>
-```
-
-**`src/app/features/products/product-list/product-list.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.product-list-page {
-  padding-top: $space-lg;
-  padding-bottom: $space-xl;
-}
-
-.page-header {
-  text-align: center;
-  margin-bottom: $space-xl;
-  h1 {
-    font-size: $font-size-xxl;
-    margin-bottom: $space-xs;
-  }
-  p {
-    font-size: $font-size-lg;
-  }
-}
-
-.filters-section {
-  background-color: $primary-white; // Or a very light gray
-  border-radius: $border-radius-lg;
-  padding: $space-md;
-  .form-label {
-    font-size: $font-size-sm;
-    font-weight: $font-weight-bold;
-    margin-bottom: $space-xs / 2;
-  }
-  .input-group .form-control, .form-select {
-    height: calc(2.25rem + 10px); // Taller inputs
-    padding: $space-sm;
-  }
-  .input-group .btn {
-    height: calc(2.25rem + 10px); // Match input height
-  }
-}
-
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); // Responsive grid
-  gap: $space-lg;
-
-  @media (min-width: $breakpoint-sm) {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: $space-md;
-  }
-  @media (min-width: $breakpoint-md) {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  }
-   @media (min-width: $breakpoint-lg) {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-     gap: $space-lg;
-  }
-}
-
-.product-grid-item {
-  // Each item will take the app-product-card styling
-  // Ensure cards have consistent height if desired:
-  // display: flex; // If product-card itself is not flex column
-}
-
-.pagination-controls {
-  .pagination {
-    .page-item {
-      margin: 0 2px;
-      .page-link {
-        color: $primary-black;
-        border-radius: $border-radius-sm;
-        padding: $space-xs $space-sm; // Comfortable tap targets
-        min-width: 40px;
-        text-align: center;
-        transition: $transition-base;
-        border: 1px solid $light-gray-border;
-
-        &:hover {
-          background-color: $background-light;
-          border-color: $secondary-gray;
-        }
-      }
-      &.active .page-link {
-        background-color: $primary-gold;
-        border-color: $primary-gold;
-        color: $primary-black;
-        font-weight: $font-weight-bold;
-      }
-      &.disabled .page-link {
-        color: $secondary-gray;
-        pointer-events: none;
-        background-color: transparent;
-        border-color: $light-gray-border;
-      }
-    }
-  }
-}
-
-.loading-indicator, .empty-state {
-  min-height: 300px; // Ensure it takes some space
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-}
-```
-
-**`src/app/features/products/product-detail/product-detail.component.ts` (Structure):**
-```typescript
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { ProductService } from '../../../core/services/product.service';
-import { CartService } from '../../../core/services/cart.service';
-import { Product } from '../../../core/models/product.model';
-import { Observable, Subscription, of } from 'rxjs';
-import { switchMap, catchError, tap } from 'rxjs/operators';
-import { NotificationService } from '../../../core/services/notification.service';
-import { LoadingService } from '../../../core/services/loading.service';
-
-
-@Component({
-  selector: 'app-product-detail',
-  templateUrl: './product-detail.component.html',
-  styleUrls: ['./product-detail.component.scss']
-})
-export class ProductDetailComponent implements OnInit, OnDestroy {
-  product$: Observable<Product | null>;
-  product: Product | null = null; // For easier template access after resolution
-  quantity = 1;
-  isLoading$: Observable<boolean>;
-
-  private productSubscription!: Subscription;
-
-  defaultImageUrl = 'assets/images/product-placeholder-large.png'; // Larger placeholder
-
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private productService: ProductService,
-    private cartService: CartService,
-    private notificationService: NotificationService,
-    public loadingService: LoadingService
-  ) {
-    this.isLoading$ = this.loadingService.isLoading$;
-    this.product$ = this.route.paramMap.pipe(
-      switchMap(params => {
-        const id = params.get('id');
-        if (id) {
-          return this.productService.getProductById(+id);
-        }
-        this.router.navigate(['/products']); // Or to a 404 page
-        return of(null);
-      }),
-      tap(product => this.product = product), // Assign to local property
-      catchError(() => { // Handled in service, but good for component-level fallback
-        this.router.navigate(['/products']);
-        return of(null);
-      })
-    );
-  }
-
-  ngOnInit(): void {
-    // Subscription can be done here if product$ is not directly used with async pipe in template
-    // this.productSubscription = this.product$.subscribe(p => this.product = p);
-  }
-
-  onAddToCart(): void {
-    if (this.product && this.quantity > 0) {
-      this.cartService.addItem(this.product, this.quantity).subscribe(success => {
-        if (success) {
-          // Notification handled by cartService
-          // Optionally, show a more prominent confirmation on this page
-        }
-      });
-    }
-  }
-
-  incrementQuantity(): void {
-    this.quantity++;
-  }
-
-  decrementQuantity(): void {
-    if (this.quantity > 1) {
-      this.quantity--;
-    }
-  }
-
-  getImageUrl(product: Product | null): string {
-    if (product?.imageUrl) {
-       // Same logic as product-card.component.ts
-       if (product.imageUrl.startsWith('http')) {
-            return product.imageUrl;
-        }
-        return product.imageUrl;
-    }
-    return this.defaultImageUrl;
-  }
-
-
-  ngOnDestroy(): void {
-    if (this.productSubscription) {
-      this.productSubscription.unsubscribe();
-    }
-    // Clear current product in service if it's set there for global state
-    // this.productService.clearCurrentProduct();
-  }
-}
-```
-
-**`src/app/features/products/product-detail/product-detail.component.html`:**
-```html
-<div class="product-detail-page container py-5" *ngIf="(product$ | async) as product; else loadingOrError">
-  <div class="row">
-    <div class="col-md-6 mb-4 mb-md-0">
-      <div class="product-image-gallery">
-        <!-- Main Image -->
-        <img [src]="getImageUrl(product)" [alt]="product.name" class="img-fluid main-product-image" onError="this.src='assets/images/product-placeholder-large.png'">
-        <!-- Thumbnails (if multiple images) -->
-        <!-- <div class="thumbnails mt-3 d-flex">
-          <img src="..." alt="Thumbnail 1" class="img-thumbnail me-2 active">
-          ...
-        </div> -->
-      </div>
-    </div>
-    <div class="col-md-6 product-info">
-      <h1 class="product-name">{{ product.name }}</h1>
-      <p class="product-category text-secondary">{{ product.categoryName || 'General' }}</p>
-
-      <div class="product-price h2 my-3">{{ product.price | currency:'USD':'symbol':'1.2-2' }}</div>
-
-      <p class="product-description text-secondary">{{ product.description || 'No description available.' }}</p>
-
-      <!-- Quantity Selector -->
-      <div class="form-group quantity-selector my-4">
-        <label for="quantity" class="form-label me-3">Quantity:</label>
-        <div class="input-group" style="max-width: 150px;">
-          <button class="btn btn-outline-dark btn-sm" type="button" (click)="decrementQuantity()" [disabled]="quantity <= 1">-</button>
-          <input type="number" id="quantity" class="form-control text-center" [(ngModel)]="quantity" min="1" readonly>
-          <button class="btn btn-outline-dark btn-sm" type="button" (click)="incrementQuantity()">+</button>
-        </div>
-      </div>
-
-      <button (click)="onAddToCart()" class="btn btn-primary btn-lg w-100 add-to-cart-btn">
-        Add to Cart
-      </button>
-
-      <!-- Additional Info: SKU, Availability, Reviews Placeholder -->
-      <div class="additional-info mt-4">
-        <p class="text-sm text-secondary"><small>SKU: {{ product.productId || 'N/A' }}</small></p>
-        <!-- <p class="text-sm"><small>Availability: In Stock</small></p> -->
-      </div>
-    </div>
-  </div>
-
-  <!-- Related Products / Reviews Section (Placeholder) -->
-  <!-- <div class="related-products mt-5">
-    <h2>You Might Also Like</h2>
-    ...
-  </div> -->
-</div>
-
-<ng-template #loadingOrError>
-  <div *ngIf="isLoading$ | async; else notFound" class="loading-indicator text-center my-5 py-5">
-    <p>Loading product details...</p>
-    <!-- <app-loading-spinner></app-loading-spinner> -->
-  </div>
-</ng-template>
-<ng-template #notFound>
-  <div class="container text-center my-5 py-5">
-    <h2>Product Not Found</h2>
-    <p class="text-secondary">The product you are looking for does not exist or may have been removed.</p>
-    <a routerLink="/products" class="btn btn-primary mt-3">Back to Products</a>
-  </div>
-</ng-template>
-```
-
-**`src/app/features/products/product-detail/product-detail.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.product-detail-page {
-  .main-product-image {
-    width: 100%;
-    max-height: 500px; // Limit image height
-    object-fit: cover; // Or 'contain'
-    border-radius: $border-radius-lg;
-    background-color: $background-light;
-    box-shadow: $box-shadow-sm;
-  }
-
-  .product-info {
-    .product-name {
-      font-size: $font-size-xxl * 1.2; // Larger name
-      font-weight: $font-weight-bold;
-      color: $accent-rich-black;
-      line-height: 1.2;
-    }
-    .product-category {
-      font-size: $font-size-base;
-      margin-bottom: $space-md;
-    }
-    .product-price {
-      color: $primary-black; // Or $primary-gold;
-      font-weight: $font-weight-bold;
-    }
-    .product-description {
-      font-size: $font-size-base;
-      line-height: 1.7;
-      margin-bottom: $space-lg;
-    }
-  }
-
-  .quantity-selector {
-    display: flex;
-    align-items: center;
-    .form-label {
-      margin-bottom: 0;
-    }
-    .input-group {
-      .form-control {
-        border-left: none;
-        border-right: none;
-        &:focus { box-shadow: none; }
-      }
-      .btn {
-        border-color: $light-gray-border;
-        &:hover { background-color: $background-light; }
-      }
-    }
-  }
-
-  .add-to-cart-btn {
-    padding: $space-sm $space-lg; // Larger button
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-
-  .additional-info {
-    border-top: 1px solid $light-gray-border;
-    padding-top: $space-md;
-    margin-top: $space-lg;
-  }
-}
-
-// Styles for loading/not found states (can be global)
-.loading-indicator, .empty-state-container { // Assuming .empty-state-container for the #notFound template
-    min-height: 60vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-}
-```
-
----
-
-**13. Home Page (Structure)**
-
-**`src/app/features/home/home-routing.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { HomeComponent } from './home.component';
-
-const routes: Routes = [{ path: '', component: HomeComponent }];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule]
-})
-export class HomeRoutingModule { }
-```
-
-**`src/app/features/home/home.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { SharedModule } from '../../shared/shared.module';
-import { HomeRoutingModule } from './home-routing.module';
-import { HomeComponent } from './home.component';
-import { ProductsModule } from '../products/products.module'; // If reusing product-card
-
-@NgModule({
-  declarations: [HomeComponent],
-  imports: [
-    CommonModule,
-    SharedModule,
-    HomeRoutingModule,
-    ProductsModule // To use app-product-card
-  ]
-})
-export class HomeModule { }
-```
-
-**`src/app/features/home/home.component.ts`:**
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { ProductService } from '../../core/services/product.service';
-import { CartService } from '../../core/services/cart.service';
-import { Product } from '../../core/models/product.model';
-import { Observable, of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
-import { Router } from '@angular/router';
-import { LoadingService } from '../../core/services/loading.service';
-
-@Component({
-  selector: 'app-home',
-  templateUrl: './home.component.html',
-  styleUrls: ['./home.component.scss']
-})
-export class HomeComponent implements OnInit {
-  featuredProducts$: Observable<Product[]> = of([]);
-  latestProducts$: Observable<Product[]> = of([]);
-  isLoading$: Observable<boolean>;
-
-  // Carousel items (example)
-  carouselItems = [
-    { title: 'New Collection Arrivals', subtitle: 'Discover the latest trends', imageUrl: 'assets/images/carousel-1.jpg', link: '/products?category=new' },
-    { title: 'Seasonal Sale Up to 50% Off', subtitle: 'Limited time offer', imageUrl: 'assets/images/carousel-2.jpg', link: '/products?sale=true' },
-    { title: 'Timeless Elegance', subtitle: 'Curated luxury pieces', imageUrl: 'assets/images/carousel-3.jpg', link: '/products?category=luxury' }
-  ];
-  currentSlide = 0;
-
-
-  constructor(
-    private productService: ProductService,
-    private cartService: CartService,
-    private router: Router,
-    public loadingService: LoadingService
-  ) {
-    this.isLoading$ = this.loadingService.isLoading$;
-  }
-
-  ngOnInit(): void {
-    // Fetch a few products for "Featured" - e.g., first 4-8 products
-    this.featuredProducts$ = this.productService.getProducts(1, 4).pipe(
-      map(paginatedResult => paginatedResult.items || []),
-      catchError(() => of([])) // Handle error gracefully
-    );
-
-    // Fetch a few products for "Latest" - e.g., page 2, or sort by date if API supports
-    this.latestProducts$ = this.productService.getProducts(1, 8).pipe( // Example: 8 latest
-      map(paginatedResult => paginatedResult.items || []),
-      catchError(() => of([]))
-    );
-
-    // Auto-play carousel
-    setInterval(() => {
-        this.nextSlide();
-    }, 5000); // Change slide every 5 seconds
-  }
-
-  onAddToCart(product: Product): void {
-    this.cartService.addItem(product, 1).subscribe();
-  }
-
-  onViewProductDetails(product: Product): void {
-    this.router.navigate(['/products', product.productId]);
-  }
-
-  // Basic Carousel Logic
-  nextSlide(): void {
-    this.currentSlide = (this.currentSlide + 1) % this.carouselItems.length;
-  }
-
-  prevSlide(): void {
-    this.currentSlide = (this.currentSlide - 1 + this.carouselItems.length) % this.carouselItems.length;
-  }
-
-  goToSlide(index: number): void {
-    this.currentSlide = index;
-  }
-}
-```
-
-**`src/app/features/home/home.component.html`:**
-```html
-<div class="home-page">
-  <!-- Hero Section / Carousel -->
-  <section class="hero-section">
-    <div class="carousel">
-      <div class="carousel-inner">
-        <div *ngFor="let item of carouselItems; let i = index"
-             class="carousel-item"
-             [class.active]="i === currentSlide"
-             [style.background-image]="'url(' + item.imageUrl + ')'">
-          <div class="carousel-caption container">
-            <h1>{{ item.title }}</h1>
-            <p>{{ item.subtitle }}</p>
-            <a [routerLink]="item.link" class="btn btn-primary btn-lg">Shop Now</a>
-          </div>
-        </div>
-      </div>
-      <button class="carousel-control prev" (click)="prevSlide()">&#10094;</button>
-      <button class="carousel-control next" (click)="nextSlide()">&#10095;</button>
-      <div class="carousel-indicators">
-        <span *ngFor="let item of carouselItems; let i = index"
-              [class.active]="i === currentSlide"
-              (click)="goToSlide(i)"></span>
-      </div>
-    </div>
-  </section>
-
-  <!-- Featured Items Section -->
-  <section class="featured-products-section container py-5">
-    <h2 class="section-title">Featured Products</h2>
-    <div *ngIf="(isLoading$ | async) && !(featuredProducts$ | async)?.length" class="text-center">Loading...</div>
-    <div *ngIf="!(isLoading$ | async) && !(featuredProducts$ | async)?.length" class="text-center text-secondary">No featured products available at the moment.</div>
-
-    <div class="product-grid" *ngIf="(featuredProducts$ | async) as products">
-      <div *ngFor="let product of products" class="product-grid-item">
-        <app-product-card
-          [product]="product"
-          (addToCart)="onAddToCart($event)"
-          (viewDetails)="onViewProductDetails($event)">
-        </app-product-card>
-      </div>
-    </div>
-  </section>
-
-  <!-- Call to Action / Banner -->
-  <section class="cta-banner my-5">
-    <div class="container text-center">
-      <h3>Discover Your Unique Style</h3>
-      <p>Explore our exclusive collections and find pieces that resonate with you.</p>
-      <a routerLink="/products" class="btn btn-outline-light btn-lg">Explore Collections</a>
-    </div>
-  </section>
-
-  <!-- Latest or Popular Products Section -->
-  <section class="latest-products-section container py-5">
-    <h2 class="section-title">Latest Arrivals</h2>
-    <div *ngIf="(isLoading$ | async) && !(latestProducts$ | async)?.length" class="text-center">Loading...</div>
-    <div *ngIf="!(isLoading$ | async) && !(latestProducts$ | async)?.length" class="text-center text-secondary">No new products to show right now.</div>
-
-    <div class="product-grid" *ngIf="(latestProducts$ | async) as products">
-      <div *ngFor="let product of products" class="product-grid-item">
-        <app-product-card
-          [product]="product"
-          (addToCart)="onAddToCart($event)"
-          (viewDetails)="onViewProductDetails($event)">
-        </app-product-card>
-      </div>
-    </div>
-    <div class="text-center mt-4" *ngIf="(latestProducts$ | async)?.length">
-        <a routerLink="/products" class="btn btn-outline-dark">View All Products</a>
-    </div>
-  </section>
-
-  <!-- Category Links (Optional) -->
-  <!-- <section class="category-showcase-section container py-5"> ... </section> -->
-
-</div>
-```
-
-**`src/app/features/home/home.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.home-page {
-  // General styling for the home page if needed
-}
-
-.hero-section {
-  .carousel {
-    position: relative;
-    width: 100%;
-    height: 70vh; // Adjust height as needed, or use aspect-ratio
-    min-height: 400px;
-    max-height: 600px;
-    overflow: hidden;
-    background-color: $accent-rich-black; // Fallback for images
-
-    .carousel-inner {
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
-
-    .carousel-item {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-size: cover;
-      background-position: center center;
-      opacity: 0;
-      transition: opacity 1s ease-in-out; // Smooth fade transition
-      display: flex; // For caption alignment
-      align-items: center;
-      justify-content: center;
-
-      &.active {
-        opacity: 1;
-        z-index: 1;
-      }
-
-      &::before { // Dark overlay for text readability
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background-color: rgba($primary-black, 0.4);
-      }
-    }
-
-    .carousel-caption {
-      position: relative; // To be above the overlay
-      z-index: 2;
-      text-align: center;
-      color: $primary-white;
-
-      h1 {
-        font-size: $font-size-xxl * 1.5;
-        font-weight: $font-weight-bold;
-        color: $primary-white;
-        margin-bottom: $space-md;
-        text-shadow: 1px 1px 3px rgba($primary-black, 0.5);
-      }
-      p {
-        font-size: $font-size-lg;
-        margin-bottom: $space-lg;
-        color: $primary-white;
-      }
-      .btn-primary { // Gold button from variables
-        padding: $space-sm $space-xl;
-        font-size: $font-size-lg;
-      }
-    }
-
-    .carousel-control {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      z-index: 3;
-      background-color: rgba($primary-black, 0.3);
-      color: $primary-white;
-      border: none;
-      padding: $space-sm $space-xs;
-      cursor: pointer;
-      font-size: $font-size-xl;
-      border-radius: $border-radius-sm;
-      transition: background-color 0.2s ease;
-
-      &:hover {
-        background-color: rgba($primary-black, 0.6);
-      }
-      &.prev { left: $space-md; }
-      &.next { right: $space-md; }
-    }
-
-    .carousel-indicators {
-      position: absolute;
-      bottom: $space-md;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 3;
-      display: flex;
-
-      span {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background-color: rgba($primary-white, 0.5);
-        margin: 0 $space-xs / 2;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-
-        &.active, &:hover {
-          background-color: $primary-white;
-        }
-      }
-    }
-  }
-}
-
-.section-title {
-  text-align: center;
-  font-size: $font-size-xl * 1.2;
-  margin-bottom: $space-xl;
-  font-weight: $font-weight-bold;
-  color: $accent-rich-black;
-  position: relative;
-  padding-bottom: $space-sm;
-
-  // Simple underline accent
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80px;
-    height: 3px;
-    background-color: $primary-gold;
-  }
-}
-
-// Re-use product grid from product-list styles if globalized, or copy here
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: $space-lg;
-  @media (max-width: $breakpoint-sm) {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); // Smaller cards on mobile for home
-    gap: $space-md;
-  }
-}
-
-.cta-banner {
-  background-color: $accent-rich-black; // Dark accent background
-  color: $primary-white;
-  padding: $space-xxl 0;
-  background-image: url('assets/images/cta-background.jpg'); // Optional subtle background pattern
-  background-size: cover;
-  background-position: center;
-
-  h3 {
-    font-size: $font-size-xl * 1.3;
-    color: $primary-white;
-    margin-bottom: $space-sm;
-  }
-  p {
-    font-size: $font-size-lg;
-    color: $secondary-gray; // Lighter text on dark bg
-    margin-bottom: $space-lg;
-  }
-  .btn-outline-light {
-    border-color: $primary-gold;
-    color: $primary-gold;
-    &:hover {
-      background-color: $primary-gold;
-      color: $primary-black;
-    }
-  }
-}
-```
-*Carousel images:* Add `carousel-1.jpg`, `carousel-2.jpg`, `carousel-3.jpg`, and `cta-background.jpg` to `src/assets/images/`. These are placeholders.
-
----
-
-**14. Cart Page (Structure)**
-
-**`src/app/features/cart/cart-routing.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { CartComponent } from './cart.component';
-
-const routes: Routes = [{ path: '', component: CartComponent }];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule]
-})
-export class CartRoutingModule { }
-```
-
-**`src/app/features/cart/cart.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { SharedModule } from '../../shared/shared.module';
-import { CartRoutingModule } from './cart-routing.module';
-import { CartComponent } from './cart.component';
-
-@NgModule({
-  declarations: [CartComponent],
-  imports: [
-    CommonModule,
-    SharedModule, // For FormsModule if used, pipes etc.
-    CartRoutingModule
-  ]
-})
-export class CartModule { }
-```
-
-**`src/app/features/cart/cart.component.ts`:**
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
-import { Observable, of } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { CartService } from '../../core/services/cart.service';
-import { Cart, CartItem } from '../../core/models/cart.model';
-import { LoadingService } from '../../core/services/loading.service';
-
-@Component({
-  selector: 'app-cart',
-  templateUrl: './cart.component.html',
-  styleUrls: ['./cart.component.scss']
-})
-export class CartComponent implements OnInit {
-  cart$: Observable<Cart | null>;
-  isLoading$: Observable<boolean>;
-
-  defaultImageUrl = 'assets/images/product-placeholder.png';
-
-  constructor(
-    private cartService: CartService,
-    public loadingService: LoadingService,
-    private router: Router
-  ) {
-    this.cart$ = this.cartService.cart$;
-    this.isLoading$ = this.loadingService.isLoading$;
-  }
-
-  ngOnInit(): void {
-    // Cart is loaded by CartService on auth change or init
-  }
-
-  updateQuantity(item: CartItem, newQuantity: number): void {
-    if (newQuantity < 1) {
-      // Optionally ask for confirmation before removing if quantity becomes 0
-      this.removeItem(item.productId);
-      return;
-    }
-    this.cartService.updateItemQuantity(item.productId, newQuantity).subscribe();
-  }
-
-  incrementQuantity(item: CartItem): void {
-    this.updateQuantity(item, item.quantity + 1);
-  }
-
-  decrementQuantity(item: CartItem): void {
-    this.updateQuantity(item, item.quantity - 1);
-  }
-
-  removeItem(productId: number): void {
-    // Optionally, add a confirmation dialog here
-    this.cartService.removeItem(productId).subscribe();
-  }
-
-  calculateSubtotal(cart: Cart | null): number {
-    if (!cart || !cart.items) return 0;
-    return cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  }
-
-  // You can add more complex calculations like tax, shipping, total
-  // For now, subtotal is the total.
-
-  proceedToCheckout(): void {
-    this.router.navigate(['/checkout']);
-  }
-
-  getImageUrl(item: CartItem): string {
-    if (item.imageUrl) {
-       if (item.imageUrl.startsWith('http')) {
-            return item.imageUrl;
-        }
-        return item.imageUrl; // Assuming full URL or correctly relative
-    }
-    return this.defaultImageUrl;
-  }
-}
-```
-
-**`src/app/features/cart/cart.component.html`:**
-```html
-<div class="cart-page container py-5">
-  <header class="page-header">
-    <h1>Your Shopping Cart</h1>
-  </header>
-
-  <div *ngIf="isLoading$ | async" class="loading-indicator text-center my-5">
-    <p>Loading your cart...</p>
-  </div>
-
-  <ng-container *ngIf="(cart$ | async) as cart; else emptyCartOrLoading">
-    <div *ngIf="cart && cart.items && cart.items.length > 0; else emptyCartTemplate" class="cart-content">
-      <div class="row">
-        <!-- Cart Items List -->
-        <div class="col-lg-8">
-          <div class="cart-items-list">
-            <div *ngFor="let item of cart.items" class="cart-item card mb-3">
-              <div class="card-body">
-                <div class="row align-items-center">
-                  <div class="col-3 col-md-2">
-                    <img [src]="getImageUrl(item)" [alt]="item.productName" class="img-fluid rounded cart-item-image">
-                  </div>
-                  <div class="col-9 col-md-4">
-                    <h5 class="item-name mb-1">{{ item.productName }}</h5>
-                    <p class="item-price text-secondary mb-0">{{ item.price | currency:'USD' }} / unit</p>
-                  </div>
-                  <div class="col-6 col-md-3 mt-2 mt-md-0">
-                    <div class="input-group quantity-control">
-                      <button class="btn btn-outline-dark btn-sm" type="button" (click)="decrementQuantity(item)">-</button>
-                      <input type="number" class="form-control text-center" [value]="item.quantity" readonly>
-                      <button class="btn btn-outline-dark btn-sm" type="button" (click)="incrementQuantity(item)">+</button>
-                    </div>
-                  </div>
-                  <div class="col-4 col-md-2 mt-2 mt-md-0 text-md-end">
-                    <span class="item-total-price fw-bold">{{ (item.price * item.quantity) | currency:'USD' }}</span>
-                  </div>
-                  <div class="col-2 col-md-1 mt-2 mt-md-0 text-end">
-                    <button class="btn btn-link text-danger p-0" (click)="removeItem(item.productId)" title="Remove item">
-                      <!-- SVG Trash Icon -->
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Cart Summary -->
-        <div class="col-lg-4">
-          <div class="cart-summary card sticky-top" style="top: 100px;"> <!-- Adjust top for sticky header -->
-            <div class="card-body">
-              <h4 class="card-title mb-4">Order Summary</h4>
-              <div class="summary-item d-flex justify-content-between mb-2">
-                <span>Subtotal</span>
-                <span class="fw-bold">{{ calculateSubtotal(cart) | currency:'USD' }}</span>
-              </div>
-              <!-- <div class="summary-item d-flex justify-content-between mb-2">
-                <span>Shipping</span>
-                <span class="text-secondary">Calculated at checkout</span>
-              </div>
-              <div class="summary-item d-flex justify-content-between mb-3">
-                <span>Tax</span>
-                <span class="text-secondary">Calculated at checkout</span>
-              </div> -->
-              <hr>
-              <div class="summary-item d-flex justify-content-between fw-bold h5 mt-3">
-                <span>Total</span>
-                <span>{{ calculateSubtotal(cart) | currency:'USD' }}</span>
-              </div>
-              <button class="btn btn-primary w-100 mt-4 btn-lg" (click)="proceedToCheckout()">
-                Proceed to Checkout
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </ng-container>
-
-  <ng-template #emptyCartOrLoading>
-    <div *ngIf="!(isLoading$ | async)"> <!-- Only show empty cart if not loading -->
-      <ng-container *ngTemplateOutlet="emptyCartTemplate"></ng-container>
-    </div>
-  </ng-template>
-
-  <ng-template #emptyCartTemplate>
-    <div class="empty-cart text-center my-5 py-5">
-      <img src="assets/icons/cart.svg" alt="Empty cart" style="width: 80px; opacity: 0.5; margin-bottom: 1rem;">
-      <h3>Your Cart is Empty</h3>
-      <p class="text-secondary">Looks like you haven't added anything to your cart yet.</p>
-      <a routerLink="/products" class="btn btn-primary mt-3">Start Shopping</a>
-    </div>
-  </ng-template>
-</div>
-```
-
-**`src/app/features/cart/cart.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.cart-page {
-  .page-header {
-    text-align: center;
-    margin-bottom: $space-xl;
-  }
-}
-
-.cart-item {
-  .cart-item-image {
-    max-width: 80px;
-    height: auto;
-    aspect-ratio: 1/1;
-    object-fit: cover;
-  }
-  .item-name {
-    font-size: $font-size-base;
-    font-weight: $font-weight-bold;
-  }
-  .item-price {
-    font-size: $font-size-sm;
-  }
-  .quantity-control {
-    max-width: 120px;
-    .form-control {
-      border-left: none;
-      border-right: none;
-      padding-left: $space-xs;
-      padding-right: $space-xs;
-      &:focus { box-shadow: none; }
-    }
-    .btn {
-      border-color: $light-gray-border;
-      &:hover { background-color: $background-light; }
-    }
-  }
-  .item-total-price {
-    font-size: $font-size-base;
-  }
-}
-
-.cart-summary {
-  .card-title {
-    font-weight: $font-weight-bold;
-  }
-  .summary-item span:first-child {
-    color: $secondary-gray;
-  }
-}
-
-.empty-cart {
-  min-height: 40vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-}
-```
-
----
-
-**15. Checkout Page (Structure & Stripe Intent)**
-
-**`src/app/features/checkout/checkout-routing.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { CheckoutComponent } from './checkout.component';
-
-const routes: Routes = [{ path: '', component: CheckoutComponent }];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule]
-})
-export class CheckoutRoutingModule { }
-```
-
-**`src/app/features/checkout/checkout.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { SharedModule } from '../../shared/shared.module';
-import { CheckoutRoutingModule } from './checkout-routing.module';
-import { CheckoutComponent } from './checkout.component';
-
-@NgModule({
-  declarations: [CheckoutComponent],
-  imports: [
-    CommonModule,
-    SharedModule, // For ReactiveFormsModule
-    CheckoutRoutingModule
-  ]
-})
-export class CheckoutModule { }
-```
-
-**`src/app/features/checkout/checkout.component.ts`:**
-```typescript
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { Observable, Subscription, of } from 'rxjs';
-import { switchMap, filter, tap } from 'rxjs/operators';
-import { loadStripe, Stripe, StripeElements, StripeCardElement } from '@stripe/stripe-js';
-
-import { CartService } from '../../core/services/cart.service';
-import { OrderService } from '../../core/services/order.service';
-import { AuthService } from '../../core/services/auth.service';
-import { NotificationService } from '../../core/services/notification.service';
-import { LoadingService } from '../../core/services/loading.service';
-import { Cart, CartItem } from '../../core/models/cart.model';
-import { User } from '../../core/models/user.model';
-import { environment } from '../../../environments/environment'; // If you store Stripe PK here
-
-@Component({
-  selector: 'app-checkout',
-  templateUrl: './checkout.component.html',
-  styleUrls: ['./checkout.component.scss']
-})
-export class CheckoutComponent implements OnInit, OnDestroy {
-  @ViewChild('cardElement') cardElementRef!: ElementRef;
-
-  checkoutForm!: FormGroup;
-  cart$: Observable<Cart | null>;
-  currentUser$: Observable<User | null>;
-  isLoading$: Observable<boolean>;
-
-  stripe: Stripe | null = null;
-  cardElement!: StripeCardElement; // To be initialized by Stripe.js
-  clientSecret: string | null = null;
-  isPaymentProcessing = false;
-
-  private subscriptions = new Subscription();
-
-  // Replace with your actual Stripe Publishable Key
-  stripePublishableKey = 'pk_test_YOUR_STRIPE_PUBLISHABLE_KEY'; // Get from environment ideally
-
-  constructor(
-    private fb: FormBuilder,
-    private cartService: CartService,
-    private orderService: OrderService,
-    private authService: AuthService,
-    private notificationService: NotificationService,
-    public loadingService: LoadingService,
-    private router: Router
-  ) {
-    this.cart$ = this.cartService.cart$;
-    this.currentUser$ = this.authService.currentUser;
-    this.isLoading$ = this.loadingService.isLoading$;
-  }
-
-  async ngOnInit(): Promise<void> {
-    this.checkoutForm = this.fb.group({
-      // Basic address fields, expand as needed
-      name: ['', Validators.required],
-      addressLine1: ['', Validators.required],
-      city: ['', Validators.required],
-      postalCode: ['', Validators.required],
-      country: ['US', Validators.required], // Default or dynamic
-      // Add more fields: email (prefill), phone
-    });
-
-    // Pre-fill form if user data is available
-    const userSub = this.currentUser$.subscribe(user => {
-      if (user) {
-        this.checkoutForm.patchValue({ name: user.displayName });
-      }
-    });
-    this.subscriptions.add(userSub);
-
-    // Load Stripe and initialize elements
-    this.stripe = await loadStripe(this.stripePublishableKey);
-    if (this.stripe) {
-      const elements = this.stripe.elements();
-      this.cardElement = elements.create('card', {
-        style: { // Basic styling, customize as needed
-          base: {
-            iconColor: '#000000', // Black
-            color: '#000000',
-            fontWeight: '500',
-            fontFamily: 'Roboto, Open Sans, Segoe UI, sans-serif',
-            fontSize: '16px',
-            fontSmoothing: 'antialiased',
-            ':-webkit-autofill': {
-              color: '#fce883',
-            },
-            '::placeholder': {
-              color: '#B0B0B0', // Gray
-            },
-          },
-          invalid: {
-            iconColor: '#F44336', // Error color
-            color: '#F44336',
-          },
-        }
-      });
-      // Defer mounting until cardElementRef is available (after view init)
-    } else {
-      this.notificationService.error('Stripe could not be loaded. Please try refreshing.', 'Payment Error');
-    }
-
-    // Get Payment Intent Client Secret
-    const intentSub = this.orderService.createPaymentIntent().pipe(
-      filter(response => !!response && !!response.clientSecret)
-    ).subscribe(response => {
-      if (response) this.clientSecret = response.clientSecret;
-    });
-    this.subscriptions.add(intentSub);
-  }
-
-  ngAfterViewInit(): void {
-    if (this.cardElement && this.cardElementRef) {
-      this.cardElement.mount(this.cardElementRef.nativeElement);
-      this.cardElement.on('change', (event) => {
-        // Handle card validation errors display
-        const displayError = document.getElementById('card-errors');
-        if (displayError) {
-            if (event.error) {
-                displayError.textContent = event.error.message || 'Card details are invalid.';
-            } else {
-                displayError.textContent = '';
-            }
-        }
-      });
-    }
-  }
-
-
-  async onSubmitPayment(): Promise<void> {
-    if (this.checkoutForm.invalid || !this.stripe || !this.cardElement || !this.clientSecret) {
-      this.notificationService.warning('Please fill all required fields and ensure card details are correct.', 'Form Incomplete');
-      Object.values(this.checkoutForm.controls).forEach(control => control.markAsTouched());
-      // Trigger Stripe element validation visually if possible
-      return;
-    }
-
-    this.isPaymentProcessing = true;
-    this.loadingService.show(); // Show global loader as well
-
-    const { error, paymentIntent } = await this.stripe.confirmCardPayment(this.clientSecret, {
-      payment_method: {
-        card: this.cardElement,
-        billing_details: {
-          name: this.checkoutForm.value.name,
-          address: { // Collect more address details if needed by Stripe/your business
-            line1: this.checkoutForm.value.addressLine1,
-            city: this.checkoutForm.value.city,
-            postal_code: this.checkoutForm.value.postalCode,
-            country: this.checkoutForm.value.country,
-          },
-          // email: this.authService.currentUserValue?.email // If email is collected
-        },
-      },
-    });
-
-    this.isPaymentProcessing = false;
-    this.loadingService.hide();
-
-    if (error) {
-      this.notificationService.error(error.message || 'Payment failed. Please try again.', 'Payment Error');
-      console.error('Stripe Error:', error);
-    } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-      this.notificationService.success('Payment successful! Your order is confirmed.', 'Order Placed');
-      // TODO: Call your backend to finalize the order (e.g. save transaction details, update inventory)
-      // This is often handled by a Stripe Webhook on your backend based on payment_intent.succeeded event.
-      this.cartService.clearCartAfterOrder().subscribe(() => {
-        this.router.navigate(['/profile/orders'], { queryParams: { success: true, orderId: paymentIntent.id }}); // Or a dedicated success page
-      });
-    } else if (paymentIntent) {
-        this.notificationService.warning(`Payment status: ${paymentIntent.status}. Please contact support.`, 'Payment Pending');
-    }
-  }
-
-  calculateSubtotal(cart: Cart | null): number {
-    if (!cart || !cart.items) return 0;
-    return cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  }
-
-  ngOnDestroy(): void {
-    this.subscriptions.unsubscribe();
-    if (this.cardElement) {
-      this.cardElement.destroy();
-    }
-  }
-}
-```
-
-**`src/app/features/checkout/checkout.component.html`:**
-```html
-<div class="checkout-page container py-5">
-  <header class="page-header text-center mb-5">
-    <h1>Checkout</h1>
-    <p class="text-secondary">Almost there! Please complete your order details.</p>
-  </header>
-
-  <div class="row g-5">
-    <!-- Order Summary (Mobile First - or on right for Desktop) -->
-    <div class="col-md-5 col-lg-4 order-md-last">
-      <h4 class="d-flex justify-content-between align-items-center mb-3">
-        <span class="text-gold">Your Cart</span>
-        <span class="badge bg-dark rounded-pill">{{ (cart$ | async)?.items?.length || 0 }}</span>
-      </h4>
-      <ul class="list-group mb-3" *ngIf="(cart$ | async) as cart">
-        <li *ngFor="let item of cart.items" class="list-group-item d-flex justify-content-between lh-sm">
-          <div>
-            <h6 class="my-0">{{ item.productName }} <small class="text-muted">x {{item.quantity}}</small></h6>
-            <small class="text-muted">{{ item.description | slice:0:50 }}...</small>
-          </div>
-          <span class="text-muted">{{ (item.price * item.quantity) | currency:'USD' }}</span>
-        </li>
-        <li class="list-group-item d-flex justify-content-between bg-light">
-          <div class="text-success">
-            <!-- <h6 class="my-0">Promo code</h6>
-            <small>EXAMPLECODE</small> -->
-          </div>
-          <!-- <span class="text-success">−$5</span> -->
-        </li>
-        <li class="list-group-item d-flex justify-content-between">
-          <span>Total (USD)</span>
-          <strong>{{ calculateSubtotal(cart) | currency:'USD' }}</strong>
-        </li>
-      </ul>
-      <!-- Promo Code Form (Optional) -->
-    </div>
-
-    <!-- Billing/Shipping and Payment Form -->
-    <div class="col-md-7 col-lg-8">
-      <h4 class="mb-3">Billing Address</h4>
-      <form [formGroup]="checkoutForm" (ngSubmit)="onSubmitPayment()" novalidate class="needs-validation">
-        <div class="row g-3">
-          <div class="col-12">
-            <label for="name" class="form-label">Full name</label>
-            <input type="text" class="form-control" id="name" formControlName="name" placeholder="John M. Doe" required>
-            <div *ngIf="checkoutForm.get('name')?.invalid && checkoutForm.get('name')?.touched" class="form-error-message">
-              Full name is required.
-            </div>
-          </div>
-
-          <!-- Add Email and Phone inputs here if needed for Stripe or your records -->
-
-          <div class="col-12">
-            <label for="addressLine1" class="form-label">Address</label>
-            <input type="text" class="form-control" id="addressLine1" formControlName="addressLine1" placeholder="1234 Main St" required>
-             <div *ngIf="checkoutForm.get('addressLine1')?.invalid && checkoutForm.get('addressLine1')?.touched" class="form-error-message">
-              Address is required.
-            </div>
-          </div>
-
-          <!-- Address Line 2 (Optional) -->
-
-          <div class="col-md-5">
-            <label for="country" class="form-label">Country</label>
-            <select class="form-select form-control" id="country" formControlName="country" required>
-              <option value="US">United States</option>
-              <!-- Add more countries -->
-            </select>
-            <div *ngIf="checkoutForm.get('country')?.invalid && checkoutForm.get('country')?.touched" class="form-error-message">
-              Please select a valid country.
-            </div>
-          </div>
-
-          <div class="col-md-4">
-            <label for="city" class="form-label">City</label> <!-- Or State/Province -->
-            <input type="text" class="form-control" id="city" formControlName="city" placeholder="Your City" required>
-            <div *ngIf="checkoutForm.get('city')?.invalid && checkoutForm.get('city')?.touched" class="form-error-message">
-              City is required.
-            </div>
-          </div>
-
-          <div class="col-md-3">
-            <label for="postalCode" class="form-label">Zip / Postal code</label>
-            <input type="text" class="form-control" id="postalCode" formControlName="postalCode" placeholder="" required>
-             <div *ngIf="checkoutForm.get('postalCode')?.invalid && checkoutForm.get('postalCode')?.touched" class="form-error-message">
-              Zip code required.
-            </div>
-          </div>
-        </div>
-
-        <hr class="my-4">
-
-        <!-- Shipping address same as billing checkbox -->
-        <!-- <div class="form-check"> ... </div> -->
-
-        <h4 class="mb-3">Payment</h4>
-
-        <!-- Stripe Card Element will be injected here -->
-        <div class="form-group">
-          <label for="card-element" class="form-label">Credit or debit card</label>
-          <div id="card-element" #cardElement class="form-control stripe-card-element">
-            <!-- A Stripe Element will be inserted here. -->
-          </div>
-          <!-- Used to display form errors. -->
-          <div id="card-errors" role="alert" class="form-error-message mt-2"></div>
-        </div>
-
-        <hr class="my-4">
-
-        <button class="w-100 btn btn-primary btn-lg" type="submit" [disabled]="isPaymentProcessing || !clientSecret || (isLoading$ | async)">
-          <span *ngIf="isPaymentProcessing">Processing Payment...</span>
-          <span *ngIf="!isPaymentProcessing">Pay {{ (cart$ | async)?.items ? (calculateSubtotal(cart$ | async) | currency:'USD') : '' }}</span>
-        </button>
-        <p *ngIf="!clientSecret && !(isLoading$ | async)" class="text-danger mt-2 text-center">
-            Could not initialize payment. Please try refreshing the page or contact support.
-        </p>
-      </form>
-    </div>
-  </div>
-
-  <div *ngIf="(isLoading$ | async) && !isPaymentProcessing" class="loading-overlay">
-      <p>Loading checkout details...</p> <!-- Or a spinner -->
-  </div>
-</div>
-```
-
-**`src/app/features/checkout/checkout.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.checkout-page {
-  .list-group-item {
-    border-left: none;
-    border-right: none;
-    padding-left: 0;
-    padding-right: 0;
-    &:first-child { border-top: none; }
-    &:last-child { border-bottom: none; }
-  }
-
-  .stripe-card-element {
-    padding: $space-sm; // Match other form controls
-    border: $border-width solid $light-gray-border;
-    border-radius: $border-radius-sm;
-    background-color: $primary-white;
-  }
-
-  .form-error-message { // Already defined globally, but can be tweaked
-    color: $error-color;
-    font-size: $font-size-sm;
-  }
-
-  .loading-overlay { // For when loading initial checkout details
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgba($primary-white, 0.8);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1050; // Above most content
-    p { font-size: $font-size-lg; color: $primary-black; }
-  }
-}
-```
-*Stripe Key:* Remember to replace `'pk_test_YOUR_STRIPE_PUBLISHABLE_KEY'` with your actual Stripe publishable key. It's best practice to load this from `environment.ts`.
-
----
-
-**16. User Profile Page (Structure)**
-
-**`src/app/features/profile/profile-routing.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
-import { UserProfileComponent } from './user-profile/user-profile.component';
-import { OrderHistoryComponent } from './order-history/order-history.component'; // Create this
-
-const routes: Routes = [
-  {
-    path: '',
-    component: UserProfileComponent,
-    children: [ // Optional: Child routes for different profile sections
-      { path: 'orders', component: OrderHistoryComponent },
-      // { path: 'settings', component: ProfileSettingsComponent },
-      { path: '', redirectTo: 'orders', pathMatch: 'full' } // Default to orders or a dashboard
-    ]
-  }
-];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule]
-})
-export class ProfileRoutingModule { }
-```
-
-**`src/app/features/profile/profile.module.ts`:**
-```typescript
-import { NgModule } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { SharedModule } from '../../shared/shared.module';
-import { ProfileRoutingModule } from './profile-routing.module';
-import { UserProfileComponent } from './user-profile/user-profile.component';
-import { OrderHistoryComponent } from './order-history/order-history.component';
-
-@NgModule({
-  declarations: [
-    UserProfileComponent,
-    OrderHistoryComponent
-  ],
-  imports: [
-    CommonModule,
-    SharedModule,
-    ProfileRoutingModule
-  ]
-})
-export class ProfileModule { }
-```
-
-**`src/app/features/profile/user-profile/user-profile.component.ts`:**
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { AuthService } from '../../../core/services/auth.service';
-import { User } from '../../../core/models/user.model';
-import { Observable } from 'rxjs';
-
-@Component({
-  selector: 'app-user-profile',
-  templateUrl: './user-profile.component.html',
-  styleUrls: ['./user-profile.component.scss']
-})
-export class UserProfileComponent implements OnInit {
-  currentUser$: Observable<User | null>;
-
-  constructor(private authService: AuthService) {
-    this.currentUser$ = this.authService.currentUser;
-  }
-
-  ngOnInit(): void {
-    // Optionally, fetch fresh user info if it can change frequently
-    // this.authService.fetchAndUpdateUserInfo().subscribe();
-  }
-}
-```
-
-**`src/app/features/profile/user-profile/user-profile.component.html`:**
-```html
-<div class="profile-page container py-5">
-  <div class="row">
-    <div class="col-md-3">
-      <!-- Profile Sidebar Navigation -->
-      <div class="profile-sidebar card sticky-top" style="top: 100px;">
-        <div class="card-body p-0">
-          <div *ngIf="currentUser$ | async as user" class="profile-user-info text-center p-3 border-bottom">
-            <!-- Add user avatar here -->
-            <h5 class="mt-2 mb-0">{{ user.displayName }}</h5>
-            <p class="text-secondary mb-0"><small>{{ user.email }}</small></p>
-          </div>
-          <nav class="nav flex-column profile-nav">
-            <a class="nav-link" routerLink="orders" routerLinkActive="active">
-              <!-- Icon --> Order History
-            </a>
-            <a class="nav-link" routerLink="settings" routerLinkActive="active">
-              <!-- Icon --> Account Settings
-            </a>
-            <!-- Add more links: Addresses, Payment Methods, etc. -->
-            <a class="nav-link text-danger" (click)="authService.logout()">
-              <!-- Icon --> Logout
-            </a>
-          </nav>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-9">
-      <!-- Profile Content Area -->
-      <div class="profile-content">
-        <router-outlet></router-outlet>
-      </div>
-    </div>
-  </div>
-</div>
-```
-
-**`src/app/features/profile/user-profile/user-profile.component.scss`:**
-```scss
-@import 'assets/styles/variables';
-
-.profile-sidebar {
-  .profile-user-info {
-    // Styles for avatar, name, email display
-  }
-  .profile-nav {
-    .nav-link {
-      color: $primary-black;
-      padding: $space-sm $space-md;
-      border-bottom: 1px solid $light-gray-border;
-      font-weight: $font-weight-normal;
-
-      &:last-child {
-        border-bottom: none;
-      }
-
-      &:hover {
-        background-color: $background-light;
-      }
-      &.active {
-        background-color: lighten($primary-gold, 30%);
-        color: darken($primary-gold, 15%);
-        font-weight: $font-weight-bold;
-        border-left: 3px solid $primary-gold; // Active indicator
-      }
-      &.text-danger:hover {
-          background-color: lighten($error-color, 35%);
-      }
-    }
-  }
-}
-
-.profile-content {
-  // Styles for the content area (e.g., card for each section)
-}
-```
-
-**`src/app/features/profile/order-history/order-history.component.ts` (Structure):**
-```typescript
-import { Component, OnInit } from '@angular/core';
-import { Observable, of } from 'rxjs';
-import { OrderService } from '../../../core/services/order.service';
-import { LoadingService } from '../../../core/services/loading.service';
-import { OrderHistoryItem } from '../../../core/models/order.model';
-
-@Component({
-  selector: 'app-order-history',
-  templateUrl: './order-history.component.html',
-  styleUrls: ['./order-history.component.scss']
-})
-export class OrderHistoryComponent implements OnInit {
-  orderHistory$: Observable<OrderHistoryItem[]> = of([]);
-  isLoading$: Observable<boolean>;
-
-  constructor(
-    private orderService: OrderService,
-    public loadingService: LoadingService
-  ) {
-    this.isLoading$ = this.loadingService.isLoading$;
-  }
-
-  ngOnInit(): void {
-    this.orderHistory$ = this.orderService.getOrderHistory();
-  }
-
-  // Method to view order details if you have a dedicated order detail page
-  viewOrderDetails(orderId: string): void {
-    // this.router.navigate(['/profile/orders', orderId]);
-    console.log('View details for order:', orderId);
-  }
-}
-```
-
-**`src/app/features/profile/order-history/order-history.component.html` (Structure):**
-```html
-<div class="order-history-section card">
-  <div class="card-header bg-transparent">
-    <h4 class="mb-0">Your Orders</h4>
-  </div>
-  <div class="card-body">
-    <div *ngIf="isLoading$ | async" class="text-center py-5">
-      <p>Loading order history...</p>
-      <!-- <app-loading-spinner></app-loading-spinner> -->
-    </div>
-
-    <div *ngIf="!(isLoading$ | async) && (orderHistory$ | async) as orders">
-      <div *ngIf="orders.length === 0" class="text-center py-5 text-secondary">
-        <p>You haven't placed any orders yet.</p>
-        <a routerLink="/products" class="btn btn-primary">Start Shopping</a>
-      </div>
-
-      <div *ngIf="orders.length > 0" class="orders-list">
-        <div *ngFor="let order of orders" class="order-item card mb-3">
-          <div class="card-header d-flex justify-content-between align-items-center bg-light">
-            <div>
-              <span class="fw-bold">Order #{{ order.orderId }}</span>
-              <small class="ms-2 text-muted">Placed on: {{ order.orderDate | date:'mediumDate' }}</small>
-            </div>
-            <span class="badge" [ngClass]="{'bg-success': order.status === 'Delivered', 'bg-warning text-dark': order.status === 'Processing', 'bg-info text-dark': order.status === 'Shipped', 'bg-secondary': order.status !== 'Delivered' && order.status !== 'Processing' && order.status !== 'Shipped'}">
-              {{ order.status }}
-            </span>
-          </div>
-          <div class="card-body">
-            <!-- Simple item summary -->
-            <div *ngFor="let item of order.items | slice:0:2" class="order-item-summary d-flex align-items-center mb-2">
-              <!-- <img [src]="item.imageUrl" [alt]="item.productName" class="me-2" style="width: 40px; height: 40px; object-fit: cover;"> -->
-              <p class="mb-0 flex-grow-1">{{ item.productName }} <small class="text-muted">x {{ item.quantity }}</small></p>
-              <p class="mb-0 fw-bold">{{ (item.price * item.quantity) | currency:'USD' }}</p>
-            </div>
-            <p *ngIf="order.items.length > 2" class="text-muted"><small>+ {{ order.items.length - 2 }} more item(s)</small></p>
-            <hr>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="h5 mb-0">Total: {{ order.totalAmount | currency:'USD' }}</span>
-              <button class="btn btn-outline-dark btn-sm" (click)="viewOrderDetails(order.orderId)">
-                View Details
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-```
-*Order History Styling (`order-history.component.scss`): Add specific styles as needed for order items.*
-
----
-
-**17. Admin Section (Optional - Basic Structure)**
-
-If you implement admin, it would follow a similar pattern:
-`AdminModule`, `AdminRoutingModule`.
-Components for `ManageProductsComponent`, `ManageCategoriesComponent`, `ViewOrdersComponent`.
-These would use the admin methods in `ProductService`, `CategoryService`, etc.
-Protect admin routes with an `AdminGuard` (similar to `AuthGuard` but checks for an 'Admin' role).
-
----
-
-**Final Recommendations & Next Steps:**
-
-1.  **SVG Icons:** Replace placeholder text/SVG strings with actual SVG icons. Store them in `src/assets/icons/` and use them via `<img>` tags or inline SVGs.
-2.  **Images:**
-    *   Add your logo (`logo.svg`) to `src/assets/icons/`.
-    *   Add placeholder images: `src/assets/images/product-placeholder.png`, `product-placeholder-large.png`, `empty-box.svg`.
-    *   Add carousel and CTA banner images.
-3.  **Error Handling:** Implement a global `ErrorInterceptor` (similar to `AuthInterceptor`) to catch HTTP errors, log them, and show user-friendly notifications via `NotificationService`.
-4.  **Loading States:**
-    *   Use `LoadingService` more extensively. You can create a global `app-loading-spinner` component and show it in `app.component.html` based on `loadingService.isLoading$`.
-    *   Implement skeleton loaders for product cards and lists for a smoother perceived performance.
-5.  **Forms Validation:** Enhance form validation messages and styling.
-6.  **Stripe Integration:**
-    *   Replace the placeholder Stripe publishable key.
-    *   Thoroughly test the Stripe payment flow.
-    *   Implement backend webhooks for `payment_intent.succeeded` and other relevant Stripe events to reliably update order status, send emails, etc.
-7.  **API Models Refinement:** Double-check all DTOs (`core/models/`) against your actual API responses. The `PaginatedProducts` structure is an assumption; adjust if your API paginates differently (e.g., via Link headers or a different body structure).
-8.  **User ID in Cart:** Clarify how `userId` is handled for cart operations with your backend. If it's inferred from the token, `CartRequestDto` might not need `userId`.
-9.  **Infinite Scroll vs. Pagination:** For product listings, decide between pagination (implemented) or infinite scroll (requires different logic, e.g., using `ngx-infinite-scroll`).
-10. **State Management:** For larger applications, consider NgRx or other state management libraries for more complex states (cart, user session, product filters). For now, `BehaviorSubject` in services is a good start.
-11. **Testing:** Add unit tests (Karma/Jasmine) and consider end-to-end tests (Cypress/Protractor).
-12. **Accessibility (a11y):** Continuously review for ARIA attributes, keyboard navigation, color contrast, etc.
-13. **Responsiveness:** Test thoroughly across devices. The provided SCSS includes breakpoints and basic responsive patterns.
-14. **Build & Deploy:** Configure `angular.json` for production builds (`ng build --configuration production`).
-
-This comprehensive structure provides a very solid foundation. You'll need to fill in the details for remaining components (Checkout payment form, Profile sections, Admin, etc.) following these patterns. The design is minimalist and modern, focusing on clarity and comfort. The repository pattern ensures clean separation of concerns.
-
-Good luck with your e-commerce project! It's been a pleasure designing this for you.
+1.  According to Dr. Mourad Raafat, why is data visualization essential?
+    A. It replaces the need for raw data.
+    **B. It transforms complex information into clear, meaningful, and compelling visual representations.**
+    C. It is only useful for telling data stories.
+    D. It is primarily for highlighting key insights.
+    Source:
+
+2.  Data visualization helps enhance understanding by making data-driven arguments more insightful and compelling, similar to how sentences are more persuasive with supporting evidence. This statement is:
+    A. False.
+    **B. True.**
+    C. Only true for numerical data.
+    D. Only true for large datasets.
+    Source:
+
+3.  Visualizations show data stories by converting numerical, relational, or spatial patterns into images. This is one of the key takeaways for why data visualization is important. This statement is:
+    A. False.
+    **B. True.**
+    C. True, but only for spatial patterns.
+    D. True, but only for numerical patterns.
+    Source:
+
+4.  A well-designed visualization draws attention to what is most important in the data, making it easier to grasp than raw text alone. This is described as highlighting key insights. This statement is:
+    A. False.
+    **B. True.**
+    C. Only applies to charts, not tables or maps.
+    D. Only applies to complex datasets.
+    Source:
+
+5.  The sources mention that free and easy-to-use digital tools are available for creating charts, tables, and maps. This is listed as a reason why data visualization is important. This statement is:
+    **A. False.**
+    C. Only proprietary tools are effective.
+    D. Only maps can be created with free tools.
+    Source:
+
+6.  Data visualizations support decision-making by helping new learners and professionals decide on the best way to present information. The best way to present information could be through tables, charts, or maps. This statement is:
+    A. False.
+    **B. True.**
+    C. Decision-making is only supported by charts.
+    D. Decision-making is only supported by maps.
+    Source:
+
+7.  Modern data visualizations can be interactive, allowing users to explore, download, and share insights easily. This is listed as a key benefit of data visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. Interactivity is limited to static visuals.
+    D. Sharing insights is not a feature of interactive visualizations.
+    Source:
+
+8.  With the rise of digital content, data visualizations reach a wider audience on the web, engaging them in ways that traditional print materials cannot. This is listed under the benefit of increased accessibility. This statement is:
+    A. False.
+    **B. True.**
+    C. Traditional print materials are more engaging than digital visualizations.
+    D. Accessibility only refers to sharing insights.
+    Source:
+
+9.  Data visualizations can be manipulated to deceive, making it essential to critically evaluate the sources and accuracy of data stories. This is mentioned as a potential negative aspect or challenge of data visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. Visualizations can only uncover the truth.
+    D. Evaluating accuracy is not possible with visualizations.
+    Source:
+
+10. According to the sources, what is NOT one of the three things you have to understand in order to visualize data?
+    A. Preattentive attributes.
+    B. Types of data.
+    **C. Digital tools.**
+    D. Dealing with Colors.
+    Sources:
+
+11. Preattentive attributes are things our brains process in milliseconds, before we pay attention to everything else. This definition is provided in the sources. This statement is:
+    A. False.
+    **B. True.**
+    C. They require conscious attention.
+    D. They are processed slowly.
+    Source:
+
+12. Which of the following is listed as a type of Preattentive Attribute in the sources?
+    A. Shape.
+    B. Texture.
+    **C. Color.**
+    D. Orientation.
+    Source:
+
+13. The sources give an example showing that coloring every digit when trying to find a specific number (like 9s) is nearly as bad as having no color. This demonstrates a misuse of color. This statement is:
+    A. False.
+    **B. True.**
+    C. Coloring all digits is the best way to highlight them.
+    D. Coloring improves the task regardless of how it's applied.
+    Source:
+
+14. For quantitative comparisons, what preattentive attributes are mentioned as best?
+    A. Color and Size.
+    B. Position and Shape.
+    **C. Length and Position.**
+    D. Size and Texture.
+    Source:
+
+15. The sources list three types of data. Which of the following is NOT one of them?
+    A. Categorical Data (aka Nominal Data).
+    B. Ordinal Data.
+    **C. Binary Data.**
+    D. Quantitative Data (aka Numerical Data).
+    Source:
+
+16. Categorical data is also known as what kind of variable?
+    A. Continuous variable.
+    **B. Nominal variable.**
+    C. Ordinal variable.
+    D. Quantitative variable.
+    Source:
+
+17. Continuous data is described as allowing for the "in between," meaning there is an infinite number of possible intermediate values. Examples given are Temperature and Weights. This statement is:
+    A. False.
+    **B. True.**
+    C. Continuous data can only take whole number values.
+    D. Only Temperature is a type of continuous data.
+    Source:
+
+18. According to the sources, color is one of the most important things to understand in data visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. Color is only important for aesthetic purposes.
+    D. Color is frequently used correctly.
+    Source:
+
+19. The sources advise that you should not use color just to spice up a boring visualization. This suggests that color should be used purposefully. This statement is:
+    A. False.
+    **B. True.**
+    C. Using color to spice up a visualization is always a good practice.
+    D. Color should only be used for quantitative data.
+    Source:
+
+20. Sequential Color is defined as the use of a single color from light to dark. This definition is provided as a reminder. This statement is:
+    A. False.
+    **B. True.**
+    C. Sequential color uses multiple colors.
+    D. Sequential color is only used for categorical data.
+    Source:
+
+21. An example of using sequential color given in the sources is encoding the unemployment rate by state. Another example is encoding the total amount of sales by state in blue, where darker blue shows higher sales. This statement is:
+    A. False.
+    **B. True.**
+    C. Sequential color is only for categorical data.
+    D. Lighter blue shows higher sales in the example.
+    Source:
+
+22. Highlight color is used when there is something that needs to stand out to the reader, but not to alert or alarm them. This description is provided as a reminder. This statement is:
+    A. False.
+    **B. True.**
+    C. Highlight color is primarily for alerting or alarming the reader.
+    D. Highlight color is used to make everything stand out equally.
+    Source:
+
+23. Which of the following is listed as a way highlights can be used?
+    **A. Highlighting a certain data point.**
+    B. Highlighting the axis labels.
+    C. Highlighting the chart title.
+    D. Highlighting the data source.
+    Source:
+
+24. According to research mentioned in the sources, approximately what percentage of males have color vision deficiency (CVD)?
+    A. 0.4 percent.
+    **B. 8 percent.**
+    C. 19 percent.
+    D. 50 percent.
+    Source:
+
+25. The term "color blindness" is not entirely accurate for Color Vision Deficiency (CVD). People suffering from CVD can in fact see color, but cannot distinguish colors in the same way as the rest of the population. This statement is:
+    A. False.
+    **B. True.**
+    C. People with CVD cannot see any color.
+    D. People with CVD see colors the same way as everyone else.
+    Source:
+
+26. A common issue mentioned regarding CVD is difficulty distinguishing between which two colors?
+    A. Blue and Yellow.
+    **B. Red and Green.**
+    C. Purple and Orange.
+    D. Black and White.
+    Source:
+
+27. Using red for 'bad' and green for 'good' in a visualization might cause issues for people with CVD. This statement is:
+    A. False.
+    **B. True.**
+    C. This color scheme is universally understandable.
+    D. CVD only affects brightness perception, not color.
+    Source:
+
+28. Which of the following is listed as a challenge when visualizing multi-class data?
+    **A. Managing visual clutter due to numerous classes.**
+    B. Increasing the number of dimensions.
+    C. Using only one color for all classes.
+    D. Reducing accessibility and interpretability.
+    Source:
+
+29. Selecting appropriate visualization methods that clearly differentiate classes is a challenge in visualizing multi-class data. This statement is:
+    A. False.
+    **B. True.**
+    C. Any visualization method works well for multi-class data.
+    D. Differentiating classes is rarely an issue.
+    Source:
+
+30. Issues related to class imbalance or overlapping classes are challenges in multi-class data visualization.
+    A. False.
+    **B. True.**
+    C. Class imbalance simplifies visualization.
+    D. Overlapping classes are easy to visualize.
+    Source:
+
+31. Choosing suitable colors and graphical elements to ensure accessibility and interpretability by diverse audiences is a challenge in multi-class data visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. Color choice is only an aesthetic consideration.
+    D. Accessibility is not relevant for data visualization.
+    Source:
+
+32. In a dashboard tracking user engagement by product category, overlapping behaviors from users engaging in multiple categories can make it difficult to isolate trends by class. This is given as an example of a challenge in multi-class visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. User engagement dashboards never face this challenge.
+    D. Overlapping behaviors simplify analysis.
+    Source:
+
+33. To manage complexity and improve clarity in visualizing overlapping multi-class data, careful use of dimensionality reduction and interactive filtering tools is essential. This advice is given in the context of the user engagement example. This statement is:
+    A. False.
+    **B. True.**
+    C. Adding more dimensions is recommended.
+    D. Static visualizations are best for overlapping data.
+    Source:
+
+34. A Histogram is a chart that groups numeric data into bins, displaying the bins as segmented columns. This description is given for a Histogram. This statement is:
+    A. False.
+    **B. True.**
+    C. Histograms display individual data points.
+    D. Histograms are used for categorical data.
+    Source:
+
+35. Histograms are used to depict the distribution of a dataset: how often values fall into ranges. The histogram was first introduced by Karl Pearson. This statement is:
+    A. False.
+    **B. True.**
+    C. Histograms show correlation between two variables.
+    D. Karl Pearson introduced the box plot.
+    Source:
+
+36. To construct a histogram, the first step is to count how many values fall into each interval, and then bin the range of values. This statement is:
+    A. False.
+    **B. True.**
+    C. The first step is to bin the range of values, then count.
+    D. Histograms are not constructed using bins.
+    Source:
+
+37. In a histogram, a rectangle is drawn with height proportional to the count and width equal to the bin size. The rectangles abut each other. This statement is:
+    A. False.
+    **B. True.**
+    C. Rectangles in a histogram never touch.
+    D. Rectangle width is not related to bin size.
+    Source:
+
+38. Box plots can be drawn either horizontally or vertically. This statement is:
+    A. False.
+    **B. True.**
+    C. Box plots can only be drawn vertically.
+    D. Box plots can only be drawn horizontally.
+    Source:
+
+39. In a box plot diagram, the minimum and maximum values are shown. Outliers, the first quartile (Q1), the third quartile (Q3), and the median are also typically depicted. This statement is:
+    A. False.
+    **B. True.**
+    C. Box plots only show the median and quartiles.
+    D. Box plots do not show outliers.
+    Source:
+
+40. The Inter Quartile Range (IQR) in a box plot represents the middle 50% of scores for the group. The range of scores from lower to upper quartile is referred to as the inter-quartile range. This statement is:
+    A. False.
+    **B. True.**
+    C. The IQR represents the middle 25% of scores.
+    D. The IQR is the range from minimum to maximum.
+    Source:
+
+41. Seventy-five percent of the scores fall below the upper quartile (Q3) in a box plot. Twenty-five percent of scores fall below the lower quartile (Q1). This statement is:
+    A. False.
+    **B. True.**
+    C. The upper quartile is the median.
+    D. The lower quartile is the minimum.
+    Sources:
+
+42. The whiskers in a box plot represent scores outside the middle 50%. They often stretch over a wider range of scores than the middle quartile groups. This statement is:
+    A. False.
+    **B. True.**
+    C. Whiskers always cover a smaller range than the IQR.
+    D. Whiskers are always drawn at 1.5 times the IQR.
+    Source:
+
+43. The IQR is not shown directly in a box plot graph, but it is a very useful measurement. Why is the IQR useful?
+    A. It is influenced by extreme values.
+    **B. It limits the range to the middle 50% of the values.**
+    C. It shows the mean of the data.
+    D. It determines the number of outliers.
+    Source:
+
+44. How is the IQR calculated?
+    A. Median - Q1.
+    **B. Q3 - Q1.**
+    C. Q3 + Q1.
+    D. Maximum - Minimum.
+    Sources:
+
+45. A Scatter plot is a type of mathematical diagram using Cartesian coordinates to display values for two variables for a set of data. The data is displayed as a collection of points. This statement is:
+    A. False.
+    **B. True.**
+    C. Scatter plots display only one variable.
+    D. Scatter plots use polar coordinates.
+    Source:
+
+46. In a scatter plot, each point's position is determined by the values of the two variables. One variable determines the position on the horizontal axis and the other on the vertical axis. This statement is:
+    A. False.
+    **B. True.**
+    C. Both variables determine the position on only one axis.
+    D. The position is determined randomly.
+    Source:
+
+47. A Bubble chart is a type of chart that displays how many dimensions of data?
+    A. Two dimensions.
+    **B. Three dimensions.**
+    C. Four dimensions.
+    D. One dimension.
+    Source:
+
+48. In a bubble chart, how are the three dimensions of data represented?
+    A. Two values through xy location, one through color.
+    B. One value through x, one through y, one through color.
+    **C. Two values through xy location, one through size.**
+    D. All three values through size.
+    Source:
+
+49. Bubble charts can be considered a variation of which other chart type?
+    A. Bar chart.
+    B. Line chart.
+    **C. Scatter plot.**
+    D. Pie chart.
+    Source:
+
+50. A Heat map is a data visualization type where the individual values contained in a matrix are represented through variations in what?
+    A. Size.
+    B. Shape.
+    **C. Coloring.**
+    D. Position.
+    Source:
+
+51. The term "Heat map" was originally introduced by software designer Cormac Kinney in 1991. This statement is:
+    A. False.
+    **B. True.**
+    C. Heat maps existed for over a century before 1991.
+    D. Karl Pearson introduced the heat map.
+    Source:
+
+52. According to the sources, to select the right type of visual chart, you need to match your data with the chart. This requires asking several questions. Which of the following is NOT listed as a question to ask?
+    A. What type of data?.
+    B. How do you want to communicate?.
+    **C. What software should I use?.**
+    D. Who is my audience?.
+    Source:
+
+53. When comparing charts, Tables are recommended for which purpose?
+    A. To display trends over time.
+    **B. To compare individual or precise values.**
+    C. To show the rank of values and focus on the extremes.
+    D. To visualize comparisons of quality data.
+    Source:
+
+54. Tables are useful when displaying quantitative information is more important than trends. This statement is:
+    A. False.
+    **B. True.**
+    C. Tables are always better than charts for showing trends.
+    D. Tables cannot display quantitative information.
+    Source:
+
+55. Column Chart and Cluster column bar charts are recommended for which purpose?
+    A. To display parts of a whole in percentages.
+    B. To show if data values have attained a particular goal.
+    **C. To display and compare the rank of values and focus on the extremes.**
+    D. To compare multiple items or groups on various attributes.
+    Source:
+
+56. Column charts and Cluster column bar charts are suitable for short data category labels and when items on the chart have less than seven categories. This statement is:
+    A. False.
+    **B. True.**
+    C. They are best for long labels.
+    D. They work best with more than 15 categories.
+    Source:
+
+57. Bar charts are recommended for which purpose?
+    A. To display parts of a whole in percentages.
+    **B. To show if the data values have attained a particular goal.**
+    C. To compare individual or precise values.
+    D. To display trends over time.
+    Source:
+
+58. Bar charts are suitable for items on the chart having how many categories?
+    A. Less than seven.
+    **B. Over seven but less than 15.**
+    C. Exactly three.
+    D. Any number of categories.
+    Source:
+
+59. Bar charts can be used to display negative numbers and are suitable for long data category labels. This statement is:
+    A. False.
+    **B. True.**
+    C. Bar charts can only display positive numbers.
+    D. Bar charts are only for short labels.
+    Source:
+
+60. Radar charts are recommended for which purpose?
+    A. To display parts of a whole in percentages.
+    **B. To compare multiple items or groups on various attributes.**
+    C. To show if the data values have attained a particular goal.
+    D. To display and compare the rank of values.
+    Source:
+
+61. For Radar charts, the number of attributes compared should be at least three but less than 10. This statement is:
+    A. False.
+    **B. True.**
+    C. Any number of attributes can be used.
+    D. They are best for exactly two attributes.
+    Source:
+
+62. Pie Charts are recommended for which purpose?
+    A. To compare many different items.
+    **B. To display parts of a whole in percentages.**
+    C. To show trends over time.
+    D. To visualize comparisons of quality data.
+    Source:
+
+63. In Pie Charts, all categories must add up to what total percentage?
+    A. 50%.
+    B. 75%.
+    **C. 100%.**
+    D. Any percentage is acceptable.
+    Source:
+
+64. Stacked Bar charts are recommended for which purpose?
+    A. To display parts of a whole in percentages.
+    B. To compare multiple items or groups on various attributes.
+    **C. To compare many different items and show the composition of each.**
+    D. To display the rank of values.
+    Source:
+
+65. Stacked Bar charts can be used to display visual aggregate all of the categories in a group when the size of individual categories is not important. This statement is:
+    A. False.
+    **B. True.**
+    C. Stacked Bar charts are only useful when individual category size is crucial.
+    D. Stacked Bar charts do not show composition.
+    Source:
+
+66. Dimensionality Reduction is needed due to several issues that arise with high dimensional data. Which of the following is listed as one of these issues?
+    A. Ease in clustering similar features.
+    B. Decreased space and computational time complexity.
+    C. Running a risk of overfitting the machine learning model.
+    **D. Ability to easily visualize/understand the data.**
+    Source:
+
+67. High dimensional data can be difficult to visualize or understand. Dimensionality reduction techniques can help address this issue by reducing the number of features. This statement is:
+    A. False.
+    **B. True.**
+    C. High dimensional data is always easy to visualize.
+    D. Dimensionality reduction increases the number of features.
+    Sources:
+
+68. Which of the following is listed as a Decomposition algorithm for dimensionality reduction?
+    A. `t-Distributed Stochastic Neighbor Embedding (t-SNE)`.
+    B. `Linear Discriminant Analysis (LDA)`.
+    **C. Principal Component Analysis (PCA).**
+    D. `Locally Linear Embedding (LLE)`.
+    Source:
+
+69. Which of the following is listed as a Manifold learning algorithm?
+    A. `Principal Component Analysis (PCA)`.
+    B. `Singular Value Decomposition (SVD)`.
+    **C. t-Distributed Stochastic Neighbor Embedding (t-SNE).**
+    D. `Kernel Principal Component Analysis (Kernel PCA)`.
+    Source:
+
+70. Which of the following is listed as a Discriminant Analysis algorithm?
+    A. `Spectral Embedding`.
+    **B. Quadratic Discriminant Analysis (QDA).**
+    C. `Non-Negative Matrix Factorization (NMF)`.
+    D. `Locally Linear Embedding (LLE)`.
+    Source:
+
+71. Dimensionality reduction techniques could be categorized between applied on linear and non-linear distributions. Non-linear distributions describe a situation where there is not a straight-line or direct relationship between variables. This statement is:
+    A. False.
+    **B. True.**
+    C. Dimensionality reduction only applies to linear relationships.
+    D. Non-linear relationships are always straight lines.
+    Source:
+
+72. Principal Component Analysis (PCA) is a dimensionality-reduction method to find lower-dimensional space by preserving the variance as measured in the high dimensional input space. This is given as a summary of PCA. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA maximizes the mean, not variance.
+    D. PCA increases the dimensions.
+    Source:
+
+73. PCA is described as what type of method for dimensionality reduction?
+    A. Supervised method.
+    **B. Unsupervised method.**
+    C. Semi-supervised method.
+    D. Classification method.
+    Source:
+
+74. PCA transformations are linear transformations. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA only performs non-linear transformations.
+    D. The type of transformation depends on the data.
+    Source:
+
+75. One of the steps in the process of PCA mentioned is the standardization of the data. Standardization transforms data such that the resulting distribution has a mean of 0 and a standard deviation of 1. This statement is:
+    A. False.
+    **B. True.**
+    C. Standardization changes the mean but not the standard deviation.
+    D. Standardization is not a step in PCA.
+    Source:
+
+76. The covariance matrix is calculated in PCA. It is an `n x n` matrix, where `n` represents the dimensions of the dataset. The covariance value denotes how co-dependent two variables are. This statement is:
+    A. False.
+    **B. True.**
+    C. The covariance matrix is always `2x2`.
+    D. Covariance measures independence, not co-dependence.
+    Source:
+
+77. In PCA, you calculate the eigenvectors and eigenvalues from the covariance matrix. Eigenvalues determine the radius of the Ellipse. This statement is:
+    **A. False.**
+    B. True.
+    C. Eigenvalues determine the direction of variance.
+    D. Eigenvalues and eigenvectors are not used in PCA.
+    Source:
+
+78. The idea behind eigenvectors in PCA is to use the Covariance matrix to understand where in the data there is the most amount of variance. For every eigenvector, there is an eigenvalue. This statement is:
+    A. False.
+    **B. True.**
+    C. Eigenvectors show the mean of the data.
+    D. Eigenvectors and eigenvalues are unrelated.
+    Source:
+
+79. The final step in computing the Principal Components is to form a matrix known as the feature matrix that contains all the significant data variables. This matrix is obtained using eigenvectors and the original data. This statement is:
+    **A. False.**
+    B. True.
+    C. The feature matrix contains random data variables.
+    D. The feature matrix is formed before calculating eigenvectors.
+    Sources:
+
+80. To reduce the dimensions of the dataset in PCA, you project the feature space onto a smaller subspace. The eigenvectors will form the axes of this new feature subspace. This statement is:
+    A. False.
+    **B. True.**
+    C. The original features form the axes of the new subspace.
+    D. PCA does not involve projecting the feature space.
+    Source:
+
+81. How do you typically choose the number of components (k) in PCA for visualization purposes?
+    A. `k = 1`.
+    **B. k = 2.**
+    C. `k = 3`.
+    D. `k = 50`.
+    Source:
+
+82. When choosing the number of components (k) in PCA, typically you want the explained variance to be between what percentage?
+    A. 50-75%.
+    B. 80-90%.
+    **C. 95-99%.**
+    D. 100%.
+    Source:
+
+83. In Python, when implementing PCA, you can specify the number of components (k) or specify a percentage of explained variance (e.g., `components = 0.95`). This statement is:
+    A. False.
+    **B. True.**
+    C. Only the number of components can be specified.
+    D. Explained variance is not relevant in Python PCA.
+    Source:
+
+84. In a more dynamic PCA application described, PCA is applied on the train data with a certain variance percentage, then a model is applied, and finally, the testing set is transformed and prediction is applied. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA is only applied to the testing set.
+    D. The model is applied before PCA.
+    Source:
+
+85. Kernel Principal Component Analysis (Kernel PCA) is used when dealing with what type of distributions?
+    A. Linear distributions.
+    **B. Non-linear distributions.**
+    C. Uniform distributions.
+    D. Normal distributions.
+    Source:
+
+86. The idea behind Kernel PCA is to try to increase the dimensions, then apply PCA. This is done to find a linear separation in a higher dimensional space. This statement is:
+    A. False.
+    **B. True.**
+    C. Kernel PCA decreases dimensions first.
+    D. Kernel PCA does not involve applying PCA.
+    Sources:
+
+87. The RBF kernel function (Gaussian Kernel) is used in Kernel PCA to compute the similarity or how close two points are to each other. When points are the same, the distance is close to 1. This statement is:
+    A. False.
+    **B. True.**
+    C. The RBF kernel measures dissimilarity.
+    D. When points are the same, the kernel value is close to 0.
+    Sources:
+
+88. In Kernel PCA using landmarks, each point can be a landmark. If `x` is close to a landmark, the similarity is close to 1; if far, the similarity is close to 0. This statement is:
+    A. False.
+    **B. True.**
+    C. Landmarks are chosen randomly.
+    D. Similarity is always close to 0.
+    Sources:
+
+89. After applying the Kernel function in Kernel PCA, you can apply PCA. This is done because the Kernel transformed the data into a space where a linear separation might be possible. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA is not applied after the Kernel.
+    D. The Kernel itself provides the final linear separation.
+    Source:
+
+90. Singular Value Decomposition (SVD) is a factorization method that is efficient when working with what type of dataset?
+    A. Dense dataset.
+    **B. Sparse dataset (having many zero entries).**
+    C. Small dataset.
+    D. Continuous dataset.
+    Source:
+
+91. Examples of datasets where SVD is typically used include data for a recommender system or a bag of words model for text. This is because these datasets are often sparse. This statement is:
+    A. False.
+    **B. True.**
+    C. SVD is best for dense datasets like recommender systems.
+    D. Bag of words models are typically dense.
+    Source:
+
+92. The idea of SVD is that every matrix of shape `n x p` factorizes into `A = USV^T`. `U` is an orthogonal matrix, `S` is a diagonal matrix, and `V^T` is also an orthogonal matrix. This statement is:
+    A. False.
+    **B. True.**
+    C. `U`, `S`, and `V^T` are all diagonal matrices.
+    D. The factorization is `A = USV`.
+    Sources:
+
+93. In the SVD factorization `A = USV^T`, if `A` is an `m x n` input data matrix, what is the shape of the `U` matrix (Left singular Vectors)?
+    A. `n x n`.
+    **B. m x r (where r is the rank of A).**
+    C. `r x r`.
+    D. `n x r`.
+    Source:
+
+94. In the SVD factorization `A = USV^T`, `Σ` (or `S`) is a diagonal matrix. What does it represent?
+    A. Left singular vectors.
+    B. Right singular vectors.
+    **C. Singular values (strength of each concept).**
+    D. The input data matrix.
+    Source:
+
+95. According to the sources, if the data is dense, it is better to use which dimensionality reduction method?
+    A. SVD.
+    **B. PCA.**
+    C. Kernel PCA.
+    D. t-SNE.
+    Source:
+
+96. PCA can be implemented as SVD on the covariance matrix. SVD and PCA are for linear distributions. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA is for non-linear distributions.
+    D. SVD is not related to PCA.
+    Source:
+
+97. The sources state that PCA and SVD are almost the same, but the difference is that PCA calculates the eigenvalues from the `COV` matrix, whereas SVD tries to find a decomposition of the data itself. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA calculates eigenvalues from the data matrix directly.
+    D. SVD calculates eigenvalues from the covariance matrix.
+    Source:
+
+98. In the context of the Anscombe's quartet data presented visually, Group A shows data points that appear to be:
+    **A. Strongly linearly correlated.**
+    B. Non-linearly correlated.
+    C. Not strongly correlated.
+    D. Grouped in a circle.
+    Source:
+
+99. In the visual analysis of the Anscombe's quartet data, Group B initially shows a linear trend, but after a certain point (e.g., X=10), the trend appears to change. This statement is:
+    A. False.
+    **B. True.**
+    C. Group B always shows a strong linear trend.
+    D. Group B shows no clear trend.
+    Source:
+
+100. According to the explanation of visualizing the Anscombe's quartet data, simply looking at the raw table of numbers is usually less insightful than visualizing the data. This statement is:
+    A. False.
+    **B. True.**
+    C. Raw tables are always easier to understand.
+    D. Visualization makes the data harder to understand.
+    Source:
+
+101. The size of a visual element can be used as a preattentive attribute to draw the viewer's attention to something specific. This is mentioned as a tool available to the visualizer. This statement is:
+    A. False.
+    **B. True.**
+    C. Size is not a preattentive attribute.
+    D. Size should only be used for aesthetic purposes.
+    Source:
+
+102. Quantitative data, which are numbers, can be one of two types: Discrete or Continuous. This classification is presented in the sources. This statement is:
+    A. False.
+    **B. True.**
+    C. Quantitative data is always continuous.
+    D. Quantitative data is always discrete.
+    Source:
+
+103. Discrete quantitative data takes specific, countable values, like the number of courses taken in a semester (e.g., 4, 5, 6). You cannot have 4.5 courses. This statement is:
+    A. False.
+    **B. True.**
+    C. Discrete data can take any value within a range.
+    D. The example given is for continuous data.
+    Source:
+
+104. A Bar chart is given as an example visualization method suitable for discrete quantitative data, such as the number of courses students registered for. This statement is:
+    A. False.
+    **B. True.**
+    C. Bar charts are only for continuous data.
+    D. Histograms are better for discrete data.
+    Source:
+
+105. In the example of visualizing malaria deaths in Africa, the variables discussed were Country, District, and Year. Which of these was described as Categorical (Nominal)?
+    **A. Country.**
+    B. District.
+    C. Year.
+    D. All three.
+    Source:
+
+106. In the malaria death example, the Year variable was described as potentially Ordinal. Why?
+    A. Because you cannot add years together.
+    B. Because it is a numerical variable.
+    **C. Because you can order the years sequentially.**
+    D. Because it is a nominal variable.
+    Source:
+
+107. When visualizing the malaria death data using a format like a heatmap (where color intensity indicates value), the color scale allows the viewer to understand the range of values being represented. This key (or legend) is important for interpretation. This statement is:
+    A. False.
+    **B. True.**
+    C. The color intensity is self-explanatory without a key.
+    D. Heatmaps do not use color scales.
+    Source:
+
+108. Visualizing geographical data on a map allows the viewer to leverage their existing knowledge of locations. This is mentioned as a benefit of using maps. This statement is:
+    A. False.
+    **B. True.**
+    C. Maps make it harder to understand geographical data.
+    D. Maps are only useful for showing trends over time.
+    Source:
+
+109. Interactive visualizations allow users to drill down into the data for more detail. For example, clicking on a region might show data for specific years. This statement is:
+    A. False.
+    **B. True.**
+    C. Interactive visualizations limit data exploration.
+    D. Interactivity is only for aesthetic purposes.
+    Source:
+
+110. A dashboard is presented as a way to combine multiple visualizations (like charts, maps, etc.) on a single screen. This allows a manager to view related information together. This statement is:
+    A. False.
+    **B. True.**
+    C. Dashboards only show one visualization at a time.
+    D. Dashboards are not useful for managers.
+    Source:
+
+111. Using color in a choropleth map (like the unemployment example) can highlight areas of high or low values. The color red is associated with high unemployment rates in one example. This statement is:
+    A. False.
+    **B. True.**
+    C. Color is not effective for choropleth maps.
+    D. Red is always associated with low values.
+    Source:
+
+112. Sequential color is used to show varying degrees of a single measure, like unemployment rate or total sales, using different shades of the same color. This reinforces the concept of sequential color. This statement is:
+    A. False.
+    **B. True.**
+    C. Sequential color uses many different colors.
+    D. Sequential color is only for categorical data.
+    Sources:
+
+113. Highlight color can be used to draw attention to a specific data point, text in a table, a line on a line chart, or a bar on a bar chart. This is done without necessarily implying the highlighted item is bad or alarming. This statement is:
+    A. False.
+    **B. True.**
+    C. Highlight color is only for alarming information.
+    D. Highlight color cannot be used on lines or bars.
+    Sources:
+
+114. Alarm color uses visual cues (like red or orange circles) to indicate the status or recency of information, such as highlighting old or potentially inaccurate data. This statement is:
+    A. False.
+    **B. True.**
+    C. Alarm color is only used for positive information.
+    D. Alarm color is the same as highlight color.
+    Source:
+
+115. Color vision deficiency (CVD) can make it difficult for individuals to distinguish between certain colors, particularly red and green. Visualizations relying solely on these colors to convey different meanings (like good/bad) can be problematic. This statement is:
+    A. False.
+    **B. True.**
+    C. CVD only affects blue and yellow perception.
+    D. Using red and green is always safe for all audiences.
+    Source:
+
+116. The source suggests that using simulations can help visualize what a chart looks like to someone with color vision deficiency. This is a tool to improve accessibility. This statement is:
+    A. False.
+    **B. True.**
+    C. Simulations are not useful for testing accessibility.
+    D. CVD cannot be simulated.
+    Source:
+
+117. In a bar chart displaying favorite colors among children, the height of the bars effectively shows which color is most popular. This relies on the principle that length is good for quantitative comparisons. This statement is:
+    A. False.
+    **B. True.**
+    C. The color of the bar is more important than its length.
+    D. Bar charts are not good for comparing quantities.
+    Sources:
+
+118. A Line chart is most useful for showing trends over what?
+    A. Over groups.
+    B. Over multiple attributes.
+    **C. Over time.**
+    D. Over categories.
+    Sources:
+
+119. Multiple line charts plotted on the same axes are effective for comparing trends across different categories or groups over time. An example given is comparing the population trends of different animal species (bears, dolphins, whales). This statement is:
+    A. False.
+    **B. True.**
+    C. Multiple line charts are difficult to compare.
+    D. Line charts cannot show trends for multiple groups.
+    Source:
+
+120. A Scatter plot is primarily used to visualize the relationship between how many variables for a set of data?
+    A. One variable.
+    **B. Two variables.**
+    C. Three variables.
+    D. More than three variables.
+    Source:
+
+121. In a scatter plot, each data point represents a single observation or entity. The position of the point indicates the values of the two variables for that observation. This statement is:
+    A. False.
+    **B. True.**
+    C. Scatter plots aggregate data points.
+    D. Points in a scatter plot do not represent individual observations.
+    Sources:
+
+122. A scatter plot visualizing apartment price versus size can help identify trends or lack thereof between these two variables. It can show if larger apartments tend to have higher prices. This statement is:
+    A. False.
+    **B. True.**
+    C. Scatter plots cannot show trends.
+    D. This example is better suited for a bar chart.
+    Sources:
+
+123. The source mentions that if you have multiple categories in a scatter plot, you can differentiate them using different colors or symbols as preattentive attributes. This makes it easier to distinguish which points belong to which category. This statement is:
+    A. False.
+    **B. True.**
+    C. All categories must use the same color and symbol.
+    D. Preattentive attributes are not useful in scatter plots.
+    Sources:
+
+124. A Dot plot displays the distribution of a single variable. Each point represents an individual observation, and points are stacked to show frequency at specific values. This statement is:
+    A. False.
+    **B. True.**
+    C. Dot plots show the relationship between two variables.
+    D. Dot plots use bins like histograms.
+    Source:
+
+125. A dot plot is given as suitable for visualizing the number of books read by several students, where each point is a student. This shows the frequency of students reading a certain number of books. This statement is:
+    A. False.
+    **B. True.**
+    C. This example is only suitable for a scatter plot.
+    D. A dot plot cannot show frequencies.
+    Source:
+
+126. Compared to a bar chart, a dot plot might be preferred when visualizing the distribution of a single variable with a relatively small number of data points or unique values. It gives a sense of the individual points. This statement is:
+    A. False.
+    **B. True.**
+    C. Bar charts are always better than dot plots.
+    D. Dot plots are best for thousands of data points.
+    Source:
+
+127. A scatter plot can be used to compare two different measures for the same set of entities, such as the number of books read and the number of pages read by each student. This shows the relationship between these two measures. This statement is:
+    A. False.
+    **B. True.**
+    C. Scatter plots can only compare unrelated measures.
+    D. This requires a dot plot, not a scatter plot.
+    Source:
+
+128. A Choropleth map uses variations in color intensity to represent the value of a variable across geographical regions, such as states or countries. This allows for quick visual comparison of values across locations. This statement is:
+    A. False.
+    **B. True.**
+    C. Choropleth maps use different symbols, not colors.
+    D. Choropleth maps show individual data points, not aggregated values for regions.
+    Sources:
+
+129. A Bubble chart is presented again as a way to visualize data on a map, where the size of the bubble represents a quantitative value associated with a geographical location. An example given is showing the intensity or count of hurricanes. This statement is:
+    A. False.
+    **B. True.**
+    C. Bubble size on a map is only for categorical data.
+    D. This requires a choropleth map, not a bubble chart.
+    Source:
+
+130. A Bullet graph is a chart type used to compare an actual value against a target value and show performance relative to defined performance bands (like Bad, Satisfactory, Good). This statement is:
+    A. False.
+    **B. True.**
+    C. Bullet graphs only show the target value.
+    D. Bullet graphs are used for comparing trends over time.
+    Source:
+
+131. In a Bullet graph, the actual value is typically represented by a bar or line, the target value by a line, and the performance bands by colored background segments. This statement is:
+    A. False.
+    **B. True.**
+    C. Performance bands are represented by separate lines.
+    D. The target value is shown as a bar.
+    Sources:
+
+132. A key benefit of the bullet graph mentioned is that it allows a quick visual assessment of whether the actual value has met or exceeded the target and how performance falls within defined ranges. This statement is:
+    A. False.
+    **B. True.**
+    C. Bullet graphs are complex and hard to interpret quickly.
+    D. Bullet graphs only show the actual value.
+    Source:
+
+133. Stacked bullet graphs can be used to compare the performance (actual vs target) of multiple items or categories simultaneously within a single visualization. This allows for easy comparison across items. This statement is:
+    A. False.
+    **B. True.**
+    C. Each item requires a separate bullet graph.
+    D. Stacked bullet graphs do not show targets.
+    Source:
+
+134. In one example of a stacked bullet graph visualizing sales performance by state, states that met or exceeded the target were highlighted using a specific color (blue). This is another application of highlighting. This statement is:
+    A. False.
+    **B. True.**
+    C. States exceeding the target were colored red.
+    D. Highlighting is not used in bullet graphs.
+    Sources:
+
+135. A Pie chart is described as displaying parts of a whole in percentages. It shows the relative proportion of each category. This statement is:
+    A. False.
+    **B. True.**
+    C. Pie charts show absolute values, not percentages.
+    D. Pie charts compare multiple items or groups.
+    Source:
+
+136. A Stacked Bar chart is used to compare many different items and show the composition of each item being compared. It displays the visual aggregate of all categories in a group. This statement is:
+    A. False.
+    **B. True.**
+    C. Stacked bar charts only show the total value for each item.
+    D. Stacked bar charts are not used for comparison.
+    Source:
+
+137. The sources discuss that it can be difficult to accurately determine the percentage represented by each slice in a standard Pie chart, especially when slices are similar in size or oriented at different angles. This is highlighted as a potential drawback. This statement is:
+    A. False.
+    **B. True.**
+    C. Pie charts are always easy to read precisely.
+    D. The angle of a slice does not affect perception.
+    Source:
+
+138. A Donut chart is mentioned as an alternative to a Pie chart. What feature of the Donut chart is highlighted as potentially improving readability compared to a Pie chart?
+    A. It uses more colors.
+    **B. It aligns the segments, making length comparison easier.**
+    C. It shows absolute values instead of percentages.
+    D. It can display more dimensions.
+    Source:
+
+139. An Area chart is described as useful for showing trends over time for multiple series while also showing the composition of the whole. It combines aspects of a line chart and a stacked bar chart. This statement is:
+    A. False.
+    **B. True.**
+    C. Area charts are only for single series data.
+    D. Area charts do not show composition.
+    Source:
+
+140. A Radar chart is used for comparing multiple items or groups across various quantitative attributes. It can also be used for quality data comparisons. This statement is:
+    A. False.
+    **B. True.**
+    C. Radar charts are only for showing trends over time.
+    D. Radar charts are only for qualitative data.
+    Sources:
+
+141. The source emphasizes that the design of a chart is very important. Knowing how to use tools is necessary, but knowing how to design the information visually makes a difference. This statement is:
+    A. False.
+    **B. True.**
+    C. Design is less important than the data itself.
+    D. Anyone can design a chart equally well.
+    Sources:
+
+142. In the context of data visualization, the "quality" of the visualization often refers to how effectively and quickly it conveys information to the intended audience. Key goals are to get information across as much as possible and understand it in the least amount of time. This statement is:
+    A. False.
+    **B. True.**
+    C. Quality is only about aesthetic appeal.
+    D. Speed of understanding is not a goal.
+    Source:
+
+143. What are mentioned as important data properties besides the mean?
+    A. Mode, Median, Range, Outliers.
+    **B. Variance, Covariance, Correlation, Distribution.**
+    C. Standard Deviation, IQR, Skewness, Kurtosis.
+    D. Min, Max, Q1, Q3.
+    Source:
+
+144. Mean alone is not sufficient to understand a dataset's characteristics. Why is variance important?
+    A. It shows the average value.
+    **B. It shows the spread or variation from the mean.**
+    C. It shows the relationship between variables.
+    D. It shows the distribution shape.
+    Sources:
+
+145. Covariance and Correlation are important data properties because they show the relationship between different variables. They indicate whether variables tend to increase or decrease together. This statement is:
+    A. False.
+    **B. True.**
+    C. Covariance and Correlation only describe single variables.
+    D. They show the center of the data, not relationships.
+    Source:
+
+146. Visualizing data with more than three dimensions (like 4 or more features) can be challenging or impossible directly with standard charts like 2D/3D scatter plots. This is why dimensionality reduction is needed. This statement is:
+    A. False.
+    **B. True.**
+    C. Any number of dimensions can be plotted in a 3D scatter plot.
+    D. Visualizing 4D data is as easy as 2D data.
+    Sources:
+
+147. PCA can be used to reduce the number of features (dimensions) in a dataset to make it suitable for visualization. For example, reducing 4 features to 2 or 3 allows plotting in 2D or 3D scatter plots. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA increases the number of features for visualization.
+    D. PCA is not used for visualization purposes.
+    Sources:
+
+148. The Iris dataset is used as an example with 3 classes (types of flowers) and 4 features (measurements like sepal/petal length/width). It has 150 samples, with 50 samples per class. This statement is:
+    A. False.
+    **B. True.**
+    C. The Iris dataset has 4 classes and 3 features.
+    D. The Iris dataset is an example of sparse data.
+    Sources:
+
+149. The goal of visualizing the Iris dataset features after PCA is to see if the chosen features are suitable for distinguishing (classifying) the different classes. A good visualization would show clear separation between the classes. This statement is:
+    A. False.
+    **B. True.**
+    C. Visualization is not used to assess feature suitability for classification.
+    D. Good features would show significant overlap between classes.
+    Sources:
+
+150. In the 2D PCA visualization of the Iris dataset, the classes appeared well-separated. One class (blue) was completely separated from the others, while the other two had some minor overlap. This statement is:
+    A. False.
+    **B. True.**
+    C. All classes were completely overlapping.
+    D. None of the classes were separated.
+    Sources:
+
+151. The sources introduce the fundamental equation for eigenvalues and eigenvectors: `A * x = lambda * x`. Here, `A` is a matrix, `x` is the eigenvector, and `lambda` is the eigenvalue. This statement is:
+    A. False.
+    **B. True.**
+    C. `A` is a scalar, not a matrix.
+    D. `Lambda` is a vector, not a scalar.
+    Source:
+
+152. To find the eigenvalues (`lambda`) of a matrix `A`, you need to solve the characteristic equation: `determinant(A - lambda * I) = 0`. Here, `I` is the identity matrix. This statement is:
+    A. False.
+    **B. True.**
+    C. You solve for `lambda` using `A + lambda * I = 0`.
+    D. Determinants are not used to find eigenvalues.
+    Sources:
+
+153. Once eigenvalues (`lambda`) are found, to find the corresponding eigenvectors (`x`), you need to solve the system of linear equations: `(A - lambda * I) * x = 0`. This statement is:
+    A. False.
+    **B. True.**
+    C. You solve `(A + lambda * I) * x = 0`.
+    D. Eigenvectors are found independently of eigenvalues.
+    Source:
+
+154. The source demonstrates simplifying the matrix `(A - lambda * I)` using row operations to get it into a form that makes solving for `x` easier, like the 'E Q Z' form (الاي كيو زيرو). This form helps deduce the eigenvector components. This statement is:
+    A. False.
+    **B. True.**
+    C. Row operations are not used in finding eigenvectors.
+    D. The E Q Z form makes solving for `x` impossible.
+    Source:
+
+155. The sources explain that if, after simplifying the matrix `(A - lambda * I)`, you get a row of zeros, it indicates that the equations are dependent, and you can assign a free variable (like `k`) to one of the eigenvector components. This is typical when solving for eigenvectors. This statement is:
+    A. False.
+    **B. True.**
+    C. A row of zeros means there are no solutions for `x`.
+    D. You must solve for every component directly without free variables.
+    Sources:
+
+156. The sources demonstrate solving for eigenvector components (`x1`, `x2`, `x3`) by expressing them in terms of a free variable (`k`) after simplifying the matrix. This results in an eigenvector that is a multiple of a base vector. This statement is:
+    A. False.
+    **B. True.**
+    C. All eigenvector components must be fixed numbers.
+    D. The free variable method only works sometimes.
+    Sources:
+
+157. If, after simplifying the matrix, you get a row like `[0 0 Z9]` where `Z9` is non-zero, and this corresponds to the third component (`x3`), what does this imply about `x3` in the eigenvector solution?
+    A. `x3` can be any value.
+    **B. x3 must be 0.**
+    C. `x3` must be 1.
+    D. This implies nothing about `x3`.
+    Source:
+
+158. The sources note that the covariance matrix is symmetric. This means that the covariance between variable 1 and variable 2 is the same as the covariance between variable 2 and variable 1. This statement is:
+    A. False.
+    **B. True.**
+    C. The covariance matrix is always diagonal.
+    D. Symmetry does not apply to covariance matrices.
+    Source:
+
+159. If the covariance matrix is diagonal (meaning all off-diagonal elements are zero), it indicates that the features (variables) are what?
+    A. Highly correlated.
+    B. Highly co-dependent.
+    **C. Not correlated or independent.**
+    D. All zeros.
+    Source:
+
+160. In Machine Learning and PCA, having features that are not correlated (covariance is zero) is generally considered a good property. Why?
+    A. It adds redundant information.
+    **B. It reduces redundant information, simplifying calculations and understanding.**
+    C. It increases the number of necessary dimensions.
+    D. It leads to overfitting.
+    Sources:
+
+161. PCA works by finding new axes (defined by eigenvectors) that capture the most variance in the data. Rotating the axes can reveal uncorrelated views of the data. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA only works on the original axes.
+    D. PCA aims to minimize variance.
+    Sources:
+
+162. A key step in PCA calculations shown is subtracting the mean from each data point (standardization or centering). This ensures the mean of the centered data is zero. This statement is:
+    A. False.
+    **B. True.**
+    C. Subtracting the mean is not a step in PCA.
+    D. Centering changes the variance of the data.
+    Sources:
+
+163. The covariance matrix can be calculated from the centered data matrix (`X'`) as `(X')^T * X'`. This is a shortcut mentioned in the sources. This statement is:
+    A. False.
+    **B. True.**
+    C. The covariance matrix is calculated as `X' * (X')^T`.
+    D. This shortcut is only for specific datasets.
+    Sources:
+
+164. After calculating the eigenvalues in PCA, you order them from largest to smallest. The eigenvectors corresponding to the largest eigenvalues capture the most variance and are the most important components. This statement is:
+    A. False.
+    **B. True.**
+    C. Eigenvalues are ordered from smallest to largest.
+    D. The order of eigenvalues does not matter.
+    Source:
+
+165. Normalizing the eigenvectors means scaling them so they have a length (magnitude) of 1. This is often done in PCA implementation. This statement is:
+    A. False.
+    **B. True.**
+    C. Eigenvectors are never normalized.
+    D. Normalization changes the direction of the eigenvector.
+    Sources:
+
+166. Truncation in PCA refers to the process of removing components (eigenvectors and their corresponding eigenvalues) that contribute less to the total variance. This is how dimensionality is reduced. This statement is:
+    A. False.
+    **B. True.**
+    C. Truncation means adding more components.
+    D. Truncation is not a part of dimensionality reduction.
+    Source:
+
+167. The concept of 'Explained Variance' in PCA refers to how much of the original data's variance is preserved after reducing the dimensions. Choosing components based on explained variance ensures minimal information loss. This statement is:
+    A. False.
+    **B. True.**
+    C. Explained variance measures the mean preserved.
+    D. Higher explained variance means more information is lost.
+    Sources:
+
+168. If PCA produces an eigenvalue of zero, it implies that the corresponding eigenvector captures zero variance. This component (and dimension) could be considered redundant and removed without losing any variance. This statement is:
+    A. False.
+    **B. True.**
+    C. A zero eigenvalue means the component captures maximum variance.
+    D. Components with zero eigenvalues must always be kept.
+    Source:
+
+169. When visualizing multi-class data without pre-existing labels for each data point, you might use algorithms like K-Means clustering to automatically find groups (clusters) in the data. These clusters can then be treated as classes. This statement is:
+    A. False.
+    **B. True.**
+    C. K-Means requires labels as input.
+    D. Clustering algorithms are not useful for unlabelled data.
+    Source:
+
+170. K-Means clustering is described as an algorithm that takes data and the desired number of clusters (k) as input. It outputs the clusters (or predicted labels) and the cluster centers (centroids). This statement is:
+    A. False.
+    **B. True.**
+    C. K-Means outputs only the cluster labels.
+    D. K-Means requires cluster centers as input.
+    Sources:
+
+171. One of the steps in the K-Means algorithm is assigning each data point to the cluster whose center is closest to it. The squared Euclidean distance is mentioned as a way to measure closeness. This statement is:
+    A. False.
+    **B. True.**
+    C. K-Means assigns points randomly.
+    D. K-Means only uses Manhattan distance.
+    Sources:
+
+172. After assigning points to clusters in K-Means, the algorithm updates the cluster centers by calculating the average (mean) of all points assigned to each cluster. This is an iterative process that repeats until the centers stabilize or points stop changing clusters. This statement is:
+    A. False.
+    **B. True.**
+    C. Cluster centers are updated randomly.
+    D. The process stops after the first iteration.
+    Sources:
+
+173. Visualizing multi-class data can involve coloring each data point according to its class (if labels are available) or its predicted cluster (if using clustering). This is typically done using a scatter plot. This statement is:
+    A. False.
+    **B. True.**
+    C. Data points are never colored based on class.
+    D. Only cluster centers are visualized.
+    Sources:
+
+174. For high-dimensional multi-class data (like the digits dataset with 64 features), dimensionality reduction using PCA is necessary before visualizing the data points on a 2D or 3D scatter plot. This statement is:
+    A. False.
+    **B. True.**
+    C. High-dimensional data can be visualized directly in 2D.
+    D. Dimensionality reduction is not needed for multi-class data.
+    Sources:
+
+175. One visualization approach for multi-class data discussed is drawing bounding polygons (like convex hulls) around each cluster or class. This visually defines the area occupied by each group. This statement is:
+    A. False.
+    **B. True.**
+    C. Bounding polygons show the individual data points.
+    D. Polygons are only for single-class data.
+    Sources:
+
+176. Another visualization approach is background segmentation, where the entire visualization area (background) is colored based on the predicted class for every point in that area. The actual data points can then be plotted on top. This statement is:
+    A. False.
+    **B. True.**
+    C. Background segmentation is done before clustering.
+    D. Data points are not shown when using background segmentation.
+    Sources:
+
+177. To perform background segmentation, a grid of points is created across the visualization space. For each grid point, a classification or clustering model is used to predict which class it belongs to. This prediction determines the color for that point in the background. This statement is:
+    A. False.
+    **B. True.**
+    C. Background segmentation colors areas randomly.
+    D. Only actual data points are used to color the background.
+    Source:
+
+178. The smoothness of the background segmentation visualization depends on the density of the grid points. A denser grid (smaller step size) results in a smoother visual separation between classes. This statement is:
+    A. False.
+    **B. True.**
+    C. Grid density does not affect smoothness.
+    D. A larger step size gives a smoother result.
+    Sources:
+
+179. The sources compare applying K-Means clustering directly to the raw, high-dimensional data versus applying K-Means to the PCA-reduced data. What trade-off is discussed between these two approaches?
+    A. Accuracy vs. Complexity.
+    **B. Accuracy vs. Speed.**
+    C. Speed vs. Simplicity.
+    D. Complexity vs. Speed.
+    Source:
+
+180. Applying K-Means to PCA-reduced data can be significantly faster, especially for very high-dimensional data, but might result in slightly lower clustering accuracy compared to using the raw data. This is the trade-off mentioned. This statement is:
+    A. False.
+    **B. True.**
+    C. Using PCA-reduced data is always more accurate.
+    D. Using raw data is always faster.
+    Source:
+
+181. The sources show that when K-Means was applied to the PCA-reduced digit data (2 dimensions), the resulting clusters and background segmentation were visually less distinct and had more mixing of classes compared to when K-Means was applied to the original 64-dimensional data. This visually demonstrates the accuracy trade-off. This statement is:
+    A. False.
+    **B. True.**
+    C. The 2D K-Means result was perfect.
+    D. The raw data K-Means result was less accurate.
+    Sources:
+
+182. In summary, to visualize multi-class data: if data has labels and is 2D/3D, use a colored scatter plot. If data has labels but is high-dimensional, use PCA to reduce dimensions to 2D/3D, then use a colored scatter plot. This statement is:
+    A. False.
+    **B. True.**
+    C. Labels are not needed for these approaches.
+    D. Scatter plots are not suitable for multi-class data.
+    Source:
+
+183. If data does NOT have labels, clustering algorithms like K-Means can be used to find groups. You would then visualize the data points colored by their predicted cluster label. This statement is:
+    A. False.
+    **B. True.**
+    C. Clustering is only for labeled data.
+    D. You cannot visualize data without original labels.
+    Sources:
+
+184. Besides coloring data points or drawing bounding polygons, background segmentation is presented as a third main approach for visualizing multi-class data. It involves coloring the entire visualization space based on predicted class membership. This statement is:
+    A. False.
+    **B. True.**
+    C. Background segmentation only works with bounding polygons.
+    D. There are only two main approaches mentioned.
+    Sources:
+
+185. When visualizing multi-class data after using PCA for dimensionality reduction, you can visualize the cluster centers (centroids) obtained from K-Means. If K-Means was applied to the reduced 2D data, the centers are already 2D and can be plotted. This statement is:
+    A. False.
+    **B. True.**
+    C. Cluster centers are never visualized.
+    D. Centers from 2D data are always 64D.
+    Sources:
+
+186. If K-Means was applied to the original high-dimensional data (e.g., 64D), the resulting cluster centers will also be high-dimensional. To visualize these centers on a 2D plot, you must apply PCA to the centers themselves to reduce their dimensions. This statement is:
+    A. False.
+    **B. True.**
+    C. Centers from high-dimensional data are always 2D.
+    D. PCA cannot be applied to cluster centers.
+    Source:
+
+187. The sources mention the `meshgrid` function in Python as a way to create a grid of points (like the x and y coordinates for background segmentation) from input arrays. This function generates coordinate matrices. This statement is:
+    A. False.
+    **B. True.**
+    C. `meshgrid` is used for clustering, not grid creation.
+    D. `meshgrid` creates random points.
+    Source:
+
+188. The sources describe taking the coordinate matrices generated by `meshgrid` and 'flattening' them into single vectors. These flattened vectors (one for X coordinates, one for Y) are then combined (stacked) to create a matrix where each row is a point (`x`, `y`) in the grid. This matrix represents all points in the background space. This statement is:
+    A. False.
+    **B. True.**
+    C. `meshgrid` output is used directly without flattening.
+    D. The stacked matrix represents only the data points, not the background.
+    Sources:
+
+189. This matrix of background grid points is then fed into a classifier or the K-Means prediction function to get a predicted class label for each point. These predicted labels are then used to assign a color to each point on the visualization background. This statement is:
+    A. False.
+    **B. True.**
+    C. The background points are colored randomly.
+    D. The prediction function only outputs the distance to centers.
+    Sources:
+
+190. A Scatter plot is a visualization where individual data points are plotted using Cartesian coordinates. It's suitable for visualizing the relationship between two numerical variables or the distribution of multi-class data points after dimensionality reduction. This statement is:
+    A. False.
+    **B. True.**
+    C. Scatter plots cannot be used for multi-class data.
+    D. Scatter plots are only for categorical data.
+    Sources:
+
+191. When comparing different methods for dimensionality reduction or visualization, such as PCA followed by K-Means vs. K-Means on raw data, there can be trade-offs involving computational cost (speed) and the quality or accuracy of the result (e.g., class separation). This requires considering the specific goal and constraints. This statement is:
+    A. False.
+    **B. True.**
+    C. All methods have the same speed and accuracy.
+    D. The goal is always perfect accuracy regardless of speed.
+    Sources:
+
+192. The sources mention Python libraries like `Matplotlib` for plotting. Functions like `fill` are used to draw polygons. This statement is:
+    A. False.
+    **B. True.**
+    C. Only proprietary software can draw polygons.
+    D. `Matplotlib` is only for data analysis, not plotting.
+    Sources:
+
+193. Creating animations of the K-Means clustering process can visually demonstrate how the cluster centers move and how data points are reassigned during iterations. This helps understand the algorithm's behavior. This statement is:
+    A. False.
+    **B. True.**
+    C. K-Means is a static algorithm and cannot be animated.
+    D. Animation makes the process harder to understand.
+    Sources:
+
+194. When calculating the minimum and maximum values for whiskers in a box plot, the formula involves the IQR and a multiplier (e.g., 1.5). Values outside of `(Q1 - 1.5IQR)` and `(Q3 + 1.5IQR)` are potential outliers. This statement is:
+    A. False.
+    **B. True.**
+    C. Outliers are always within the whiskers.
+    D. The multiplier (1.5) cannot be changed.
+    Sources:
+
+195. An example of calculating the IQR and potential outliers is provided for a sample dataset of weights. The steps include ordering the data, finding the median (Q2), Q1, Q3, IQR, and then calculating the minimum/maximum whisker bounds. This statement is:
+    A. False.
+    **B. True.**
+    C. Ordering the data is not necessary.
+    D. Outliers are never excluded from the minimum/maximum.
+    Sources:
+
+196. The covariance matrix represents the relationships (covariance) between every pair of random variables in the dataset. Its size is `n x n`, where `n` is the number of dimensions. This statement is:
+    A. False.
+    **B. True.**
+    C. The covariance matrix only shows variance, not covariance.
+    D. The covariance matrix is always a `2x2` matrix.
+    Sources:
+
+197. In the example calculation of eigenvalues, the process involves setting the determinant of `(A - lambda * I)` to zero and solving the resulting polynomial equation for `lambda`. The roots of this polynomial are the eigenvalues. This statement is:
+    A. False.
+    **B. True.**
+    C. Eigenvalues are found by solving `(A + lambda * I) = 0`.
+    D. The determinant is set to 1, not 0.
+    Sources:
+
+198. For a `2x2` matrix, the characteristic equation `determinant(A - lambda * I) = 0` results in a quadratic equation for `lambda`. For a `3x3` matrix, it results in a cubic equation. The number of eigenvalues equals the number of dimensions (`n`). This statement is:
+    A. False.
+    **B. True.**
+    C. The number of eigenvalues is always 2.
+    D. The equation for `lambda` is always linear.
+    Sources:
+
+199. When calculating eigenvectors for a given eigenvalue (`lambda`), you substitute `lambda` into `(A - lambda * I)` and solve the system of linear equations: `(A - lambda * I) * x = 0`. This involves finding a non-zero vector `x` that satisfies the equation. This statement is:
+    A. False.
+    **B. True.**
+    C. The equation is `(A + lambda * I) * x = 0`.
+    D. The solution vector `x` must be the zero vector.
+    Sources:
+
+200. The sources demonstrate using row operations to simplify the matrix `(A - lambda * I)` to make it easier to solve for the eigenvector components. Techniques include dividing rows by a scalar, swapping rows, and adding/subtracting multiples of rows. This statement is:
+    A. False.
+    **B. True.**
+    C. Only dividing rows is a valid operation.
+    D. Row operations are not allowed when finding eigenvectors.
+    Sources:
+
+201. The 'E Q Z' form (الاي كيو زيرو) mentioned for simplifying the matrix `(A - lambda * I)` has a specific structure: a block identity matrix (`I`) in the top left, a block zero matrix (`0`) below it, and a block matrix (`Q`) to the right of `I`. The eigenvector components can be easily read from this form. This statement is:
+    A. False.
+    **B. True.**
+    C. The structure is `I`, `0`, and `Q` stacked vertically.
+    D. The form does not help in reading the eigenvector.
+    Source:
+
+202. In the context of PCA and SVD, it's noted that while libraries exist to compute eigenvalues, eigenvectors, PCA, etc., understanding the underlying mathematical concepts is crucial for data scientists to select appropriate methods, interpret results, and potentially develop new techniques. This statement is:
+    A. False.
+    **B. True.**
+    C. Using libraries is sufficient; understanding the math is not needed.
+    D. Only theoretical understanding is required, not practical application.
+    Source:
+
+203. PCA preserves variance. The first principal component (PC1) captures the most variance, the second (PC2) captures the second most (orthogonal to PC1), and so on. This statement is:
+    A. False.
+    **B. True.**
+    C. PC1 captures the least variance.
+    D. Principal components are not ordered by variance.
+    Sources:
+
+204. For the Anscombe's quartet (dataset 4), visualizing the data points individually using a scatter plot was far more informative about the relationships and trends in the data than simply looking at summary statistics or the raw table. This demonstrates the power of visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. Summary statistics provide all the necessary information.
+    D. The raw table is the best way to understand this data.
+    Sources:
+
+205. The sources mention that while PCA is good for linear relationships, Kernel PCA is used for non-linear distributions. This is achieved by implicitly mapping data to a higher dimension where a linear separation might exist. This statement is:
+    A. False.
+    **B. True.**
+    C. Kernel PCA is only for linear data.
+    D. Kernel PCA reduces dimensions before applying a kernel.
+    Sources:
+
+206. SVD is particularly useful for matrix factorization in applications like recommender systems. This often involves sparse matrices (many zeros) representing user ratings or item interactions. This statement is:
+    A. False.
+    **B. True.**
+    C. SVD is not used in recommender systems.
+    D. Recommender system data is always dense.
+    Sources:
+
+207. The definition of a Categorical variable (Nominal data) is provided as a variable that can take on one of a limited, fixed number of possible values, and does not imply any ordering. An example might be Country or color. This statement is:
+    A. False.
+    **B. True.**
+    C. Categorical variables have a natural order.
+    D. Categorical variables take continuous values.
+    Sources:
+
+208. Ordinal data is similar to categorical data but has a clear ordering or rank among the possible values. An example given was Year. This statement is:
+    A. False.
+    **B. True.**
+    C. Ordinal data has no implied order.
+    D. Ordinal data is always numerical.
+    Sources:
+
+209. Quantitative (Numerical) data are variables where the values have a numerical meaning and can be measured on a scale. They can be Discrete or Continuous. This statement is:
+    A. False.
+    **B. True.**
+    C. Quantitative data only includes categorical values.
+    D. Quantitative data cannot be measured on a scale.
+    Sources:
+
+210. Discrete data is countable and takes specific, often integer, values. Continuous data can take any value within a given range, with infinite possibilities between values. This statement is:
+    A. False.
+    **B. True.**
+    C. Discrete data is always continuous.
+    D. Continuous data can only take whole numbers.
+    Sources:
+
+211. The sources illustrate the concept of variance by comparing two sets of numbers that have the same mean but different spreads. This emphasizes that mean alone does not fully describe a distribution. This statement is:
+    A. False.
+    **B. True.**
+    C. Sets with the same mean always have the same variance.
+    D. Variance is not important for understanding distribution.
+    Sources:
+
+212. The explained variance ratio associated with each principal component (eigenvalue) indicates the proportion of the total dataset's variance captured by that component. Summing the explained variances for the chosen components gives the total variance preserved. This statement is:
+    A. False.
+    **B. True.**
+    C. Explained variance ratio indicates the mean captured.
+    D. Summing explained variances does not give total variance preserved.
+    Sources:
+
+213. When applying PCA, the goal is often to select a subset of the principal components (k) that capture a high percentage of the total variance (e.g., 95-99%) while significantly reducing the number of dimensions. This allows for dimensionality reduction with minimal loss of important information. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA always aims for exactly 50% explained variance.
+    D. The number of components is always chosen randomly.
+    Sources:
+
+214. The Reconstruction process in dimensionality reduction allows you to reverse the transformation and approximate the original data from the lower-dimensional representation. This capability is mentioned in the context of Kernel PCA. This statement is:
+    A. False.
+    **B. True.**
+    C. Reconstruction is not possible after dimensionality reduction.
+    D. Reconstruction perfectly recovers the original data.
+    Source:
+
+215. The sources briefly list Non-Negative Matrix Factorization (NMF) as a decomposition algorithm. This is listed alongside PCA, Kernel PCA, and SVD. This statement is:
+    A. False.
+    **B. True.**
+    C. NMF is a manifold learning algorithm.
+    D. NMF is a discriminant analysis algorithm.
+    Source:
+
+216. The sources briefly list Spectral Embedding and Locally Linear Embedding (LLE) as manifold learning algorithms. These are listed alongside `t-SNE`. This statement is:
+    A. False.
+    **B. True.**
+    C. Spectral Embedding is a decomposition algorithm.
+    D. LLE is a discriminant analysis algorithm.
+    Source:
+
+217. The sources briefly list Linear Discriminant Analysis (LDA) and Quadratic Discriminant Analysis (QDA) as discriminant analysis algorithms. This statement is:
+    A. False.
+    **B. True.**
+    C. LDA is a decomposition algorithm.
+    D. QDA is a manifold learning algorithm.
+    Source:
+
+218. Decomposition algorithms (like PCA, SVD, NMF) and Manifold learning algorithms (like `t-SNE`, Spectral Embedding, LLE) are generally categorized as unsupervised methods for dimensionality reduction. Discriminant Analysis methods (like LDA, QDA) are supervised. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA is a supervised method.
+    D. LDA is an unsupervised method.
+    Source:
+
+219. The Iris dataset is presented as an example of a dataset suitable for classification and visualization using PCA because its classes are separable in the feature space. The clear visual separation in the PCA plot suggests that the features are informative for distinguishing between flower types. This statement is:
+    A. False.
+    **B. True.**
+    C. The Iris dataset features are not useful for classification.
+    D. PCA makes the Iris classes completely overlap.
+    Sources:
+
+220. The variance spread on the first axis (corresponding to the largest eigenvalue) in PCA represents the direction with the highest variance in the data. This is visualized in one example with a value and a percentage of total variance. This statement is:
+    A. False.
+    **B. True.**
+    C. The first axis always has the lowest variance.
+    D. Variance spread is unrelated to eigenvalues.
+    Sources:
+
+221. When applying K-Means clustering to unlabelled multi-class data, the algorithm assigns a predicted cluster label to each data point. This is done iteratively by finding initial centers, assigning points, and updating centers until convergence. This statement is:
+    A. False.
+    **B. True.**
+    C. K-Means requires pre-assigned labels.
+    D. K-Means only runs for one iteration.
+    Sources:
+
+222. The K-Means algorithm starts with some initial cluster centers. These can be chosen randomly or using specific methods. The algorithm refines these centers over iterations. This statement is:
+    A. False.
+    **B. True.**
+    C. Initial centers are not part of K-Means.
+    D. Cluster centers are fixed from the beginning.
+    Sources:
+
+223. K-Means determines the cluster assignment for each point based on its distance to the current cluster centers. A point is assigned to the cluster whose center is closest. This statement is:
+    A. False.
+    **B. True.**
+    C. Points are assigned based on color, not distance.
+    D. Points are assigned to the furthest center.
+    Sources:
+
+224. The source describes calculating distances between points and cluster centers by summing the squared differences between their coordinates. The square root is not necessary for simply comparing which distance is smallest. This statement is:
+    A. False.
+    **B. True.**
+    C. The square root is always needed to compare distances.
+    D. Distance calculation is not part of K-Means.
+    Sources:
+
+225. After points are assigned to clusters in K-Means, the new cluster centers are computed as the mean of all points assigned to that cluster. This step updates the centers based on the current assignments. This statement is:
+    A. False.
+    **B. True.**
+    C. New centers are chosen randomly.
+    D. Centers are not updated in K-Means.
+    Source:
+
+226. The K-Means algorithm repeats the steps of assigning points to the nearest center and updating centers until convergence. Convergence occurs when the cluster assignments no longer change significantly or the centers stabilize. This statement is:
+    A. False.
+    **B. True.**
+    C. K-Means runs for a fixed number of iterations, regardless of convergence.
+    D. The process stops only when all points are perfectly separated.
+    Sources:
+
+227. K-Means is typically used for data without initial labels to automatically group similar data points into clusters. These resulting clusters can then be treated as categories or classes for visualization or further analysis. This statement is:
+    A. False.
+    **B. True.**
+    C. K-Means is a supervised classification algorithm.
+    D. K-Means cannot assign labels to data points.
+    Sources:
+
+228. The digit dataset is used as an example of multi-class data with a relatively high number of classes (10 digits, 0-9) and high-dimensional features (64 features per digit image). This makes it suitable for demonstrating dimensionality reduction and clustering techniques. This statement is:
+    A. False.
+    **B. True.**
+    C. The digit dataset has only 2 classes.
+    D. The digit dataset has low-dimensional features.
+    Sources:
+
+229. The sources show how to programmatically determine the number of classes in a labeled dataset by finding the unique values among the labels and counting them. This is useful when the number of classes isn't immediately known. This statement is:
+    A. False.
+    **B. True.**
+    C. The number of classes must always be known manually beforehand.
+    D. Unique values of features, not labels, determine class count.
+    Source:
+
+230. The three main visualization approaches for multi-class data summarized are: coloring individual data points (e.g., scatter plot), drawing bounding shapes/polygons around clusters, and background segmentation. This statement is:
+    A. False.
+    **B. True.**
+    C. Only two approaches were discussed.
+    D. Tables are a primary approach for multi-class visualization.
+    Sources:
+
+231. When dealing with high-dimensional data, the general workflow for visualization involves applying dimensionality reduction first (e.g., PCA) to get 2D or 3D data, and then applying a visualization method suitable for 2D/3D. This statement is:
+    A. False.
+    **B. True.**
+    C. Visualization should always happen before dimensionality reduction.
+    D. Dimensionality reduction always results in 1D data.
+    Source:
+
+232. The benefit of background segmentation for multi-class visualization is that it clearly shows the decision boundaries learned by a classification or clustering model across the entire visualization space. This helps understand how the model separates the classes. This statement is:
+    A. False.
+    **B. True.**
+    C. Background segmentation hides the decision boundaries.
+    D. It only shows the individual data points.
+    Sources:
+
+233. The accuracy of the decision boundaries shown by background segmentation depends on the model used (classification or clustering) and the density of the background grid. A more accurate model and denser grid yield a more precise representation of the boundaries. This statement is:
+    A. False.
+    **B. True.**
+    C. Grid density does not affect the accuracy of the boundaries.
+    D. The model accuracy is irrelevant for background segmentation.
+    Sources:
+
+234. The sources demonstrate using Python code snippets involving `NumPy` for mathematical operations (like mean calculation for standardization or matrix operations). This shows the practical implementation aspects. This statement is:
+    A. False.
+    **B. True.**
+    C. Only theoretical concepts were presented.
+    D. No specific libraries were mentioned for implementation.
+    Sources:
+
+235. The sources discuss how to interpret the K-Means output, which includes the predicted labels for each data point and the coordinates of the final cluster centers. These outputs are used for visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. K-Means output is not used for visualization.
+    D. Only the labels are output by K-Means.
+    Sources:
+
+236. In the context of K-Means clustering, the term "centroid" refers to the center of a cluster, calculated as the mean of all data points assigned to that cluster. This each cluster and connecting them. This creates a shape that encloses all points within that cluster. This statement is:
+    A. False.
+    **B. True.**
+    C. Polygons are drawn randomly around points.
+    D. Polygons connect every point in the cluster.
+    Source:
+
+237. The source mentions that the order of points used to draw a polygon using a function like `Matplotlib`'s `fill` matters for creating the correct shape. Points are typically ordered in a sequence around the boundary, such as counter-clockwise. This statement is:
+    A. False.
+    **B. True.**
+    C. The order of points doesn't affect the polygon shape.
+    D. Points are always ordered clockwise.
+    Sources:
+
+238. The 'explained variance' concept in PCA helps decide how many principal components to keep. You might choose enough components to capture a certain percentage of the total variance (e.g., 95%). This statement is:
+    A. False.
+    **B. True.**
+    C. Explained variance is used to choose the mean.
+    D. You always keep all components regardless of explained variance.
+    Sources:
+
+239. The Eigenvalues represent the amount of variance captured by their corresponding eigenvectors. Larger eigenvalues indicate directions with more variance. This statement is:
+    A. False.
+    **B. True.**
+    C. Eigenvalues represent the mean.
+    D. Larger eigenvalues mean less variance.
+    Sources:
+
+240. The concept of "Dimensionality Reduction" is introduced to address issues with high-, allowing viewers to understand and interpret the data to make informed choices. This statement is:
+    A. False.
+    **B. True.**
+    C. Visualization only tells stories, it doesn't support decisions.
+    D. Only experts can use visualizations for decision-making.
+    Sources:
+
+241. Preattentive attributes are processed by the brain very quickly, before conscious attention is fully engaged. This makes them useful for directing the viewer's eye to important elements in a visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. Preattentive attributes require significant processing time.
+    D. They are not used to guide attention.
+    Source:
+
+242. The importance of using color appropriately in data visualization is stressed, noting that it is frequently misused. Color should have a purpose, not just be added for decoration. This statement is:
+    A. False.
+    **B. True.**
+    C. Color is rarely misused in visualizations.
+    D. Adding color for decoration is always recommended.
+    Source:
+
+243. The sources define Sequential Color as using varying shades of a single color to represent quantitative values, typically from light (low value) to dark (high value). This is suitable for ordered numerical data. This statement is:
+    A. False.
+    **B. True.**
+    C. Sequential color uses many different colors.
+    D. It is used for categorical data.
+    Source:
+
+244. Highlight color is used to make specific elements stand out without necessarily implying a negative or alarming status. Examples include highlighting a data point, line, or text. This statement is:
+    A. False.
+    **B. True.**
+    C. Highlight color is the same as alarm color.
+    D. Highlight color is only for negative information.
+    Sources:
+
+245. Challenges in visualizing multi-class data include dealing with visual clutter, selecting methods.
+    A. False.
+    **B. True.**
+    C. Histograms are for categorical data.
+    D. Histograms show the relationship between two variables.
+    Source:
+
+246. Box plots provide a visual summary of a dataset's distribution, showing key statistics like the median, quartiles, and potential outliers. They are useful for comparing distributions across different groups. This statement is:
+    A. False.
+    **B. True.**
+    C. Box plots hide the median.
+    D. Box plots only show the minimum and maximum.
+    Sources:
+
+247. Scatter plots are ideal for visualizing the relationship between two continuous numerical variables. Each point represents an observation with its values for both variables. This statement is:
+    A. False.
+    **B. True.**
+    C. Scatter plots are for single variables.
+    D. Scatter plots are only for categorical data.
+    Sources:
+
+248. Bubble charts extend scatter plots to include a third quantitative variable, which is represented by the size of the data point (bubble). This allows visualizing three dimensions simultaneously on a 2D plane. This statement is:
+    A. False.
+    **B. True.**
+    C. Bubble charts use color for the third dimension.
+    D. Bubble charts can only visualize two dimensions.
+    Sources:
+
+249. Heat maps represent the values in a matrix using variations in color. They are useful for visualizing patterns in complex data matrices, such as correlation matrices or data indexed by two categorical/ordinal variables. This statement is:
+    A. False.
+    **B. True.**
+    C. Chart selection is arbitrary.
+    D. All charts serve the same purpose.
+    Sources:
+
+250. Tables are best for comparing precise, individual values and when multiple units of measure are involved, prioritizing the display of exact numbers over trends. This statement is:
+    A. False.
+    **B. True.**
+    C. Tables are primarily for showing trends.
+    D. Tables cannot display multiple units of measure.
+    Source:
+
+251. Column charts and cluster column charts are suited for displaying and comparing the rank of values and focusing on extremes, especially with a limited number of categories (less than seven) and short labels. This statement is:
+    A. False.
+    **B. True.**
+    C. They are best for long labels.
+    D. They are suitable for visualizing over 15 categories.
+    Source:
+
+252. Bar charts are useful for showing goal attainment, comparing values across a moderate number of categories (over 7 but less than 15), handling long category labels, and displaying negative values. This statement is:
+    A. False.
+    **B. True.**
+    C. Bar charts cannot display negative numbers.
+    D. Bar charts are only for short labels.
+    Source:
+
+253. Radar charts are useful for comparing multiple items or groups on several quantitative or qualitative attributes. They are effective for showing performance profiles across dimensions, typically with 3 to 10 attributes. This statement is:
+    A. False.
+    **B. True.**
+    C. Radar charts are only for showing trends over time.
+    D. Radar charts are best with only one or two attributes.
+    Source:
+
+254. Pie charts are compositional charts that show parts of a whole in percentages. Each slice represents a proportion, and all slices combined must sum to 100%. They are useful for showing relative size contributions.
+    A. False.
+    **B. True.**
+    C. Stacked bar charts do not show composition.
+    Source:
+
+255. Dimensionality reduction helps address issues like difficulty clustering similar features in high dimensions, increased space and time complexity, the risk of overfitting in machine learning models, and the inability to visualize the data. This statement is:
+    A. False.
+    **B. True.**
+    C. Dimensionality reduction increases overfitting risk.
+    D. High dimensions make clustering easier.
+    Source:
+
+256. PCA is an unsupervised, linear dimensionality reduction technique that finds a new set of uncorrelated variables (principal components) that capture the maximum variance in the original data. The first principal component captures the most variance. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA is a supervised method.
+    D. PCA only works on non-linear data.
+    Sources:
+
+257. SVD is a matrix decomposition technique particularly useful for sparse data, such as those found in recommender systems or text analysis (bag of words). It decomposes a matrix A into three other matrices: `A = USV^T`. This statement is:
+    A. False.
+    **B. True.**
+    C. SVD is best for dense data.
+    D. SVD is not used in recommender systems.
+    Sources:
+
+258. PCA and SVD are related techniques, both being linear dimensionality reduction methods. PCA can be implemented using SVD on the covariance matrix, although the core calculation approach differs slightly.
+    A. False.
+    **B. True.**
+    C. High-dimensional data can be directly plotted in 2D/3D.
+    D. Dimensionality reduction increases dimensions for plotting.
+    Sources:
+
+259. If multi-class data does not have pre-assigned labels Visualizing K-Means clustering results can involve plotting the data points colored by their cluster assignment, plotting the cluster centers (centroids), drawing bounding shapes around clusters, or using background segmentation. This statement is:
+    A. False.
+    **B. True.**
+    C. Only data points can be visualized after clustering.
+    D. Cluster centers are never plotted.
+    Sources:
+
+260. The background segmentation visualization approach for multi-class data provides a clear picture of the regions in the visualization space that correspond to each class according to a learned model. It colors the entire background based on predicted class. The choice depends on the specific application's needs. This statement is:
+    A. False.
+    **B. True.**
+    C. Raw data is always faster and more accurate.
+    D. PCA reduction has no impact on speed or accuracy.
+    Sources:
+
+261. Understanding the underlying mathematical concepts of dimensionality reduction techniques like PCA (eigenvalues, eigenvectors, covariance) is emphasized as important for data scientists, beyond just knowing how to use library functions. This knowledge helps in interpreting results and selecting methods. This statement is:
+    A. False.
+    **B. True.**
+    C. Only practical application of libraries is necessary.
+    D. Mathematical understanding is only for theoreticians.
+    Sources:
+
+262. Preattentive attributes are processed by the brain extremely fast, within milliseconds. They include features like color, size, and position. This enables viewers to quickly identify patterns or outliers without focused attention. This statement is:
+    A. False.
+    **B. True.**
+    C. They are processed slowly.
+    D. They require deliberate focus.
+    Source:
+
+263. The importance of using color strategically in data visualization is highlighted, with warnings against using it solely for decoration. Misusing color can hinder understanding or mislead the viewer.
+    A. False.
+    **B. True.**
+    C. CVD does not affect visualization accessibility.
+    D. Red and green are universally distinguishable colors.
+    Sources:
+
+264. Histograms and box plots are types of charts primarily used to visualize the distribution of a single quantitative variable. They summarize how values are spread across a range. This statement is:
+    A. False.
+    **B. True.**
+    C. Scatter plots are only for showing distributions.
+    D. They cannot show correlation.
+    Sources:
+
+265. Bubble charts add a third quantitative dimension to a scatter plot by varying the size of the plotted points. This allows for the visualization of three numerical variables simultaneously. This statement is:
+    A. False.
+    **B. True.**
+    C. Bubble charts use color for the third dimension.
+    D. Bubble charts visualize only two dimensions.
+    Sources:
+
+266. Heat maps visually represent matrix data by using color intensity or variation to depict the value in each cell. They are useful for identifying patterns or hotspots in grid-like data structures. This statement is:
+    A. False.
+    **B. True.**
+    C. Chart selection is arbitrary.
+    D. All charts serve the same purpose.
+    Sources:
+
+267. Composition charts like Pie charts and Stacked bar charts are used to show how parts contribute to a whole. Pie charts are best for simple compositions summing to 100%, while stacked bars can compare compositions across multiple items. This statement is:
+    A. False.
+    **B. True.**
+    C. Composition charts show trends over time.
+    D. Stacked bars cannot show composition.
+    Source:
+
+268. Dimensionality reduction techniques are essential for analyzing and visualizing datasets with a large number of features, helping to avoid issues like the curse of dimensionality, overfitting, and difficulty in visualizing high-dimensional spaces. This statement is:
+    A. False.
+    **B. True.**
+    C. Principal components are always correlated.
+    D. PCA only works on non-linear data.
+    Sources:
+
+269. Kernel PCA extends PCA to handle non-linear data by mapping it into a higher-dimensional space where linear separation becomes possible, using kernel functions. This allows applying PCA concepts to complex data structures. This statement is:
+    A. False.
+    **B. True.**
+    C. SVD requires dense matrices.
+    D. SVD is not used in feature extraction.
+    Sources:
+
+270. Eigenvalues and eigenvectors are fundamental concepts in linear algebra used in PCA. Eigenvectors represent directions. Finding eigenvectors involves solving the system `(A - λI)x = 0` for each eigenvalue `λ`. These calculations are key to PCA. This statement is:
+    A. False.
+    **B. True.**
+    C. Eigenvectors are found before eigenvalues.
+    D. The equation is `det(A + λI) = 0`.
+    Source:
+
+271. The covariance matrix summarizes the variance of each feature and the covariance between pairs
+    *(This question is incomplete and cannot be answered as formatted.)*
+
+272. When visualizing multi-class data, especially without labels, clustering algorithms like K-Means can group data points based on similarity. The results can then be visualized by coloring points according to their assigned cluster. This statement is:
+    A. False.
+    **B. True.**
+    C. Clustering requires labels.
+    D. Clustering is not used for visualization.
+    Sources:
+
+273. Visualizing K-Means results can include plotting cluster centers (centroids), drawing bounding polygons around clusters, or using background segmentation to show the decision boundaries implied by the clusters. These methods help interpret the clustering structure
+    *(This question is incomplete and cannot be answered as formatted.)*
+
+274. Background segmentation for multi-class data involves creating a grid over the visualization space and predicting the class for each grid point using a model. The background is then colored according to these predictions, illustrating the model's class regions. This statement is:
+    A. False.
+    **B. True.**
+    C. PCA always improves accuracy and speed.
+    D. Using raw data is always faster.
+    Sources:
+
+275. The number of eigenvalues for an `n x n` matrix is equal to `n`. Each eigenvalue corresponds to a specific eigenvector, and they are calculated from the characteristic equation. In SVD decomposition `A = USV^T`, the diagonal elements of `Σ` are the singular values, which correspond to the "strength" of the concepts captured. `U` contains the left singular vectors, and `V` contains the right singular vectors. This statement is:
+    A. False.
+    **B. True.**
+    C. `Σ` contains eigenvectors.
+    D. `U` and `V` are diagonal matrices.
+    Sources:
+
+276. When plotting data over time, a Line chart is generally the most appropriate chart type to show trends. Multiple lines can be used to compare trends for different categories. This statement is:
+    A. False.
+    **B. True.**
+    C. Bar charts are best for showing trends over time.
+    D. Line charts cannot show trends for multiple categories.
+    Sources:
+
+277. For comparing discrete items based on a
+    *(This question is incomplete and cannot be answered as formatted.)*
+
+278. When choosing a chart type, questions about the type of data (categorical, ordinal, quantitative), the intended message, the audience, and the desired insights are critical considerations. This structured approach helps select the most effective visualization. This statement is:
+    A. False.
+    **B. True.**
+    C. Only the data type matters for chart selection.
+    D. The audience is not a factor in chart choice.
+    Source:
+
+279. The usefulness of Tables lies in their ability to present precise, individual values and handle multiple units of measure, especially when the focus is on exact figures rather than visual trends. This statement is:
+    A. False.
+    **B. True.**
+    C. Tables are primarily graphical tools.
+    D. Tables cannot show exact quantitative data.
+    Source:
+
+280. Radar charts are useful for comparing the performance or characteristics of multiple entities across various attributes. They plot values along radial axes, forming a polygonal. This statement is:
+    A. False.
+    **B. True.**
+    C. Explained variance measures the mean preserved.
+    D. Keeping fewer components increases explained variance.
+    Sources:
+
+281. Color Vision Deficiency (CVD) means people cannot distinguish colors in the same way as the rest of the population, though they can still see color. This necessitates careful color choices in visualizations to avoid relying on distinctions that some viewers cannot perceive. This statement is:
+    A. False.
+    **B. True.**
+    C. People with CVD are completely colorblind.
+    D. Color choice doesn't affect accessibility for CVD.
+    Sources:

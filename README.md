@@ -4,10 +4,10 @@
 ---
 
 1.  According to Dr. Mourad Raafat, why is data visualization essential?
-    A. It replaces the need for raw data.
-    **B. It transforms complex information into clear, meaningful, and compelling visual representations.**
-    C. It is only useful for telling data stories.
-    D. It is primarily for highlighting key insights.
+    A. It replaces the need for raw data.\n
+    **B. It transforms complex information into clear, meaningful, and compelling visual representations.**\n
+    C. It is only useful for telling data stories.\n
+    D. It is primarily for highlighting key insights.\n
     Source:
 
 2.  Data visualization helps enhance understanding by making data-driven arguments more insightful and compelling, similar to how sentences are more persuasive with supporting evidence. This statement is:

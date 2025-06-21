@@ -1,145 +1,41 @@
-This is a significant and complex feature addition that moves beyond simple HTML templating into PDF manipulation and interactive design. Here's a breakdown of the approach and the new/modified files involved.
+This is a great feature request that leverages the power of both Fabric.js for rich visual design and HTML for dynamic content placement. The "Hybrid" approach you've outlined is indeed the most efficient for web applications, as it moves the rendering responsibility to the client's browser.
 
-**High-Level Approach:**
+Here's a breakdown of the implementation strategy and the necessary code modifications.
 
-1.  **PDF to Image Conversion:** When the user uploads a PDF, each page needs to be converted into an image (e.g., PNG or JPEG).
-2.  **Canvas-Based Editor:**
-    *   For each PDF page (now an image), display it as the background of an HTML5 `<canvas>` element.
-    *   Allow users to add text elements (placeholders like `<<FieldName>>` or static text) on top of the canvas.
-    *   These text elements will need properties like position (x, y), font size, font family, color, and the text content itself.
-    *   The user should be able to drag, resize (maybe), and edit these text elements.
-3.  **Saving the "Template":**
-    *   Instead of saving HTML content, you'll now need to save:
-        *   The original uploaded PDF (or references to its converted images).
-        *   A JSON structure describing the layout of text elements (placeholders) on each page (their text, position, font, etc.).
-4.  **PDF Generation with this New Template Type:**
-    *   When generating a PDF from this "canvas template":
-        *   Load the original PDF page images.
-        *   For each page, render the background image.
-        *   Fetch the corresponding layout JSON for the text elements.
-        *   Replace placeholder values in the text elements with data from the input JSON (similar to `ProcessTemplate` but for text objects).
-        *   Render these text elements onto the PDF page at their specified positions using a PDF generation library capable of drawing text on existing images/pages (e.g., iTextSharp, PdfSharp, or potentially WkHtmlToPdf if you can construct an HTML overlay precisely).
+**Core Strategy:**
 
-**Libraries/Technologies to Consider:**
+1.  **Fabric.js for Design:** The template editor (likely a separate UI or part of the Design view) will use Fabric.js to allow users to:
+    *   Upload and place static images.
+    *   Add text elements, position them, style them (font, size, color, rotation).
+    *   Crucially, associate these text elements with specific `<<PlaceholderName>>` values.
+    *   The final design of these elements (image, text position, style) will be saved as a Fabric.js JSON object.
 
-*   **PDF to Image:**
-    *   **`PdfiumViewer` (Windows-specific, uses Google's PDFium library):** Good quality, but platform-dependent.
-    *   **`Magick.NET` (cross-platform, uses ImageMagick):** Powerful image manipulation, can convert PDF pages to images.
-    *   **Ghostscript (via command-line or wrapper):** A classic tool for PDF processing.
-*   **Canvas Interaction (Client-Side):**
-    *   **`Fabric.js`:** A powerful and well-known JavaScript HTML5 canvas library that makes it easy to work with objects on the canvas (text, images, shapes), including selection, movement, scaling, etc. **This is highly recommended for this task.**
-    *   Plain HTML5 Canvas API: More manual work but possible.
-*   **PDF Generation (Server-Side - for overlaying text):**
-    *   **`iText 7` (formerly iTextSharp, commercial with AGPL option):** Very powerful PDF manipulation library. Can add text to existing PDFs or images.
-    *   **`PdfSharp` (free, MIT license):** Good for creating and modifying PDFs, can draw text.
-    *   **WkHtmlToPdf:** If you can construct an HTML page that overlays the text correctly on top of the background image for each page, WkHtmlToPdf can convert that HTML to a PDF page. This might be complex for precise positioning.
+2.  **Storing Fabric.js JSON:** The `Template` model and its DTOs will need a new field to store this Fabric.js JSON.
 
-**Let's assume we'll use `Magick.NET` for PDF-to-image and `Fabric.js` for the client-side canvas editor.**
+3.  **`ProcessTemplate` Method:**
+    *   When processing a template for PDF generation:
+        *   The `HtmlContent` will be processed as usual for `<<FieldName>>` and `{{conditional}}`.
+        *   The *Fabric.js JSON* will be parsed.
+        *   For each text object in the Fabric.js JSON that is marked as a placeholder (i.e., it has `<<PlaceholderName>>` associated with it):
+            *   The `<<PlaceholderName>>` will be replaced with the actual data value (from `jsonData` or resolved internal data).
+            *   An HTML `<div>` element will be generated for this processed text.
+            *   This `<div>` will be positioned and styled precisely according to the properties stored in the Fabric.js JSON ( `left`, `top`, `fontFamily`, `fontSize`, `fill` for color, `angle` for rotation, etc.).
+        *   The base image(s) from Fabric.js JSON will be embedded in the HTML, likely as `<img>` tags with `src` pointing to data URLs.
+        *   The generated HTML `<div>`s for placeholders will be absolutely positioned within a container that holds the image(s), effectively overlaying the text on the image.
+
+**Implementation Steps & Code Modifications:**
+
+First, let's define the new field in our data models and DTOs.
 
 ---
 
-**Changes and New Files:**
-
-**I. Model & DTO Changes (Infrastructure & Web)**
-
-1.  **`PDFGenerator.Infrastructure\DataAccess\Models\Template.cs`**:
-    *   Add a `TemplateType` property (e.g., "Html", "UploadedPdf").
-    *   `HtmlContent` becomes nullable.
-    *   Add `CanvasLayoutJson` (string, nullable) to store the Fabric.js canvas state or custom layout.
-    *   Add `OriginalPdfFileName` (string, nullable) and potentially a path or ID to the stored PDF/images.
-
-2.  **`PDFGenerator.Infrastructure\DataAccess\Models\TemplateVersion.cs`**:
-    *   `HtmlContent` becomes nullable.
-    *   Add `CanvasLayoutJson` (string, nullable).
-    *   Add `PageImagePathsJson` (string, nullable) to store a JSON array of paths to the per-page images derived from the uploaded PDF.
-
-3.  **DTOs (`TemplateDataAccessDto`, `TemplateCreateDto`, `TemplateDetailDto`, `TemplateVersionDataAccessDto`, `TemplateVersionDto` etc.)**:
-    *   Mirror the changes from the models (add `TemplateType`, `CanvasLayoutJson`, `PageImagePathsJson`, make `HtmlContent` nullable).
-
-**II. Repository Changes (Infrastructure)**
-
-1.  **`ITemplateRepository.cs` & `TemplateRepository.cs`**:
-    *   Modify `CreateNewTemplateAsync` and `UpdateTemplateAsync` to handle the new template type. This will involve saving uploaded PDF, converting to images, and storing image paths/layout JSON.
-    *   Modify `GetByNameAsync` and `GetTemplateContentByVersionReferenceAsync` to load either HTML or CanvasLayout/PageImages based on `TemplateType`.
-
-**III. Handler Changes (Web)**
-
-1.  **`CreateTemplateHandler.cs` & `UpdateTemplateHandler.cs`**:
-    *   Modify to accept file uploads (the PDF).
-    *   Orchestrate PDF-to-image conversion (possibly by calling a new service).
-    *   Pass the `CanvasLayoutJson` (initially empty or from client) and image paths to the repository.
-
-2.  **`GeneratePdfHandler.cs`**:
-    *   This will be the most significantly changed handler.
-    *   If `TemplateType` is "UploadedPdf":
-        *   It will need to use a PDF library (like iText or PdfSharp) on the server.
-        *   Load page images.
-        *   Parse `CanvasLayoutJson`.
-        *   Perform placeholder replacement in the text elements from `CanvasLayoutJson`.
-        *   Draw the images and the processed text elements onto a new PDF.
-
-**IV. New Services**
-
-1.  **`IPdfProcessingService.cs` & `PdfProcessingService.cs` (Infrastructure/Services)**:
-    *   Method to convert PDF pages to images (e.g., `Task<List<string>> ConvertPdfToImagesAsync(Stream pdfStream, string templateName)`).
-    *   Method to generate PDF from images and layout (e.g., `Task<byte[]> GeneratePdfFromCanvasLayoutAsync(List<string> pageImagePaths, string canvasLayoutJson, JsonElement jsonData)`). This service will use iText/PdfSharp.
-
-**V. Controller Changes (Web)**
-
-1.  **`TemplateController.cs`**:
-    *   `Create` (POST) and `Design` (POST for update) actions will need to handle `IFormFile` for PDF upload.
-    *   `Design` (GET) action will need to pass different data to the view based on `TemplateType` (HTML content or page image paths and layout JSON).
-
-**VI. View Changes (Web)**
-
-1.  **`Create.cshtml` & `Design.cshtml`**:
-    *   Add a file input for PDF upload.
-    *   Add radio buttons or a dropdown to select `TemplateType`.
-    *   Conditionally show either the Summernote editor (for HTML type) or the new Canvas editor UI (for UploadedPdf type).
-    *   **Canvas Editor UI (Client-Side - Major Work):**
-        *   Include `Fabric.js` library.
-        *   JavaScript to:
-            *   Initialize Fabric.js canvas for each page image.
-            *   Set the PDF page image as the canvas background.
-            *   Allow adding text objects (Fabric.IText) to the canvas.
-            *   Allow editing text content (double-click on text).
-            *   Allow moving text objects.
-            *   Serialize the canvas state (or a simplified version of it with text objects' properties) to JSON and store it in a hidden input field (`CanvasLayoutJson`) to be submitted with the form.
-            *   Handle multiple pages (e.g., tabs or a scrolling list of canvases).
-
----
-
-This is a large feature. Let's start by outlining the changes to the core models, DTOs, and the overall structure for the new template type. The client-side Fabric.js implementation would be substantial and is best developed iteratively.
-
-**Phase 1: Backend Model & DTO Changes, Basic UI for Upload**
-
-**1. New Enum for Template Type (`PDFGenerator.Helper\Helper\TemplateTypeEnum.cs`)**
-
-```csharp
-namespace PdfGeneratorApp.Common
-{
-    public static class TemplateTypeEnum
-    {
-        public const string Html = "Html";
-        public const string UploadedPdf = "UploadedPdf";
-
-        public static bool IsValid(string type)
-        {
-            return type == Html || type == UploadedPdf;
-        }
-    }
-}
-```
-
-**2. Model Changes**
-
-**`PDFGenerator.Infrastructure\DataAccess\Models\Template.cs`**
+**1. `PDFGenerator.Infrastructure\DataAccess\Models\Template.cs`**
+(Adding `FabricJson` field)
 
 ```csharp
 using System.ComponentModel.DataAnnotations;
 using System.Collections.Generic;
 using System;
-using PdfGeneratorApp.Common; // For TemplateTypeEnum
 
 namespace PdfGeneratorApp.Models
 {
@@ -151,65 +47,27 @@ namespace PdfGeneratorApp.Models
         [StringLength(100)]
         public string Name { get; set; }
 
-        [Required]
-        public string TemplateType { get; set; } = TemplateTypeEnum.Html; // Default to Html
-
         public int TestingVersion { get; set; } = 1;
         public int? ProductionVersion { get; set; } = 1;
 
         public DateTime LastModified { get; set; } = DateTime.Now;
 
-        // New properties for UploadedPdf type
-        public string? OriginalPdfStorageIdentifier { get; set; } // e.g., filename or GUID for stored PDF
+        // New field to store Fabric.js JSON definition of the template's visual layout
+        public string? FabricJson { get; set; }
 
         public ICollection<TemplateVersion> Versions { get; set; }
-        public string? Description { get; set; } // Added from previous error identification
     }
 }
 ```
 
-**`PDFGenerator.Infrastructure\DataAccess\Models\TemplateVersion.cs`**
+---
+
+**2. `PDFGenerator.Infrastructure\DataAccess\Dtos\TemplateDataAccessDto.cs`**
+(Adding `FabricJson` field)
 
 ```csharp
-using System;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-
-namespace PdfGeneratorApp.Models
-{
-    public class TemplateVersion
-    {
-        public int Id { get; set; }
-        public int TemplateId { get; set; }
-        public int VersionNumber { get; set; }
-
-        // HtmlContent is now nullable, used for TemplateTypeEnum.Html
-        public string? HtmlContent { get; set; }
-
-        // CanvasLayoutJson stores the layout of text elements for UploadedPdf type
-        public string? CanvasLayoutJson { get; set; }
-
-        // Stores JSON array of relative paths to page images for UploadedPdf type
-        public string? PageImagePathsJson { get; set; }
-
-        public string? Description { get; set; }
-        public string? ExampleJsonData { get; set; }
-        public string? InternalDataConfigJson { get; set; }
-        public DateTime CreatedDate { get; set; } = DateTime.Now;
-        public bool IsDeleted { get; set; } = false;
-        public DateTime? DeletedDate { get; set; } = null;
-
-        [ForeignKey("TemplateId")]
-        public Template Template { get; set; }
-    }
-}
-```
-
-**3. Data Access DTO Changes**
-
-**`PDFGenerator.Infrastructure\DataAccess\Dtos\TemplateDataAccessDto.cs`**
-
-```csharp
+// File: Infrastructure/Data/Dtos/TemplateDataAccessDto.cs
+using PdfGeneratorApp.Models;
 using System;
 using System.Collections.Generic;
 
@@ -219,26 +77,37 @@ namespace PDFGenerator.Infrastructure.DataAccess.Dtos
     {
         public int Id { get; set; }
         public string Name { get; set; }
-        public string TemplateType { get; set; } // Added
-        public string? HtmlContent { get; set; } // Nullable
-        public string? CanvasLayoutJson { get; set; } // Added
-        public string? PageImagePathsJson { get; set; } // Added
-        public string? OriginalPdfStorageIdentifier { get; set; } // Added
-
+        public string HtmlContent { get; set; } // Standard HTML content
         public string? Description { get; set; }
         public string? ExampleJsonData { get; set; }
         public string? InternalDataConfigJson { get; set; }
+
+        // Versioning properties
         public int TestingVersion { get; set; }
         public int? ProductionVersion { get; set; }
+
         public DateTime LastModified { get; set; }
+
+        // New field for Fabric.js JSON
+        public string? FabricJson { get; set; }
+
         public ICollection<TemplateVersionDataAccessDto> Versions { get; set; }
     }
 }
 ```
 
-**`PDFGenerator.Infrastructure\DataAccess\Dtos\TemplateVersionDataAccessDto.cs`**
+---
+
+**3. `PDFGenerator.Infrastructure\DataAccess\Dtos\TemplateVersionDataAccessDto.cs`**
+(Adding `FabricJson` field for versions if it's per-version)
+
+*   **Decision:** Should Fabric.js JSON be stored per `TemplateVersion` or per `Template`?
+    *   If it's per `TemplateVersion`, it means each version can have a different layout. This is more flexible but potentially more complex.
+    *   If it's per `Template`, it implies the layout is global for the template, and the `HtmlContent` might be considered deprecated or for simpler fallbacks.
+    *   Given the requirement "add static image at my template", it implies a visual layout that might change over template versions. Let's assume it's per `TemplateVersion` for maximum flexibility.
 
 ```csharp
+// File: Infrastructure/Data/Dtos/TemplateVersionDataAccessDto.cs
 using System;
 
 namespace PDFGenerator.Infrastructure.DataAccess.Dtos
@@ -248,177 +117,26 @@ namespace PDFGenerator.Infrastructure.DataAccess.Dtos
         public int Id { get; set; }
         public int TemplateId { get; set; }
         public int VersionNumber { get; set; }
-        public string? HtmlContent { get; set; } // Nullable
-        public string? CanvasLayoutJson { get; set; } // Added
-        public string? PageImagePathsJson { get; set; } // Added
-
+        public string HtmlContent { get; set; } // Fallback/standard HTML content
         public string? Description { get; set; }
         public string? ExampleJsonData { get; set; }
         public string? InternalDataConfigJson { get; set; }
         public DateTime CreatedDate { get; set; }
+
+        // Soft delete properties
         public bool IsDeleted { get; set; }
         public DateTime? DeletedDate { get; set; }
+
+        // New field for Fabric.js JSON specific to this version
+        public string? FabricJson { get; set; }
     }
 }
 ```
 
-**`PDFGenerator.Infrastructure\DataAccess\Dtos\TemplatesDocDataAccessDto.cs`** (Add TemplateType)
+---
 
-```csharp
-using System.ComponentModel.DataAnnotations;
-
-namespace PDFGenerator.Infrastructure.DataAccess.Dtos
-{
-    public class TemplatesDocDataAccessDto
-    {
-        public int Id { get; set; }
-        [Required]
-        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
-        public string Name { get; set; }
-        public string TemplateType { get; set; } // Added
-        public string? Description { get; set; }
-        public string? ExampleJsonData { get; set; } // For HTML type or for overall data structure
-        public string? InternalDataConfigJson { get; set; } // For HTML type or for overall data structure
-        public int TestingVersion { get; set; }
-        public int? ProductionVersion { get; set; }
-    }
-}
-```
-
-**4. Web DTO Changes**
-
-**`PDFGenerator.Web\Dtos\Template\TemplateCreateDto.cs`**
-
-```csharp
-using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Http; // For IFormFile
-using PdfGeneratorApp.Common; // For TemplateTypeEnum
-
-namespace PDFGenerator.Web.Dtos.Template
-{
-    public class TemplateCreateDto
-    {
-        [Required]
-        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
-        public string Name { get; set; }
-
-        [Required(ErrorMessage = "Template Type is required.")]
-        public string TemplateType { get; set; } = TemplateTypeEnum.Html;
-
-        public string? Description { get; set; }
-
-        // For HTML type
-        public string? HtmlContent { get; set; } // Make nullable, required based on TemplateType
-
-        // For UploadedPdf type
-        public IFormFile? UploadedPdfFile { get; set; } // For PDF upload
-        public string? CanvasLayoutJson { get; set; } // Client will send this
-
-        public string? ExampleJsonData { get; set; }
-        public string? InternalDataConfigJson { get; set; }
-    }
-}
-```
-
-**`PDFGenerator.Web\Dtos\Template\TemplateDetailDto.cs`**
-
-```csharp
-using System.ComponentModel.DataAnnotations;
-using System.Collections.Generic; // For List<string> of page image paths
-using PdfGeneratorApp.Common; // For TemplateTypeEnum
-
-namespace PDFGenerator.Web.Dtos.Template
-{
-    public class TemplateDetailDto
-    {
-        public int Id { get; set; }
-
-        [Required]
-        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
-        public string Name { get; set; }
-
-        [Required]
-        public string TemplateType { get; set; }
-
-        public string? Description { get; set; }
-
-        // For HTML type
-        public string? HtmlContent { get; set; } // Nullable
-
-        // For UploadedPdf type
-        public string? CanvasLayoutJson { get; set; }
-        public List<string>? PageImageUrls { get; set; } // URLs to serve images to client canvas
-        public string? OriginalPdfStorageIdentifier { get; set; }
-
-
-        public string? ExampleJsonData { get; set; }
-        public string? InternalDataConfigJson { get; set; }
-        public int TestingVersion { get; set; }
-        public int? ProductionVersion { get; set; }
-        public DateTime LastModified { get; set; }
-    }
-}
-```
-
-**`PDFGenerator.Web\Dtos\Template\TemplateUpdateDto.cs`**
-
-```csharp
-using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Http; // For IFormFile
-using PdfGeneratorApp.Common; // For TemplateTypeEnum
-
-namespace PDFGenerator.Web.Dtos.Template
-{
-    public class TemplateUpdateDto
-    {
-        public int Id { get; set; }
-        // TemplateType is generally not updatable after creation, but if it were:
-        // public string TemplateType { get; set; }
-
-        public string? Description { get; set; }
-
-        // For HTML type
-        public string? HtmlContent { get; set; } // Required if HTML type
-
-        // For UploadedPdf type
-        public IFormFile? UploadedPdfFile { get; set; } // Optional: allow replacing the PDF
-        public string? CanvasLayoutJson { get; set; }
-
-        public string? ExampleJsonData { get; set; }
-        public string? InternalDataConfigJson { get; set; }
-    }
-}
-```
-
-**`PDFGenerator.Web\Dtos\TemplateVersion\TemplateVersionDto.cs`**
-
-```csharp
-using System;
-
-namespace PDFGenerator.Web.Dtos.TemplateVersion
-{
-    public class TemplateVersionDto
-    {
-        public int Id { get; set; }
-        public int TemplateId { get; set; }
-        public int VersionNumber { get; set; }
-        public string? HtmlContent { get; set; } // Nullable
-        public string? CanvasLayoutJson { get; set; } // Added
-        public string? PageImagePathsJson { get; set; } // Not typically exposed directly to client in this DTO; DetailDto might have URLs instead.
-
-        public string? Description { get; set; }
-        public string? ExampleJsonData { get; set; }
-        public string? InternalDataConfigJson { get; set; }
-        public DateTime CreatedDate { get; set; }
-        public bool IsDeleted { get; set; }
-        public DateTime? DeletedDate { get; set; }
-    }
-}
-```
-
-**5. AutoMapper Profiles (Updates)**
-
-**`PDFGenerator.Infrastructure\DataAccess\MappingProfile\DataAccessMappingProfile.cs`**
+**4. `PDFGenerator.Infrastructure\DataAccess\MappingProfile\DataAccessMappingProfile.cs`**
+(Updating mappings for `FabricJson`)
 
 ```csharp
 // File: Infrastructure/Mapping/DataAccessMappingProfile.cs
@@ -432,300 +150,325 @@ namespace PdfGeneratorApp.Infrastructure.Mapping
     {
         public DataAccessMappingProfile()
         {
-            CreateMap<Template, TemplateDataAccessDto>().ReverseMap();
-            CreateMap<TemplateVersion, TemplateVersionDataAccessDto>().ReverseMap();
+            CreateMap<Template, TemplateDataAccessDto>()
+                .ForMember(dest => dest.TestingVersion, opt => opt.MapFrom(src => src.TestingVersion))
+                .ForMember(dest => dest.ProductionVersion, opt => opt.MapFrom(src => src.ProductionVersion))
+                .ForMember(dest => dest.FabricJson, opt => opt.MapFrom(src => src.FabricJson)) // Map FabricJson from Template
+                .ForMember(dest => dest.Versions, opt => opt.Ignore()); // Explicitly ignore Versions if not mapping here
 
-            // Update TemplateSimpleDto mapping
+            CreateMap<TemplateDataAccessDto, Template>()
+                .ForMember(dest => dest.TestingVersion, opt => opt.MapFrom(src => src.TestingVersion))
+                .ForMember(dest => dest.ProductionVersion, opt => opt.MapFrom(src => src.ProductionVersion))
+                .ForMember(dest => dest.FabricJson, opt => opt.MapFrom(src => src.FabricJson)) // Map FabricJson back to Template
+                .ForMember(dest => dest.Versions, opt => opt.Ignore()); // Ignore Versions collection for simplicity in this mapping
+
+
+            CreateMap<TemplateVersion, TemplateDataAccessDto>()
+                 .ForMember(dest => dest.Id, opt => opt.Ignore())
+                 .ForMember(dest => dest.Name, opt => opt.Ignore())
+                 .ForMember(dest => dest.TestingVersion, opt => opt.Ignore())
+                 .ForMember(dest => dest.ProductionVersion, opt => opt.Ignore())
+                 .ForMember(dest => dest.LastModified, opt => opt.Ignore())
+                 .ForMember(dest => dest.Versions, opt => opt.Ignore())
+                 // Map FabricJson from TemplateVersion
+                 .ForMember(dest => dest.FabricJson, opt => opt.MapFrom(src => src.FabricJson))
+                 .ReverseMap();
+
+            CreateMap<TemplateVersion, TemplateVersionDataAccessDto>()
+                .ForMember(dest => dest.IsDeleted, opt => opt.MapFrom(src => src.IsDeleted))
+                .ForMember(dest => dest.DeletedDate, opt => opt.MapFrom(src => src.DeletedDate))
+                // Map FabricJson from TemplateVersion
+                .ForMember(dest => dest.FabricJson, opt => opt.MapFrom(src => src.FabricJson))
+                .ReverseMap();
+
             CreateMap<Template, TemplateSimpleDto>()
-                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description)) // Ensure Description is mapped
-                .ReverseMap();
-
-
-            // Update TemplatesDocDataAccessDto mapping from Template model
-            // The query in TemplateRepository.GetAllAsync directly projects to TemplatesDocDataAccessDto,
-            // so this specific mapping from Template model might be for other scenarios.
-            CreateMap<Template, TemplatesDocDataAccessDto>()
-                .ForMember(dest => dest.TemplateType, opt => opt.MapFrom(src => src.TemplateType))
+                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
+                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
                 .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
-                 // ExampleJsonData and InternalDataConfigJson are typically from a specific version,
-                 // so this mapping might need to be conditional or handled by more specific logic if used.
-                .ForMember(dest => dest.ExampleJsonData, opt => opt.Ignore())
-                .ForMember(dest => dest.InternalDataConfigJson, opt => opt.Ignore());
+                .ForMember(dest => dest.TestingVersion, opt => opt.MapFrom(src => src.TestingVersion))
+                .ForMember(dest => dest.ProductionVersion, opt => opt.MapFrom(src => src.ProductionVersion))
+                .ForMember(dest => dest.LastModified, opt => opt.MapFrom(src => src.LastModified));
+
+             CreateMap<Template, TemplatesDocDataAccessDto>()
+                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
+                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.TestingVersion, opt => opt.MapFrom(src => src.TestingVersion))
+                .ForMember(dest => dest.ProductionVersion, opt => opt.MapFrom(src => src.ProductionVersion));
         }
     }
 }
 ```
-
-**`PDFGenerator.Web\MappingProfile\ApplicationLayerMappingProfile.cs`**
-
-```csharp
-using AutoMapper;
-using PDFGenerator.Web.Dtos.Template;
-using PDFGenerator.Web.Dtos.TemplateVersion;
-using PDFGenerator.Infrastructure.DataAccess.Dtos;
-using PDFGenerator.Web.Dtos.Auth;
-using PdfGeneratorApp.Models; // For User -> UserDto
-
-namespace PdfGeneratorApp.Infrastructure.Mapping
-{
-    public class ApplicationLayerMappingProfile : Profile
-    {
-        public ApplicationLayerMappingProfile()
-        {
-            CreateMap<TemplateSimpleDto, TemplateListDto>().ReverseMap();
-            CreateMap<TemplateDataAccessDto, TemplateDetailDto>()
-                // If PageImagePathsJson needs to be transformed to PageImageUrls
-                // .ForMember(dest => dest.PageImageUrls, opt => opt.MapFrom(src => ConvertJsonToUrls(src.PageImagePathsJson)))
-                .ReverseMap();
-                // .ForMember(dest => dest.PageImagePathsJson, opt => opt.MapFrom(src => ConvertUrlsToJson(src.PageImageUrls)));
-
-
-            CreateMap<TemplateDataAccessDto, TemplateCreateDto>().ReverseMap();
-            CreateMap<TemplateDataAccessDto, TemplateUpdateDto>().ReverseMap();
-            CreateMap<TemplateVersionDataAccessDto, TemplateVersionDto>().ReverseMap();
-            CreateMap<TemplatesDocDataAccessDto, TemplatesDocDto>().ReverseMap();
-            CreateMap<AccountDataAccessDto, AccountDto>().ReverseMap();
-            CreateMap<User, UserDto>();
-        }
-
-        // Example helper methods for JSON/URL conversion (you'd implement these)
-        // private List<string> ConvertJsonToUrls(string json) { /* ... */ return null; }
-        // private string ConvertUrlsToJson(List<string> urls) { /* ... */ return null; }
-    }
-}
-```
-
-This is the setup for the data structures. The next steps would be:
-
-*   **Implement `PdfProcessingService`**:
-    *   Logic for PDF to image conversion using Magick.NET. Store these images in a designated folder (e.g., `wwwroot/template_uploads/{templateId}/{versionNumber}/page_{n}.png`).
-    *   Logic for generating the final PDF from page images and canvas layout data using iText/PdfSharp.
-*   **Update Repositories**: Handle saving/loading `TemplateType`, `CanvasLayoutJson`, `PageImagePathsJson`, `OriginalPdfStorageIdentifier`.
-*   **Update Handlers**: `CreateTemplateHandler` and `UpdateTemplateHandler` will manage the PDF upload, call `PdfProcessingService` for image conversion, and save relevant data. `GeneratePdfHandler` will call `PdfProcessingService` for generation if it's an "UploadedPdf" type.
-*   **Update `TemplateController`**:
-    *   The `Create` (POST) and `Design` (POST for update) actions need to accept `IFormFile UploadedPdfFile` and `string CanvasLayoutJson` from the form.
-    *   When a PDF is uploaded:
-        *   Save the original PDF (optional, but good for re-processing).
-        *   Convert PDF to page images using the new service.
-        *   Store the paths to these images (relative to `wwwroot`) in `PageImagePathsJson`.
-        *   Save the `CanvasLayoutJson` received from the client.
-    *   The `Design` (GET) action needs to pass `PageImageUrls` and `CanvasLayoutJson` to the view if it's an "UploadedPdf" template.
-*   **Implement Client-Side Canvas Editor in `Design.cshtml`**:
-    *   This is the most UI-intensive part. You'll use Fabric.js.
-    *   On page load, if `TemplateType` is "UploadedPdf":
-        *   For each image URL in `Model.PageImageUrls`:
-            *   Create a Fabric.js canvas.
-            *   Set the image as the canvas background.
-            *   If `Model.CanvasLayoutJson` exists, parse it and load the text objects onto the canvas(es).
-        *   Provide UI tools (buttons) to:
-            *   Add new text objects (placeholders or static text).
-            *   Select, move, and edit existing text objects.
-            *   (Optional) Change font, size, color of text objects.
-        *   Before form submission, serialize the state of all text objects on all canvases into a JSON string and put it into the hidden `CanvasLayoutJson` input field.
-
-Due to the complexity, I'll provide the modified `TemplateController` (for file upload handling structure) and a very basic outline for the `Design.cshtml` to show where the canvas editor would go. The actual Fabric.js implementation and the `PdfProcessingService` are substantial pieces of work.
 
 ---
 
-**6. `PDFGenerator.Infrastructure\Services\IPdfProcessingService.cs` (New)**
+**5. `PDFGenerator.Web\Dtos\Template\TemplateDetailDto.cs`**
+(Adding `FabricJson` field)
 
 ```csharp
-using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
+using System.ComponentModel.DataAnnotations;
+
+namespace PDFGenerator.Web.Dtos.Template
+{
+    public class TemplateDetailDto
+    {
+        public int Id { get; set; }
+
+        [Required]
+        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
+        public string Name { get; set; }
+
+        public string? Description { get; set; }
+
+        [Required(ErrorMessage = "HTML Content is required.")]
+        public string HtmlContent { get; set; }
+
+        public string? ExampleJsonData { get; set; }
+
+        public string? InternalDataConfigJson { get; set; }
+
+        // Versioning properties
+        public int TestingVersion { get; set; }
+        public int? ProductionVersion { get; set; }
+
+        public DateTime LastModified { get; set; }
+
+        // New field for Fabric.js JSON
+        public string? FabricJson { get; set; }
+    }
+}
+```
+
+---
+
+**6. `PDFGenerator.Web\Dtos\Template\TemplateCreateDto.cs`**
+(Adding `FabricJson` field)
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+
+namespace PDFGenerator.Web.Dtos.Template
+{
+    public class TemplateCreateDto
+    {
+        [Required]
+        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
+        public string Name { get; set; }
+
+        public string? Description { get; set; }
+
+        [Required(ErrorMessage = "HTML Content is required.")]
+        public string HtmlContent { get; set; }
+
+        public string? ExampleJsonData { get; set; }
+
+        public string? InternalDataConfigJson { get; set; }
+
+        // New field for Fabric.js JSON
+        public string? FabricJson { get; set; }
+    }
+}
+```
+
+---
+
+**7. `PDFGenerator.Web\Dtos\Template\TemplateUpdateDto.cs`**
+(Adding `FabricJson` field)
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+
+namespace PDFGenerator.Web.Dtos.Template
+{
+    public class TemplateUpdateDto
+    {
+        public int Id { get; set; }
+
+        public string? Description { get; set; }
+
+        [Required(ErrorMessage = "HTML Content is required.")]
+        public string HtmlContent { get; set; }
+
+        public string? ExampleJsonData { get; set; }
+
+        public string? InternalDataConfigJson { get; set; }
+
+        // New field for Fabric.js JSON
+        public string? FabricJson { get; set; }
+    }
+}
+```
+
+---
+
+**8. `PDFGenerator.Web\Dtos\Template\TemplateListDto.cs`**
+(Already updated in the previous step to include versioning, now adding FabricJson if needed for list view, though not strictly required)
+
+```csharp
+namespace PDFGenerator.Web.Dtos.Template
+{
+    public class TemplateListDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string? Description { get; set; }
+        public int TestingVersion { get; set; }
+        public int? ProductionVersion { get; set; }
+        public DateTime LastModified { get; set; }
+        // public string? FabricJson { get; set; } // Only add if needed for list view
+    }
+}
+```
+
+---
+
+**9. `PDFGenerator.Web\Dtos\Template\TemplatesDocDto.cs`**
+(Already updated in the previous step to include versioning, adding FabricJson if needed for doc view)
+
+```csharp
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace PDFGenerator.Web.Dtos.Template
+{
+    public class TemplatesDocDto
+    {
+        public int Id { get; set; }
+        [Required]
+        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
+        public string Name { get; set; }
+        public string? Description { get; set; }
+        public string? ExampleJsonData { get; set; }
+        public string? InternalDataConfigJson { get; set; }
+        public int TestingVersion { get; set; }
+        public int? ProductionVersion { get; set; }
+        // public string? FabricJson { get; set; } // Only add if needed for doc view
+    }
+}
+```
+
+---
+
+**10. `PDFGenerator.Infrastructure\DataAccess\Repositories\Interfaces\ITemplateRepository.cs`**
+(Adding the new `GetTemplateContentByVersionReferenceAsync` method)
+
+```csharp
+// File: Infrastructure/Data/Repositories/ITemplateRepository.cs
+using PDFGenerator.Infrastructure.DataAccess.Dtos;
+using PdfGeneratorApp.Common;
+using PdfGeneratorApp.Infrastructure.Data.Repositories.Base;
+using PdfGeneratorApp.Models;
 using System.Threading.Tasks;
 
-namespace PDFGenerator.Infrastructure.Services
+namespace PdfGeneratorApp.Infrastructure.Data.Repositories
 {
-    public interface IPdfProcessingService
+    public interface ITemplateRepository : IBaseRepository<Template, TemplateDataAccessDto>
     {
-        // Converts PDF stream to images and returns relative paths to the saved images.
-        // templateId and versionNumber are for organizing stored images.
-        Task<(List<string> PageImagePaths, string OriginalPdfIdentifier)> ConvertPdfToImagesAsync(
-            Stream pdfStream,
-            string templateName, // Used for folder naming
-            int versionNumber // Used for folder naming
-        );
+        Task<Result<List<TemplateSimpleDto>>> GetAllTemplateSimplAsync();
+        Task<Result<List<TemplatesDocDataAccessDto>>> GetAllAsync();
 
-        // Generates a PDF by overlaying text (from canvasLayoutJson) onto page images.
-        Task<byte[]> GeneratePdfFromCanvasLayoutAsync(
-            List<string> pageImagePaths, // Relative paths from wwwroot
-            string canvasLayoutJson,
-            JsonElement jsonData // Data to fill placeholders
-        );
+        // This method remains for UI Design page, fetches Testing version content
+        Task<Result<TemplateDataAccessDto>> GetByNameAsync(string name);
+
+        Task<Result<bool>> AnyByNameAsync(string name);
+        Task<Result<TemplateDataAccessDto>> CreateNewTemplateAsync(TemplateDataAccessDto templateDataAccessDto);
+        Task<Result<TemplateDataAccessDto>> UpdateTemplateAsync(TemplateDataAccessDto templateDataAccessDto);
+        Task<Result<int>> RevertTemplateAsync(string templateName, int targetVersionNumber, string versionReferenceType);
+        Task<Result<int>> PublishTemplateAsync(string templateName);
+
+        // NEW: Method to get template content based on version reference type.
+        // Used by the PDF generation handler to fetch content for Testing or Production.
+        Task<Result<TemplateDataAccessDto>> GetTemplateContentByVersionReferenceAsync(string templateName, string versionReferenceType);
     }
 }
 ```
 
-**7. `PDFGenerator.Infrastructure\Services\PdfProcessingService.cs` (New - Skeleton)**
+---
 
-```csharp
-using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
-using System.Threading.Tasks;
-using ImageMagick; // Assuming Magick.NET for PDF to Image
-// using iText.Kernel.Pdf; // Example if using iText for generation
-// using iText.Layout;
-// using iText.Layout.Element;
-// using iText.IO.Image;
-
-namespace PDFGenerator.Infrastructure.Services
-{
-    public class PdfProcessingService : IPdfProcessingService
-    {
-        private readonly IWebHostEnvironment _hostingEnvironment; // To get wwwroot path
-
-        public PdfProcessingService(IWebHostEnvironment hostingEnvironment)
-        {
-            _hostingEnvironment = hostingEnvironment;
-        }
-
-        public async Task<(List<string> PageImagePaths, string OriginalPdfIdentifier)> ConvertPdfToImagesAsync(
-            Stream pdfStream, string templateName, int versionNumber)
-        {
-            var pageImagePaths = new List<string>();
-            var templateUploadsDir = Path.Combine("template_uploads", SanitizeFileName(templateName), $"v{versionNumber}");
-            var absoluteUploadsDir = Path.Combine(_hostingEnvironment.WebRootPath, templateUploadsDir);
-            Directory.CreateDirectory(absoluteUploadsDir); // Ensure directory exists
-
-            string originalPdfFileName = $"original_{Guid.NewGuid()}.pdf";
-            string originalPdfPath = Path.Combine(absoluteUploadsDir, originalPdfFileName);
-
-            // Save the original PDF
-            pdfStream.Position = 0; // Reset stream position
-            using (var fileStream = new FileStream(originalPdfPath, FileMode.Create, FileAccess.Write))
-            {
-                await pdfStream.CopyToAsync(fileStream);
-            }
-            string originalPdfStorageIdentifier = Path.Combine(templateUploadsDir, originalPdfFileName); // Relative path for DB
-
-            pdfStream.Position = 0; // Reset for Magick.NET
-
-            // Use Magick.NET to convert PDF pages to images
-            try
-            {
-                using (var magickImages = new MagickImageCollection())
-                {
-                    // Important: Specify density *before* reading for good quality
-                    var settings = new MagickReadSettings { Density = new Density(300, 300) }; // 300 DPI
-                    magickImages.Read(pdfStream, settings);
-
-                    int pageNum = 1;
-                    foreach (var image in magickImages)
-                    {
-                        string imageName = $"page_{pageNum}.png";
-                        string imagePath = Path.Combine(absoluteUploadsDir, imageName);
-                        image.Format = MagickFormat.Png; // Or Jpg
-                        await Task.Run(() => image.Write(imagePath)); // Write to file (can be async if Magick.NET supports it directly)
-                        pageImagePaths.Add(Path.Combine("/",templateUploadsDir, imageName).Replace("\\", "/")); // Relative URL path
-                        pageNum++;
-                    }
-                }
-            }
-            catch (MagickException ex)
-            {
-                Console.WriteLine($"Magick.NET Error converting PDF: {ex.Message}");
-                // Handle error, maybe throw a custom exception
-                throw; // Re-throw for now
-            }
-
-            return (pageImagePaths, originalPdfStorageIdentifier);
-        }
-
-        public async Task<byte[]> GeneratePdfFromCanvasLayoutAsync(
-            List<string> pageImagePaths, string canvasLayoutJson, JsonElement jsonData)
-        {
-            // This is where you'd use iText 7 or PdfSharp
-            // 1. Create a new PDF document
-            // 2. For each pageImagePath:
-            //    a. Add a new page to the PDF
-            //    b. Load the image (from wwwroot + pageImagePath)
-            //    c. Draw the image onto the PDF page
-            //    d. Parse the relevant part of canvasLayoutJson for this page
-            //    e. For each text element in the layout:
-            //       i. Replace placeholders in its text content using jsonData
-            //       ii. Draw the text onto the PDF page at the specified x, y, font, size, color
-            // 3. Save the PDF to a memory stream and return as byte[]
-
-            // Placeholder implementation:
-            Console.WriteLine("GeneratePdfFromCanvasLayoutAsync: PDF generation from canvas not fully implemented yet.");
-            // For demonstration, you might return a simple PDF or throw NotImplementedException
-            // Example using a simple library or just returning an error PDF:
-            using (var ms = new MemoryStream())
-            {
-                // Example: Use PdfSharp or iText here.
-                // For now, let's just create a dummy PDF text.
-                // This is NOT how you'd actually do it.
-                using (var writer = new StreamWriter(ms, System.Text.Encoding.UTF8, 1024, true))
-                {
-                    await writer.WriteLineAsync("%PDF-1.4");
-                    await writer.WriteLineAsync("1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj");
-                    await writer.WriteLineAsync("2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj");
-                    await writer.WriteLineAsync("3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj");
-                    await writer.WriteLineAsync("4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj");
-                    string textContent = "Canvas PDF Generation (Not Implemented Fully)";
-                    string textStream = $"BT /F1 12 Tf 100 700 Td ({textContent}) Tj ET";
-                    await writer.WriteLineAsync($"5 0 obj<</Length {textStream.Length}>>stream");
-                    await writer.WriteLineAsync(textStream);
-                    await writer.WriteLineAsync("endstream endobj");
-                    await writer.WriteLineAsync("xref\n0 6\n0000000000 65535 f\n0000000010 00000 n\n0000000059 00000 n\n0000000112 00000 n\n0000000206 00000 n\n0000000282 00000 n\ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n400\n%%EOF");
-                }
-                return ms.ToArray();
-            }
-            // throw new NotImplementedException("PDF generation from canvas layout is not implemented.");
-        }
-        private string SanitizeFileName(string fileName)
-        {
-            foreach (char c in Path.GetInvalidFileNameChars())
-            {
-                fileName = fileName.Replace(c, '_');
-            }
-            return fileName.Replace(" ", "_");
-        }
-    }
-}
-```
-
-**8. `PDFGenerator.Web\Extensions\ServiceCollectionExtensions.cs`** (Register `PdfProcessingService`)
-
-```csharp
-// ... other usings
-using PDFGenerator.Infrastructure.Services; // For IPdfProcessingService
-
-namespace PDFGenerator.Web.Extensions
-{
-    public static class ServiceCollectionExtensions
-    {
-        public static IServiceCollection AddServices(this IServiceCollection services)
-        {
-             services.AddHttpContextAccessor();
-             services.AddScoped<IPdfProcessingService, PdfProcessingService>(); // Register new service
-
-            return services.AddScoped<IGetTemplatesDocHandler, GetTemplatesDocHandler>()
-            // ... rest of the handlers
-            .AddScoped<ISoftDeleteTemplateVersionHandler, SoftDeleteTemplateVersionHandler>();
-        }
-        // ... AddAuthenticationWithJwtBearer
-    }
-}
-// ... JwtCookieMiddleware
-```
-
-**9. `PDFGenerator.Infrastructure\DataAccess\Repositories\Implementation\TemplateRepository.cs`** (Modified Create/Update/Get methods)
+**11. `PDFGenerator.Infrastructure\DataAccess\Repositories\Implementation\TemplateRepository.cs`**
+(Implementing `GetTemplateContentByVersionReferenceAsync`)
 
 ```csharp
 // File: Infrastructure/Data/Repositories/TemplateRepository.cs
-// ... (usings)
-using PdfGeneratorApp.Common; // For TemplateTypeEnum
+using AutoMapper;
+using Microsoft.EntityFrameworkCore;
+using PDFGenerator.Infrastructure.DataAccess.Dtos;
+using PdfGeneratorApp.Common;
+using PdfGeneratorApp.Data;
+using PdfGeneratorApp.Infrastructure.Data.Repositories.Base;
+using PdfGeneratorApp.Models;
+using PdfGeneratorApp.Services;
+using System.Text.Json;
+using System.Linq;
+using System;
+using System.Collections.Generic; // Ensure List<T> is available
 
 namespace PdfGeneratorApp.Infrastructure.Data.Repositories
 {
     public class TemplateRepository : BaseRepository<Template, TemplateDataAccessDto>, ITemplateRepository
     {
-        // ... (constructor and existing methods like GetAllTemplateSimplAsync, GetAllAsync, AnyByNameAsync)
+        private readonly ApplicationDbContext context;
+        private readonly IMapper _mapper;
+        private readonly TemplateProcessingService _templateProcessingService;
 
-        // Updated to handle TemplateType and new properties
+        public TemplateRepository(ApplicationDbContext context, IMapper mapper, TemplateProcessingService templateProcessingService) : base(context, mapper)
+        {
+            this.context = context;
+            _mapper = mapper;
+            _templateProcessingService = templateProcessingService;
+        }
+
+        public async Task<Result<List<TemplateSimpleDto>>> GetAllTemplateSimplAsync()
+        {
+            try
+            {
+                List<TemplateSimpleDto> data = await context.Templates.Select(t => new TemplateSimpleDto()
+                {
+                    Id = t.Id,
+                    Name = t.Name,
+                    Description = t.Description,
+                    LastModified = t.LastModified,
+                    TestingVersion = t.TestingVersion,
+                    ProductionVersion = t.ProductionVersion
+
+                }).ToListAsync();
+                return Result<List<TemplateSimpleDto>>.Success(data);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in TemplateRepository.GetAllTemplateSimplAsync: {ex.Message}");
+                return Result<List<TemplateSimpleDto>>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
+            }
+        }
+
+        public async Task<Result<List<TemplatesDocDataAccessDto>>> GetAllAsync()
+        {
+             try
+             {
+                 var templates = await (from t in context.Templates
+                                        join tv in context.TemplateVersions
+                                        on new { TemplateId = t.Id, Version = t.TestingVersion }
+                                        equals new { tv.TemplateId, Version = tv.VersionNumber }
+                                        where !tv.IsDeleted
+                                        select new TemplatesDocDataAccessDto
+                                        {
+                                            Id = t.Id,
+                                            Name = t.Name,
+                                            Description = t.Description,
+                                            ExampleJsonData = tv.ExampleJsonData,
+                                            InternalDataConfigJson = tv.InternalDataConfigJson,
+                                            TestingVersion = t.TestingVersion,
+                                            ProductionVersion = t.ProductionVersion
+                                        }).ToListAsync();
+                return Result<List<TemplatesDocDataAccessDto>>.Success(templates);
+             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in TemplateRepository.GetAllAsync: {ex.Message}");
+                return Result<List<TemplatesDocDataAccessDto>>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
+            }
+        }
+
+        // Remains the same: fetches Testing version content for Design UI.
         public async Task<Result<TemplateDataAccessDto>> GetByNameAsync(string name)
         {
             Template? template = await context.Templates
@@ -736,8 +479,6 @@ namespace PdfGeneratorApp.Infrastructure.Data.Repositories
             {
                 return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.TemplateNotFound);
             }
-
-            // Get content based on Testing Version
             TemplateVersion? currentTestingVersionContent = template.Versions
                 .SingleOrDefault(tv => tv.VersionNumber == template.TestingVersion && !tv.IsDeleted);
 
@@ -745,107 +486,78 @@ namespace PdfGeneratorApp.Infrastructure.Data.Repositories
             {
                  return Result<TemplateDataAccessDto>.Failure(string.Format(ErrorMessageUserConst.VersionNotFound, template.TestingVersion, name));
             }
-
-            var templateDto = _mapper.Map<TemplateDataAccessDto>(template); // Maps Id, Name, TemplateType, TestingVersion, ProductionVersion, LastModified, OriginalPdfStorageIdentifier
-
-            // Populate content fields based on template type and current testing version
-            if (template.TemplateType == TemplateTypeEnum.Html)
-            {
-                templateDto.HtmlContent = currentTestingVersionContent.HtmlContent;
-            }
-            else if (template.TemplateType == TemplateTypeEnum.UploadedPdf)
-            {
-                templateDto.CanvasLayoutJson = currentTestingVersionContent.CanvasLayoutJson;
-                templateDto.PageImagePathsJson = currentTestingVersionContent.PageImagePathsJson;
-            }
-            templateDto.Description = currentTestingVersionContent.Description; // Common field
+            var templateDto = _mapper.Map<TemplateDataAccessDto>(template);
+            templateDto.HtmlContent = currentTestingVersionContent.HtmlContent;
+            templateDto.Description = currentTestingVersionContent.Description;
             templateDto.ExampleJsonData = currentTestingVersionContent.ExampleJsonData;
             templateDto.InternalDataConfigJson = currentTestingVersionContent.InternalDataConfigJson;
-
-
+            templateDto.TestingVersion = template.TestingVersion;
+            templateDto.ProductionVersion = template.ProductionVersion;
             return Result<TemplateDataAccessDto>.Success(templateDto);
         }
 
+        public async Task<Result<bool>> AnyByNameAsync(string name)
+        {
+            try
+            {
+                var exists = await context.Templates.AnyAsync(t => t.Name == name);
+                return Result<bool>.Success(exists);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in TemplateRepository.AnyByNameAsync: {ex.Message}");
+                return Result<bool>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
+            }
+        }
 
-        // Updated for TemplateType
         public async Task<Result<TemplateDataAccessDto>> CreateNewTemplateAsync(TemplateDataAccessDto templateDto)
         {
             templateDto.Name = templateDto.Name.Replace(" ", "_");
-
             var nameExistsResult = await context.Templates.AnyAsync(t => t.Name == templateDto.Name);
             if (nameExistsResult) return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.TemplateNameExists);
-
-            // ExampleJsonData is common, generate if HTML type and no explicit example provided
-            if (templateDto.TemplateType == TemplateTypeEnum.Html && string.IsNullOrWhiteSpace(templateDto.ExampleJsonData))
+            try
+            {
+                templateDto.ExampleJsonData = _templateProcessingService.GenerateExampleJson(templateDto.HtmlContent);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error generating example JSON on create: {ex.Message}");
+                return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.ExampleJsonGenerationFailed);
+            }
+            if (!string.IsNullOrWhiteSpace(templateDto.InternalDataConfigJson))
             {
                 try
                 {
-                    templateDto.ExampleJsonData = _templateProcessingService.GenerateExampleJson(templateDto.HtmlContent ?? "");
+                    using JsonDocument doc = JsonDocument.Parse(templateDto.InternalDataConfigJson);
+                    if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    {
+                        return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InternalDataConfigNotObject);
+                    }
                 }
-                catch (Exception ex)
+                catch (JsonException)
                 {
-                    Console.WriteLine($"Error generating example JSON on create: {ex.Message}");
-                    return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.ExampleJsonGenerationFailed);
+                    return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InternalDataConfigInvalidJson);
                 }
             }
-
-
-            if (!string.IsNullOrWhiteSpace(templateDto.InternalDataConfigJson))
-            {
-                // ... (JSON validation as before) ...
-            }
-
             templateDto.TestingVersion = 1;
             templateDto.ProductionVersion = 1;
             templateDto.LastModified = DateTime.Now;
-
             var initialVersion = new TemplateVersion
             {
-                VersionNumber = 1,
-                CreatedDate = DateTime.Now,
-                Description = templateDto.Description,
-                ExampleJsonData = templateDto.ExampleJsonData,
-                InternalDataConfigJson = templateDto.InternalDataConfigJson,
-                IsDeleted = false
+                VersionNumber = 1, CreatedDate = DateTime.Now, HtmlContent = templateDto.HtmlContent,
+                Description = templateDto.Description, ExampleJsonData = templateDto.ExampleJsonData,
+                InternalDataConfigJson = templateDto.InternalDataConfigJson, IsDeleted = false
             };
-
-            if (templateDto.TemplateType == TemplateTypeEnum.Html)
-            {
-                initialVersion.HtmlContent = templateDto.HtmlContent;
-            }
-            else if (templateDto.TemplateType == TemplateTypeEnum.UploadedPdf)
-            {
-                initialVersion.CanvasLayoutJson = templateDto.CanvasLayoutJson; // Should come from client/handler
-                initialVersion.PageImagePathsJson = templateDto.PageImagePathsJson; // Should come from handler after PDF processing
-            }
-
-
             try
             {
                 Template template = new Template
                 {
-                    Name = templateDto.Name,
-                    TemplateType = templateDto.TemplateType,
-                    Description = templateDto.Description,
-                    TestingVersion = templateDto.TestingVersion,
-                    ProductionVersion = templateDto.ProductionVersion,
-                    LastModified = templateDto.LastModified,
-                    OriginalPdfStorageIdentifier = templateDto.OriginalPdfStorageIdentifier, // Save identifier
+                    Name = templateDto.Name, Description = templateDto.Description, TestingVersion = templateDto.TestingVersion,
+                    ProductionVersion = templateDto.ProductionVersion, LastModified = templateDto.LastModified,
                     Versions = new List<TemplateVersion> { initialVersion }
                 };
-
                 await context.Templates.AddAsync(template);
-                // To get the ID back immediately for the DTO, you'd need to save here,
-                // map, and then the UoW save would be a no-op.
-                // For now, the returned DTO won't have the DB-generated ID until after UoW.SaveAsync().
-                // We'll return the DTO as is. The handler might need to fetch it again if ID is crucial.
-                var createdDto = _mapper.Map<TemplateDataAccessDto>(template); // Map the fully constructed entity
-                createdDto.HtmlContent = initialVersion.HtmlContent; // Ensure content is in DTO
-                createdDto.CanvasLayoutJson = initialVersion.CanvasLayoutJson;
-                createdDto.PageImagePathsJson = initialVersion.PageImagePathsJson;
-
-
-                return Result<TemplateDataAccessDto>.Success(createdDto);
+                return Result<TemplateDataAccessDto>.Success(templateDto);
             }
             catch (Exception ex)
             {
@@ -854,132 +566,46 @@ namespace PdfGeneratorApp.Infrastructure.Data.Repositories
             }
         }
 
-        // Updated for TemplateType
         public async Task<Result<TemplateDataAccessDto>> UpdateTemplateAsync(TemplateDataAccessDto templateDto)
         {
-             // ... (JSON validation as before) ...
-
+            if (!string.IsNullOrWhiteSpace(templateDto.InternalDataConfigJson))
+            {
+                 try {
+                     using JsonDocument doc = JsonDocument.Parse(templateDto.InternalDataConfigJson);
+                     if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                     {
+                         return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InternalDataConfigNotObject);
+                     }
+                } catch (JsonException) {
+                     return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InternalDataConfigInvalidJson);
+                }
+            }
             Template? existingTemplate = await context.Templates
                                               .Include(t => t.Versions)
                                               .FirstOrDefaultAsync(t => t.Id == templateDto.Id);
-
             if (existingTemplate == null)
             {
                 return Result<TemplateDataAccessDto>.Failure(string.Format(ErrorMessageUserConst.TemplateIdNotFound, templateDto.Id));
             }
-
             int lastVersionNumber = existingTemplate.Versions.Any() ? existingTemplate.Versions.Max(tv => tv.VersionNumber) : 0;
             int nextVersionNumber = lastVersionNumber + 1;
-
             TemplateVersion newVersion = new TemplateVersion()
             {
-                TemplateId = templateDto.Id,
-                VersionNumber = nextVersionNumber,
-                Description = templateDto.Description,
-                ExampleJsonData = templateDto.ExampleJsonData,
-                InternalDataConfigJson = templateDto.InternalDataConfigJson,
-                CreatedDate = DateTime.Now,
-                IsDeleted = false
+                TemplateId = templateDto.Id, VersionNumber = nextVersionNumber, HtmlContent = templateDto.HtmlContent,
+                Description = templateDto.Description, ExampleJsonData = _templateProcessingService.GenerateExampleJson(templateDto.HtmlContent),
+                InternalDataConfigJson = templateDto.InternalDataConfigJson, CreatedDate = DateTime.Now, IsDeleted = false
             };
-
-            if (existingTemplate.TemplateType == TemplateTypeEnum.Html) // Assume type doesn't change on update
-            {
-                newVersion.HtmlContent = templateDto.HtmlContent;
-                if (string.IsNullOrWhiteSpace(newVersion.ExampleJsonData)) // Auto-generate if empty for HTML
-                {
-                    newVersion.ExampleJsonData = _templateProcessingService.GenerateExampleJson(newVersion.HtmlContent ?? "");
-                }
-            }
-            else if (existingTemplate.TemplateType == TemplateTypeEnum.UploadedPdf)
-            {
-                newVersion.CanvasLayoutJson = templateDto.CanvasLayoutJson;
-                // If UploadedPdfFile is provided in templateDto, handler should process it and set PageImagePathsJson
-                // For now, assume templateDto.PageImagePathsJson is populated by the handler if a new PDF was uploaded.
-                newVersion.PageImagePathsJson = templateDto.PageImagePathsJson;
-                 // Also update the OriginalPdfStorageIdentifier on the parent Template if a new PDF was uploaded
-                 if (!string.IsNullOrWhiteSpace(templateDto.OriginalPdfStorageIdentifier))
-                 {
-                     existingTemplate.OriginalPdfStorageIdentifier = templateDto.OriginalPdfStorageIdentifier;
-                 }
-
-            }
-
             existingTemplate.Versions.Add(newVersion);
             existingTemplate.TestingVersion = newVersion.VersionNumber;
             existingTemplate.Description = templateDto.Description;
             existingTemplate.LastModified = DateTime.Now;
-
-            var updatedDto = _mapper.Map<TemplateDataAccessDto>(existingTemplate);
-            // Ensure content from the new version is in the DTO
-            updatedDto.HtmlContent = newVersion.HtmlContent;
-            updatedDto.CanvasLayoutJson = newVersion.CanvasLayoutJson;
-            updatedDto.PageImagePathsJson = newVersion.PageImagePathsJson;
-
-            return Result<TemplateDataAccessDto>.Success(updatedDto);
+            var updatedTemplateDto = _mapper.Map<TemplateDataAccessDto>(existingTemplate);
+            updatedTemplateDto.HtmlContent = newVersion.HtmlContent;
+            updatedTemplateDto.ExampleJsonData = newVersion.ExampleJsonData;
+            updatedTemplateDto.InternalDataConfigJson = newVersion.InternalDataConfigJson;
+            return Result<TemplateDataAccessDto>.Success(updatedTemplateDto);
         }
 
-        // GetTemplateContentByVersionReferenceAsync: Updated to handle TemplateType
-        public async Task<Result<TemplateDataAccessDto>> GetTemplateContentByVersionReferenceAsync(string templateName, string versionReferenceType)
-        {
-             Template? template = await context.Templates
-                                       .Include(t => t.Versions)
-                                       .SingleOrDefaultAsync(t => t.Name == templateName);
-
-             if (template == null)
-             {
-                 return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.TemplateNotFound);
-             }
-
-             int targetVersionNumber;
-             string normalizedVersionReferenceType = versionReferenceType.ToLowerInvariant();
-
-             switch (normalizedVersionReferenceType)
-             {
-                 case string s when s == VersionReferenceType.Testing.ToLowerInvariant():
-                     targetVersionNumber = template.TestingVersion;
-                     break;
-                 case string s when s == VersionReferenceType.Production.ToLowerInvariant():
-                     if (!template.ProductionVersion.HasValue)
-                     {
-                          return Result<TemplateDataAccessDto>.Failure($"Production version is not set for template '{templateName}'.");
-                     }
-                     targetVersionNumber = template.ProductionVersion.Value;
-                     break;
-                 default:
-                     return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InvalidVersionReferenceType);
-             }
-
-             TemplateVersion? targetVersionContent = template.Versions
-                 .SingleOrDefault(tv => tv.VersionNumber == targetVersionNumber && !tv.IsDeleted);
-
-             if (targetVersionContent == null)
-             {
-                  string referencedVersionTypeFriendly = (normalizedVersionReferenceType == VersionReferenceType.Testing.ToLowerInvariant()) ? "Testing" : "Production";
-                  return Result<TemplateDataAccessDto>.Failure($"Content for {referencedVersionTypeFriendly} version {targetVersionNumber} not found or is deleted for template '{templateName}'.");
-             }
-
-             var templateDto = _mapper.Map<TemplateDataAccessDto>(template);
-
-            // Populate content fields based on template type
-            if (template.TemplateType == TemplateTypeEnum.Html)
-            {
-                templateDto.HtmlContent = targetVersionContent.HtmlContent;
-            }
-            else if (template.TemplateType == TemplateTypeEnum.UploadedPdf)
-            {
-                templateDto.CanvasLayoutJson = targetVersionContent.CanvasLayoutJson;
-                templateDto.PageImagePathsJson = targetVersionContent.PageImagePathsJson;
-                // OriginalPdfStorageIdentifier is already mapped from template entity
-            }
-            templateDto.Description = targetVersionContent.Description; // Common field
-            templateDto.ExampleJsonData = targetVersionContent.ExampleJsonData; // Common field
-            templateDto.InternalDataConfigJson = targetVersionContent.InternalDataConfigJson; // Common field
-
-             return Result<TemplateDataAccessDto>.Success(templateDto);
-        }
-
-
-        // ... (RevertTemplateAsync, PublishTemplateAsync remain the same)
         public async Task<Result<int>> RevertTemplateAsync(string templateName, int targetVersionNumber, string versionReferenceType)
         {
             Template? existingTemplate = await context.Templates
@@ -996,7 +622,7 @@ namespace PdfGeneratorApp.Infrastructure.Data.Repositories
             {
                  return Result<int>.Failure($"Version {targetVersionNumber} for template '{templateName}' is deleted and cannot be reverted to.");
             }
-            switch (versionReferenceType.ToLowerInvariant()) // Use ToLowerInvariant for comparison
+            switch (versionReferenceType.ToLowerInvariant())
             {
                 case string s when s == VersionReferenceType.Testing.ToLowerInvariant():
                      existingTemplate.TestingVersion = targetVersionNumber;
@@ -1028,248 +654,71 @@ namespace PdfGeneratorApp.Infrastructure.Data.Repositories
             return Result<int>.Success(existingTemplate.ProductionVersion.Value);
         }
 
-    }
-}
-```
-
-**10. `PDFGenerator.Web\Services\CreateTemplateHandler.cs`**
-
-```csharp
-// File: Handlers/CreateTemplateHandler.cs
-using AutoMapper;
-using PDFGenerator.Infrastructure.DataAccess.Dtos;
-using PDFGenerator.Web.Dtos.Template;
-using PdfGeneratorApp.Common;
-using PdfGeneratorApp.Infrastructure.Data.UnitOfWork;
-using System.Threading.Tasks;
-using PDFGenerator.Infrastructure.Services; // For IPdfProcessingService
-using System.IO; // For Stream
-using System.Collections.Generic; // For List
-using System.Text.Json; // For JsonSerializer
-
-namespace PdfGeneratorApp.Handlers
-{
-    public interface ICreateTemplateHandler : IHandler<TemplateCreateDto, string> // Return template name
-    {
-    }
-
-    public class CreateTemplateHandler : ICreateTemplateHandler
-    {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IMapper _mapper;
-        private readonly IPdfProcessingService _pdfProcessingService; // New service
-
-        public CreateTemplateHandler(IUnitOfWork unitOfWork, IMapper mapper, IPdfProcessingService pdfProcessingService)
+        // NEW METHOD IMPLEMENTATION: Get Template Content based on a specified version reference type
+        public async Task<Result<TemplateDataAccessDto>> GetTemplateContentByVersionReferenceAsync(string templateName, string versionReferenceType)
         {
-            _unitOfWork = unitOfWork;
-            _mapper = mapper;
-            _pdfProcessingService = pdfProcessingService;
-        }
+             Template? template = await context.Templates
+                                       .Include(t => t.Versions) // Crucial to include versions to find the target
+                                       .SingleOrDefaultAsync(t => t.Name == templateName);
 
-        public async Task<Result<string>> HandleAsync(TemplateCreateDto templateDto)
-        {
-            try
-            {
-                // Map the input Web DTO (TemplateCreateDto) to a DataAccess DTO (TemplateDataAccessDto).
-                var dataAccessTemplateDto = _mapper.Map<TemplateDataAccessDto>(templateDto);
-                // TemplateType and Name are mapped. HtmlContent, CanvasLayoutJson etc. are also mapped if present.
+             if (template == null)
+             {
+                 return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.TemplateNotFound);
+             }
 
-                if (templateDto.TemplateType == TemplateTypeEnum.UploadedPdf)
-                {
-                    if (templateDto.UploadedPdfFile == null || templateDto.UploadedPdfFile.Length == 0)
-                    {
-                        return Result<string>.Failure("An Uploaded PDF file is required for 'UploadedPdf' template type.");
-                    }
+             int targetVersionNumber;
+             string normalizedVersionReferenceType = versionReferenceType.ToLowerInvariant(); // Normalize input for comparison
 
-                    List<string> pageImagePaths;
-                    string originalPdfIdentifier;
+             // Determine the target version number based on the reference type.
+             switch (normalizedVersionReferenceType)
+             {
+                 case string s when s == VersionReferenceType.Testing.ToLowerInvariant():
+                     targetVersionNumber = template.TestingVersion;
+                     break;
+                 case string s when s == VersionReferenceType.Production.ToLowerInvariant():
+                     if (!template.ProductionVersion.HasValue)
+                     {
+                          return Result<TemplateDataAccessDto>.Failure($"Production version is not set for template '{templateName}'.");
+                     }
+                     targetVersionNumber = template.ProductionVersion.Value;
+                     break;
+                 default:
+                     // This case should ideally be caught by handler's IsValid check, but good as a fallback.
+                     return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InvalidVersionReferenceType);
+             }
 
-                    using (var memoryStream = new MemoryStream())
-                    {
-                        await templateDto.UploadedPdfFile.CopyToAsync(memoryStream);
-                        memoryStream.Position = 0; // Reset stream for reading
-                        var conversionResult = await _pdfProcessingService.ConvertPdfToImagesAsync(memoryStream, templateDto.Name, 1); // Version 1 initially
-                        pageImagePaths = conversionResult.PageImagePaths;
-                        originalPdfIdentifier = conversionResult.OriginalPdfIdentifier;
-                    }
+             // Find the TemplateVersion entity matching the determined version number.
+             // Ensure it's not deleted.
+             TemplateVersion? targetVersionContent = template.Versions
+                 .SingleOrDefault(tv => tv.VersionNumber == targetVersionNumber && !tv.IsDeleted);
 
-                    if (pageImagePaths == null || !pageImagePaths.Any())
-                    {
-                        return Result<string>.Failure("Failed to convert uploaded PDF to images.");
-                    }
+             if (targetVersionContent == null)
+             {
+                  // This indicates an inconsistency: the template points to a version number that doesn't exist or is deleted.
+                  string referencedVersionType = (normalizedVersionReferenceType == VersionReferenceType.Testing.ToLowerInvariant()) ? "Testing" : "Production";
+                  return Result<TemplateDataAccessDto>.Failure($"Content for {referencedVersionType} version {targetVersionNumber} not found or is deleted for template '{templateName}'.");
+             }
 
-                    dataAccessTemplateDto.PageImagePathsJson = JsonSerializer.Serialize(pageImagePaths);
-                    dataAccessTemplateDto.OriginalPdfStorageIdentifier = originalPdfIdentifier;
-                    dataAccessTemplateDto.HtmlContent = null; // Ensure HTML content is null for PDF type
-                }
-                else if (templateDto.TemplateType == TemplateTypeEnum.Html)
-                {
-                    if (string.IsNullOrWhiteSpace(templateDto.HtmlContent))
-                    {
-                        return Result<string>.Failure("HTML Content is required for 'Html' template type.");
-                    }
-                    dataAccessTemplateDto.CanvasLayoutJson = null; // Ensure canvas layout is null
-                    dataAccessTemplateDto.PageImagePathsJson = null;
-                    dataAccessTemplateDto.OriginalPdfStorageIdentifier = null;
-                }
-                else
-                {
-                    return Result<string>.Failure("Invalid template type specified.");
-                }
+             // Create the TemplateDataAccessDto with properties from the Template entity and content from the target version.
+             var templateDto = _mapper.Map<TemplateDataAccessDto>(template); // Maps Id, Name, TestingVersion, ProductionVersion, LastModified, Description, FabricJson
 
+             // Manually map the content properties from the specific target version.
+             templateDto.HtmlContent = targetVersionContent.HtmlContent;
+             templateDto.Description = targetVersionContent.Description; // Use version's description if available and preferred.
+             templateDto.ExampleJsonData = targetVersionContent.ExampleJsonData;
+             templateDto.InternalDataConfigJson = targetVersionContent.InternalDataConfigJson;
+             // The version numbers on the DTO should reflect the template's current state.
 
-                Result<TemplateDataAccessDto> result = await _unitOfWork.Templates.CreateNewTemplateAsync(dataAccessTemplateDto);
-
-                if (!result.IsCompleteSuccessfully)
-                    return Result<string>.Failure(result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-
-                var saveResult = await _unitOfWork.SaveAsync();
-                if (!saveResult.IsCompleteSuccessfully)
-                    return Result<string>.Failure(saveResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-
-                // Return the name of the created template (or ID if preferred)
-                return Result<string>.Success(result.Data.Name); // result.Data from CreateNewTemplateAsync is the DTO passed in
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in CreateTemplateHandler: {ex.Message}");
-                return Result<string>.Failure($"An unexpected error occurred during template creation: {ex.Message}");
-            }
+             return Result<TemplateDataAccessDto>.Success(templateDto);
         }
     }
 }
 ```
 
-**11. `PDFGenerator.Web\Services\UpdateTemplateHandler.cs`**
+---
 
-```csharp
-// File: Handlers/UpdateTemplateHandler.cs
-using AutoMapper;
-using PDFGenerator.Infrastructure.DataAccess.Dtos;
-using PDFGenerator.Web.Dtos.Template;
-using PdfGeneratorApp.Common;
-using PdfGeneratorApp.Infrastructure.Data.UnitOfWork;
-using System.Threading.Tasks;
-using PDFGenerator.Infrastructure.Services; // For IPdfProcessingService
-using System.IO; // For Stream
-using System.Collections.Generic; // For List
-using System.Text.Json; // For JsonSerializer
-using System; // For Exception
-
-namespace PdfGeneratorApp.Handlers
-{
-    public interface IUpdateTemplateHandler : IHandler<TemplateUpdateDto, int> // Returns new Testing Version
-    {
-    }
-
-    public class UpdateTemplateHandler : IUpdateTemplateHandler
-    {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IMapper _mapper;
-        private readonly IPdfProcessingService _pdfProcessingService; // New service
-
-        public UpdateTemplateHandler(IUnitOfWork unitOfWork, IMapper mapper, IPdfProcessingService pdfProcessingService)
-        {
-            _unitOfWork = unitOfWork;
-            _mapper = mapper;
-            _pdfProcessingService = pdfProcessingService;
-        }
-
-        public async Task<Result<int>> HandleAsync(TemplateUpdateDto templateDto)
-        {
-            try
-            {
-                // First, get the existing template to know its type and current state
-                var existingTemplateResult = await _unitOfWork.Templates.GetByNameAsync(templateDto.Id.ToString()); // Assuming GetByNameAsync can also take ID (or add GetByIdAsync)
-                                                                                                                      // For now, let's assume we need to get by ID:
-                var existingTemplateEntity = await _unitOfWork.TemplateVersions.GetTemplateByIdAsync(templateDto.Id); // Get the Template entity
-                if (existingTemplateEntity == null)
-                {
-                    return Result<int>.Failure(ErrorMessageUserConst.TemplateNotFound);
-                }
-
-
-                var dataAccessTemplateDto = _mapper.Map<TemplateDataAccessDto>(templateDto);
-                dataAccessTemplateDto.TemplateType = existingTemplateEntity.TemplateType; // Type doesn't change on update
-
-                if (existingTemplateEntity.TemplateType == TemplateTypeEnum.UploadedPdf)
-                {
-                    // If a new PDF file is uploaded for an existing UploadedPdf template
-                    if (templateDto.UploadedPdfFile != null && templateDto.UploadedPdfFile.Length > 0)
-                    {
-                        int nextVersionNumber = existingTemplateEntity.Versions.Any()
-                            ? existingTemplateEntity.Versions.Max(v => v.VersionNumber) + 1
-                            : 1;
-
-                        List<string> pageImagePaths;
-                        string originalPdfIdentifier;
-                        using (var memoryStream = new MemoryStream())
-                        {
-                            await templateDto.UploadedPdfFile.CopyToAsync(memoryStream);
-                            memoryStream.Position = 0;
-                            var conversionResult = await _pdfProcessingService.ConvertPdfToImagesAsync(memoryStream, existingTemplateEntity.Name, nextVersionNumber);
-                            pageImagePaths = conversionResult.PageImagePaths;
-                            originalPdfIdentifier = conversionResult.OriginalPdfIdentifier;
-                        }
-                        if (pageImagePaths == null || !pageImagePaths.Any())
-                        {
-                            return Result<int>.Failure("Failed to convert uploaded PDF to images during update.");
-                        }
-                        dataAccessTemplateDto.PageImagePathsJson = JsonSerializer.Serialize(pageImagePaths);
-                        dataAccessTemplateDto.OriginalPdfStorageIdentifier = originalPdfIdentifier; // Update identifier for new PDF
-                    }
-                    else
-                    {
-                        // No new PDF uploaded, keep existing PageImagePathsJson from the *previous* testing version's content
-                        // The UpdateTemplateAsync in repo will create a new version entry,
-                        // we need to decide if it copies old PageImagePathsJson or if client MUST provide CanvasLayoutJson to make sense
-                        // For now, if no new file, assume CanvasLayoutJson is the primary change.
-                        // The repository's UpdateTemplateAsync needs to be smart about this, or the handler needs to fetch previous version's paths.
-                        // Let's assume the handler is responsible if paths need to be copied.
-                        var previousTestingVersion = existingTemplateEntity.Versions
-                            .FirstOrDefault(v => v.VersionNumber == existingTemplateEntity.TestingVersion && !v.IsDeleted);
-                        if (previousTestingVersion != null)
-                        {
-                            dataAccessTemplateDto.PageImagePathsJson = previousTestingVersion.PageImagePathsJson;
-                            dataAccessTemplateDto.OriginalPdfStorageIdentifier = existingTemplateEntity.OriginalPdfStorageIdentifier; // Keep old identifier
-                        }
-                    }
-                    dataAccessTemplateDto.HtmlContent = null; // Ensure HTML is null
-                }
-                else if (existingTemplateEntity.TemplateType == TemplateTypeEnum.Html)
-                {
-                    if (string.IsNullOrWhiteSpace(templateDto.HtmlContent))
-                    {
-                        return Result<int>.Failure("HTML Content is required for 'Html' template type update.");
-                    }
-                    dataAccessTemplateDto.CanvasLayoutJson = null;
-                    dataAccessTemplateDto.PageImagePathsJson = null;
-                    dataAccessTemplateDto.OriginalPdfStorageIdentifier = null;
-                }
-
-
-                var updateOpResult = await _unitOfWork.Templates.UpdateTemplateAsync(dataAccessTemplateDto);
-
-                if (!updateOpResult.IsCompleteSuccessfully)
-                    return Result<int>.Failure(updateOpResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-
-                var saveResult = await _unitOfWork.SaveAsync();
-                if (!saveResult.IsCompleteSuccessfully)
-                    return Result<int>.Failure(saveResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-
-                return Result<int>.Success(updateOpResult.Data.TestingVersion);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in UpdateTemplateHandler: {ex.Message}");
-                return Result<int>.Failure($"An unexpected error occurred during template update: {ex.Message}");
-            }
-        }
-    }
-}
-```
-
-**12. `PDFGenerator.Web\Services\GeneratePdfHandler.cs`** (Updated to handle new template type)
+**12. `PDFGenerator.Web\Services\GeneratePdfHandler.cs`**
+(Modified to accept and use `versionReferenceType`)
 
 ```csharp
 // File: Handlers/GeneratePdfHandler.cs
@@ -1280,12 +729,10 @@ using WkHtmlToPdfDotNet;
 using WkHtmlToPdfDotNet.Contracts;
 using PdfGeneratorApp.Infrastructure.Data.UnitOfWork;
 using System.Threading.Tasks;
-using PDFGenerator.Infrastructure.Services; // For IPdfProcessingService
-using System.Collections.Generic; // For List
-using System; // For Exception
 
 namespace PdfGeneratorApp.Handlers
 {
+    // Interface updated to include versionReferenceType in the request tuple.
     public interface IGeneratePdfHandler : IHandler<(string templateName, JsonElement requestBodyJson, string mode, string? versionReferenceType), byte[]>
     {
     }
@@ -1293,27 +740,1093 @@ namespace PdfGeneratorApp.Handlers
     public class GeneratePdfHandler : IGeneratePdfHandler
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IConverter _wkHtmlToPdfConverter; // Renamed for clarity
+        private readonly IConverter _converter;
         private readonly TemplateProcessingService _templateProcessingService;
-        private readonly IPdfProcessingService _pdfProcessingService; // New service for canvas PDFs
 
-        public GeneratePdfHandler(IUnitOfWork unitOfWork, IConverter wkHtmlToPdfConverter,
-                                  TemplateProcessingService templateProcessingService, IPdfProcessingService pdfProcessingService)
+        public GeneratePdfHandler(IUnitOfWork unitOfWork, IConverter converter, TemplateProcessingService templateProcessingService)
         {
             _unitOfWork = unitOfWork;
-            _wkHtmlToPdfConverter = wkHtmlToPdfConverter;
+            _converter = converter;
             _templateProcessingService = templateProcessingService;
-            _pdfProcessingService = pdfProcessingService;
         }
 
         public async Task<Result<byte[]>> HandleAsync((string templateName, JsonElement requestBodyJson, string mode, string? versionReferenceType) request)
         {
             try
             {
-                string effectiveVersionType = string.IsNullOrWhiteSpace(request.versionReferenceType) || !VersionReferenceType.IsValid(request.versionReferenceType)
-                                                ? VersionReferenceType.Testing
-                                                : (request.versionReferenceType.Trim().ToLowerInvariant() == VersionReferenceType.Testing.ToLowerInvariant() ? VersionReferenceType.Testing : VersionReferenceType.Production);
+                // Determine the effective version type to use. Default to Testing if invalid or null.
+                string effectiveVersionType = VersionReferenceType.Testing; // Default
+                if (!string.IsNullOrWhiteSpace(request.versionReferenceType) && VersionReferenceType.IsValid(request.versionReferenceType))
+                {
+                    effectiveVersionType = request.versionReferenceType;
+                }
+                else if (!string.IsNullOrWhiteSpace(request.versionReferenceType))
+                {
+                    // Log or handle invalid type if it's explicitly provided but invalid.
+                    Console.WriteLine($"Warning: Invalid versionReferenceType '{request.versionReferenceType}' provided. Defaulting to Testing.");
+                }
 
+
+                // Fetch template content using the NEW repository method, specifying the desired version type.
+                var repoResult = await _unitOfWork.Templates.GetTemplateContentByVersionReferenceAsync(request.templateName, effectiveVersionType);
+
+                if (!repoResult.IsCompleteSuccessfully)
+                {
+                    // Propagate failure from repository (e.g., Template Not Found, Version Content Not Found/Deleted, Production version not set).
+                    return Result<byte[]>.Failure(repoResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+                }
+
+                var templateDataAccessDto = repoResult.Data; // Get the DTO with content from the target version.
+
+                // Logic for determining finalDataForHtmlProcessing based on 'mode' remains the same.
+                JsonElement finalDataForHtmlProcessing;
+                JsonElement insideParameters = default;
+
+                switch (request.mode.ToLowerInvariant())
+                {
+                    case "outside":
+                        finalDataForHtmlProcessing = request.requestBodyJson;
+                        break;
+
+                    case "inside":
+                        if (request.requestBodyJson.ValueKind != JsonValueKind.Object)
+                        {
+                            return Result<byte[]>.Failure(ErrorMessageUserConst.InsideModeBodyNotObject);
+                        }
+                        if (request.requestBodyJson.TryGetProperty("parameters", out JsonElement parametersElement))
+                        {
+                            insideParameters = parametersElement;
+                        }
+                        // Resolve internal data using the fetched template's InternalDataConfigJson (which comes from the target version)
+                        finalDataForHtmlProcessing = _templateProcessingService.ResolveInternalData(templateDataAccessDto.InternalDataConfigJson, insideParameters);
+                        break;
+
+                    default:
+                        return Result<byte[]>.Failure(ErrorMessageUserConst.InvalidMode);
+                }
+
+                // Process the HTML content (from the fetched version) with the determined data.
+                string processedHtml = _templateProcessingService.ProcessTemplate(templateDataAccessDto.HtmlContent, finalDataForHtmlProcessing);
+
+                var doc = new HtmlToPdfDocument()
+                {
+                    GlobalSettings = {
+                        ColorMode = ColorMode.Color,
+                        Orientation = Orientation.Portrait,
+                        PaperSize = PaperKind.A4,
+                        Margins = new MarginSettings() { Top = 10, Bottom = 10, Left = 10, Right = 10 },
+                        DPI = 300
+                    },
+                    Objects = {
+                        new ObjectSettings() {
+                            HtmlContent = processedHtml,
+                            WebSettings = { DefaultEncoding = "utf-8" }
+                        }
+                    }
+                };
+
+                byte[] pdf = _converter.Convert(doc);
+
+                if (pdf == null || pdf.Length == 0)
+                {
+                    return Result<byte[]>.Failure(ErrorMessageUserConst.PdfGenerationFailed + " Ensure wkhtmltopdf is correctly installed and accessible.");
+                }
+
+                return Result<byte[]>.Success(pdf);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GeneratePdfHandler: {ex.Message}");
+                return Result<byte[]>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
+            }
+        }
+    }
+}
+```
+
+---
+
+**12. `PDFGenerator.Web\Controllers\PdfController.cs`**
+(Modified POST action to pass `versionType` to handler)
+
+```csharp
+// File: Controllers/PdfController.cs
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using PdfGeneratorApp.Handlers;
+using PdfGeneratorApp.Common;
+using Microsoft.AspNetCore.Authorization;
+
+
+namespace PdfGeneratorApp.Controllers
+{
+    public class PdfController : Controller
+    {
+        private readonly IGetTemplateByNameHandler _getTemplateByNameHandler;
+        private readonly IGeneratePdfHandler _generatePdfHandler;
+
+        public PdfController(IGetTemplateByNameHandler getTemplateByNameHandler, IGeneratePdfHandler generatePdfHandler)
+        {
+            _getTemplateByNameHandler = getTemplateByNameHandler;
+            _generatePdfHandler = generatePdfHandler;
+        }
+
+        // GET: /pdf/generate/{templateName}
+        [HttpGet("pdf/generate/{templateName}")]
+        public async Task<IActionResult> Generate(string templateName)
+        {
+            var result = await _getTemplateByNameHandler.HandleAsync(templateName);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNotFound) return NotFound($"Template '{templateName}' not found.");
+
+                return StatusCode(500, result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+            }
+
+            var templateDto = result.Data;
+
+            return RedirectToAction("Design", "Template", new { templateName = templateDto.Name });
+        }
+
+        // POST: /pdf/generate/{templateName}
+        // Added [FromQuery] string? versionType parameter.
+        [HttpPost("pdf/generate/{templateName}")]
+        [Consumes("application/json")]
+        public async Task<IActionResult> Generate(
+            string templateName,
+            [FromBody] JsonElement requestBodyJson,
+            [FromQuery] string mode = "outside",
+            [FromQuery] string? versionType = null) // New optional query parameter
+        {
+            // Pass versionType to the handler's request tuple.
+            var request = (templateName, requestBodyJson, mode, versionType);
+            var result = await _generatePdfHandler.HandleAsync(request);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNotFound)
+                {
+                    return NotFound($"Template '{templateName}' not found.");
+                }
+                if (result.ErrorMessages == ErrorMessageUserConst.InvalidMode ||
+                    result.ErrorMessages == ErrorMessageUserConst.InsideModeBodyNotObject ||
+                    result.ErrorMessages == ErrorMessageUserConst.InvalidVersionReferenceType)
+                {
+                    return BadRequest(result.ErrorMessages);
+                }
+                // Handle cases where Production version is requested but not set.
+                if (result.ErrorMessages?.Contains("Production version is not set") ?? false)
+                {
+                     return BadRequest(result.ErrorMessages);
+                }
+                // Handle case where requested version content is deleted or not found.
+                 if (result.ErrorMessages?.Contains("not found or is deleted") ?? false)
+                 {
+                      return NotFound(result.ErrorMessages);
+                 }
+
+                return StatusCode(500, result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+            }
+
+            // Include version type in the filename for clarity.
+            string filenameVersionPart = string.IsNullOrWhiteSpace(versionType) ? "Testing" : versionType;
+            return File(result.Data, "application/pdf", $"{templateName}_{filenameVersionPart}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+        }
+    }
+}
+```
+
+---
+
+**13. `PDFGenerator.Web\Views\Docs\Templates.cshtml`**
+(Modified to include version selection in the "Try it out" section)
+
+```html
+@using System.Text.Json
+@using PDFGenerator.Web.Dtos.Template
+@using PdfGeneratorApp.Common // For VersionReferenceType constants
+@model List<TemplatesDocDto>
+
+@{
+    ViewData["Title"] = "API Documentation";
+}
+
+<div class="container">
+    <div class="page-header">
+        <h1>@ViewData["Title"]</h1>
+        <p class="page-subtitle">
+            Test and understand the PDF generation API endpoints. Each template uses its selected version for content.
+        </p>
+    </div>
+
+    @if (Model != null && Model.Any())
+    {
+        <div class="accordion" id="templateDocsAccordion">
+            @foreach (var template in Model)
+            {
+                string collapseId = $"collapse_template_{template.Id}";
+                string headingId = $"heading_template_{template.Id}";
+                string jsonDataTextareaId = $"jsonData_payload_{template.Id}";
+                string internalDataConfigJsonTextareaId = $"internalDataConfig_{template.Id}";
+                string insideParametersJsonTextareaId = $"insideParameters_{template.Id}";
+                // Unique name for the version type radio buttons within this accordion item
+                string versionTypeRadioName = $"versionType_{template.Id}";
+
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="@headingId">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
+                            <span class="badge bg-success me-2 p-2">POST</span>
+                            <code class="me-2 fs-6">/pdf/generate/@template.Name</code>
+                            <span class="text-muted small">@template.Description</span>
+                             <!-- Display versions here -->
+                            <span class="ms-auto badge bg-secondary me-1">Testing: v @template.TestingVersion</span>
+                            @if (template.ProductionVersion.HasValue)
+                            {
+                                <span class="badge bg-success">Prod: v @template.ProductionVersion.Value</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Prod: N/A</span>
+                            }
+                        </button>
+                    </h2>
+                    <div id="@collapseId" class="accordion-collapse collapse" aria-labelledby="@headingId" data-bs-parent="#templateDocsAccordion">
+                        <div class="accordion-body">
+                            <h5>Endpoint Summary</h5>
+                            <p>Generates a PDF document based on the <strong>@template.Name</strong> template. Content is retrieved from the selected template version (Testing or Production). Data is provided via the request body (Outside mode) or resolved internally using the template's configuration and optional parameters (Inside mode).</p>
+
+                            <hr class="my-3" />
+
+                            <div class="try-it-out-section" data-template-name="@template.Name">
+                                <h5><i class="fas fa-vial me-1"></i> Try it out</h5>
+                                <p class="small text-muted">Select mode and version, configure data/parameters, and click "Execute".</p>
+
+                                <!-- Mode Selection -->
+                                <div class="form-group mb-3">
+                                    <label class="form-label fw-semibold">Select Mode:</label>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input mode-radio" type="radio" name="mode_@template.Id" id="mode_outside_@template.Id" value="outside" checked>
+                                        <label class="form-check-label" for="mode_outside_@template.Id">Outside</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input mode-radio" type="radio" name="mode_@template.Id" id="mode_inside_@template.Id" value="inside">
+                                        <label class="form-check-label" for="mode_inside_@template.Id">Inside</label>
+                                    </div>
+                                </div>
+
+                                <!-- Version Type Selection -->
+                                 <div class="form-group mb-3">
+                                     <label class="form-label fw-semibold">Select Version:</label>
+                                     <div class="form-check form-check-inline">
+                                         <input class="form-check-input version-type-radio" type="radio" name="@versionTypeRadioName" id="version_testing_@template.Id" value="@VersionReferenceType.Testing" checked>
+                                         <label class="form-check-label" for="version_testing_@template.Id">Testing (v @template.TestingVersion)</label>
+                                     </div>
+                                     @if (template.ProductionVersion.HasValue)
+                                     {
+                                         <div class="form-check form-check-inline">
+                                             <input class="form-check-input version-type-radio" type="radio" name="@versionTypeRadioName" id="version_production_@template.Id" value="@VersionReferenceType.Production">
+                                             <label class="form-check-label" for="version_production_@template.Id">Production (v @template.ProductionVersion.Value)</label>
+                                         </div>
+                                     }
+                                 </div>
+
+                                <!-- Data Payload for OUTSIDE Mode -->
+                                <div class="form-group mb-3 data-config-section" data-mode="outside">
+                                    <label for="@jsonDataTextareaId" class="form-label fw-semibold">Request Body JSON for Outside Mode</label>
+                                    <textarea class="form-control json-payload" id="@jsonDataTextareaId" rows="10" style="font-family: monospace; font-size: 0.875em;">@FormatJsonForTextarea(template.ExampleJsonData)</textarea>
+                                    <small class="form-text text-muted">This JSON is sent in the request body as the data payload.</small>
+                                </div>
+
+                                <!-- Configuration Display for INSIDE Mode -->
+                                <div class="form-group mb-3 data-config-section" data-mode="inside" style="display:none;">
+                                    <label class="form-label fw-semibold">Internal Data Configuration (Read-only) for Inside Mode</label>
+                                    <textarea class="form-control" id="@internalDataConfigJsonTextareaId" rows="10" style="font-family: monospace; font-size: 0.875em;" readonly>@FormatJsonForTextarea(template.InternalDataConfigJson)</textarea>
+                                    <small class="form-text text-muted">This is the configuration stored for this template. Data resolution happens on the server using this config.</small>
+                                </div>
+
+                                <!-- Parameters Input for INSIDE Mode -->
+                                <div class="form-group mb-3 inside-parameters-section" style="display:none;">
+                                    <label for="@insideParametersJsonTextareaId" class="form-label fw-semibold">Inside Parameters JSON for Inside Mode</label>
+                                    <textarea class="form-control inside-parameters-json" id="@insideParametersJsonTextareaId" rows="5" style="font-family: monospace; font-size: 0.875em;">{}</textarea>
+                                    <small class="form-text text-muted">Provide JSON parameters to be used in the Internal Data Configuration (e.g., <code>{ "userNID": "12345" }</code>). This JSON will be nested under a "parameters" key in the request body.</small>
+                                </div>
+
+
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-success execute-btn">
+                                        <i class="fas fa-play-circle"></i> Execute
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary clear-response-btn ms-2" style="display:none;">
+                                        <i class="fas fa-times"></i> Clear Response
+                                    </button>
+                                </div>
+
+                                <div class="response-section mt-3" style="display:none;">
+                                    <h6><i class="fas fa-reply me-1"></i> Server Response</h6>
+                                    <div class="response-status mb-2 small p-2 border rounded bg-white"></div>
+                                    <div class="response-output p-2 border rounded bg-white" style="min-height: 50px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <i class="fas fa-book-open"></i>
+            <h3>No API Endpoints Documented</h3>
+            <p>Create some templates first to see their API documentation here.</p>
+        </div>
+    }
+</div>
+
+@functions {
+    public string FormatJsonForTextarea(string? jsonString)
+    {
+        if (string.IsNullOrWhiteSpace(jsonString)) return "{\n  \n}";
+        try
+        {
+            using var doc = JsonDocument.Parse(jsonString);
+            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (JsonException) { return System.Net.WebUtility.HtmlEncode(jsonString); }
+    }
+}
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+
+            // --- Mode Selection Toggle ---
+            $('.mode-radio').on('change', function() {
+                var $tryItOutSection = $(this).closest('.try-it-out-section');
+                var selectedMode = $(this).val();
+
+                $tryItOutSection.find('.data-config-section').hide();
+                $tryItOutSection.find('.inside-parameters-section').hide();
+
+                if (selectedMode === 'outside') {
+                     $tryItOutSection.find(`.data-config-section[data-mode="outside"]`).show();
+                } else if (selectedMode === 'inside') {
+                     $tryItOutSection.find(`.data-config-section[data-mode="inside"]`).show();
+                     $tryItOutSection.find('.inside-parameters-section').show();
+                }
+
+                 $tryItOutSection.find('.clear-response-btn').click();
+            });
+
+             // --- Version Type Selection Toggle ---
+             // This handles the change event for the version radio buttons.
+             // It's good practice to trigger a change if needed for initial state setup.
+             // No specific UI changes are made here based on version selection, but it's read by the execute button.
+             $('.version-type-radio').on('change', function() {
+                 // Optionally, if you wanted to update descriptions or example JSON based on version,
+                 // you would add that logic here. For now, it just captures the selection.
+             });
+
+
+            // --- Execute Button Logic ---
+            $('.execute-btn').on('click', function() {
+                var $button = $(this);
+                var $tryItOutSection = $button.closest('.try-it-out-section');
+                var templateName = $tryItOutSection.data('template-name');
+                var selectedMode = $tryItOutSection.find('.mode-radio:checked').val();
+                // Read the selected version type from the radio buttons
+                var selectedVersionType = $tryItOutSection.find('.version-type-radio:checked').val();
+
+
+                var $responseSection = $tryItOutSection.find('.response-section');
+                var $responseStatusDiv = $tryItOutSection.find('.response-status');
+                var $responseOutputDiv = $tryItOutSection.find('.response-output');
+                var $clearButton = $tryItOutSection.find('.clear-response-btn');
+
+                var requestBodyPayload = null;
+
+                $responseSection.hide();
+                $responseStatusDiv.empty().removeClass('text-danger text-success text-warning alert alert-danger alert-success alert-warning');
+                $responseOutputDiv.empty().removeClass('text-danger text-success text-warning').text('');
+                $clearButton.hide();
+
+                if (selectedMode === 'outside') {
+                     var $jsonPayloadTextarea = $tryItOutSection.find('.json-payload');
+                     var jsonDataString = $jsonPayloadTextarea.val();
+                     try {
+                          requestBodyPayload = jsonDataString.trim() === "" ? {} : JSON.parse(jsonDataString);
+                     } catch (e) {
+                         $responseStatusDiv.html('<strong>Error:</strong> Invalid JSON in Outside mode payload.').addClass('alert alert-danger');
+                         $responseOutputDiv.text(e.message).addClass('text-danger');
+                         $responseSection.show();
+                         $clearButton.show();
+                         return;
+                     }
+                } else if (selectedMode === 'inside') {
+                    var $insideParametersTextarea = $tryItOutSection.find('.inside-parameters-json');
+                    var insideParametersJsonString = $insideParametersTextarea.val();
+                    var parameters = null;
+
+                    try {
+                         parameters = insideParametersJsonString.trim() === "" ? {} : JSON.parse(insideParametersJsonString);
+                    } catch (e) {
+                        $responseStatusDiv.html('<strong>Error:</strong> Invalid JSON in Inside Parameters.').addClass('alert alert-danger');
+                        $responseOutputDiv.text(e.message).addClass('text-danger');
+                        $responseSection.show();
+                        $clearButton.show();
+                        return;
+                    }
+
+                     requestBodyPayload = { "parameters": parameters };
+                }
+
+                if (requestBodyPayload === null) {
+                     $responseStatusDiv.html('<strong>Error:</strong> Failed to prepare request payload.').addClass('alert alert-danger');
+                     $responseSection.show();
+                     $clearButton.show();
+                     return;
+                }
+
+
+                $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Executing...');
+
+                const endpoint = `/pdf/generate/${templateName}`;
+                const url = new URL(endpoint, window.location.origin);
+                url.searchParams.append('mode', selectedMode);
+                // Append the selected versionType to the URL query string
+                if (selectedVersionType) {
+                     url.searchParams.append('versionType', selectedVersionType);
+                }
+
+
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                        // Authorization header is added by JwtCookieMiddleware
+                    },
+                    body: JSON.stringify(requestBodyPayload)
+                })
+                .then(response => {
+                    const contentType = response.headers.get('content-type');
+                    if (!response.ok) {
+                         if (response.status === 401 || response.status === 403) {
+                              alert('Unauthorized. Please log in.');
+                              window.location.href = '/Account/Login'; // Redirect to login
+                              return Promise.reject('Unauthorized'); // Stop promise chain
+                         }
+                         return response.text().then(text => {
+                             throw new Error(`HTTP error! status: ${response.status} - ${text}`);
+                         });
+                    }
+
+                    if (contentType && contentType.includes('application/pdf')) {
+                        return response.blob().then(blob => ({
+                            blob: blob, isPdf: true, status: response.status, statusText: response.statusText, headers: response.headers, ok: response.ok
+                        }));
+                    } else {
+                         return response.text().then(text => ({
+                            text: text, isPdf: false, status: response.status, statusText: response.statusText, headers: response.headers, ok: response.ok
+                        }));
+                    }
+                })
+                .then(result => {
+                    $responseStatusDiv.html(`<strong>Status:</strong> ${result.status} ${result.statusText}`);
+                    if (result.isPdf) {
+                        const url = window.URL.createObjectURL(result.blob);
+                        const a = document.createElement('a');
+                        const filenameVersionPart = selectedVersionType || 'Testing'; // Use selected type for filename
+                        const suggestedFilename = `${templateName}_${filenameVersionPart}_${selectedMode}_API_Test_${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}.pdf`;
+                        a.href = url;
+                        a.download = suggestedFilename;
+                        a.innerHTML = `<i class="fas fa-download me-1"></i> Download ${suggestedFilename}`;
+                        a.className = 'btn btn-sm btn-success d-block mt-2';
+                        $responseOutputDiv.append($('<div>').html('PDF generated successfully.'));
+                        $responseOutputDiv.append(a);
+                        $responseStatusDiv.addClass('alert alert-success');
+                    } else {
+                        $responseOutputDiv.text(result.text);
+                        if(result.ok){
+                            $responseStatusDiv.addClass('alert alert-warning');
+                        } else {
+                             $responseStatusDiv.addClass('alert alert-danger');
+                        }
+                    }
+                })
+                .catch(error => {
+                     if (error !== 'Unauthorized') {
+                        console.error('Fetch Error:', error);
+                        $responseStatusDiv.html('<strong>Error:</strong> An API error occurred').addClass('alert alert-danger');
+                        $responseOutputDiv.text(error.message).addClass('text-danger');
+                     }
+                })
+                .finally(() => {
+                    $button.prop('disabled', false).html('<i class="fas fa-play-circle"></i> Execute');
+                    $responseSection.show();
+                    $clearButton.show();
+                });
+            });
+
+            // --- Clear Response Button ---
+            $('.clear-response-btn').on('click', function() {
+                var $tryItOutSection = $(this).closest('.try-it-out-section');
+                $tryItOutSection.find('.response-section').hide();
+                $tryItOutSection.find('.response-status').empty().removeClass('text-danger text-success text-warning alert alert-danger alert-success alert-warning');
+                $tryItOutSection.find('.response-output').empty().removeClass('text-danger text-success text-warning');
+                $(this).hide();
+            });
+
+             // Helper function for JSON formatting
+             function formatJsonTextarea(textarea) {
+                 try {
+                     var rawJson = textarea.val();
+                      if (rawJson && rawJson.trim() !== "{}" && rawJson.trim() !== "") {
+                         var parsedJson = JSON.parse(rawJson);
+                         textarea.val(JSON.stringify(parsedJson, null, 2));
+                     } else {
+                         textarea.val('{}');
+                     }
+                 } catch (e) {
+                     console.warn("Existing content is not valid JSON:", textarea.attr('id'), e);
+                 }
+            }
+
+
+            $('.json-payload').each(function() { formatJsonTextarea($(this)); });
+             $('.data-config-section[data-mode="inside"] textarea').each(function() { formatJsonTextarea($(this)); });
+             $('.inside-parameters-json').each(function() { formatJsonTextarea($(this)); });
+
+             // Initialize UI visibility and defaults
+             $('.try-it-out-section').each(function() {
+                 var $tryItOutSection = $(this);
+                 // Set default mode and version selection and trigger change event
+                 $tryItOutSection.find('.mode-radio[value="outside"]').prop('checked', true).trigger('change');
+                 // Ensure the correct version radio is checked and trigger change if necessary for UI logic
+                 var defaultVersion = '@VersionReferenceType.Testing'; // Default to Testing
+                 $tryItOutSection.find(`.version-type-radio[value="${defaultVersion}"]`).prop('checked', true);
+             });
+        });
+    </script>
+}
+```
+
+---
+
+**Update `TemplateProcessingService.cs` and `GeneratePdfHandler.cs`:**
+
+The `ProcessTemplate` method itself does NOT need to know about `FabricJson`. Its job is to take HTML content and JSON data. The *generation* of the final HTML that includes the Fabric.js elements will happen *before* this method is called.
+
+The core logic to integrate Fabric.js will be within the **`GeneratePdfHandler.cs`** and potentially the **`TemplateController.cs`** (for the "Download Test PDF" button on the Design page), and the **`TemplateProcessingService.cs`** itself will need a new method to parse `FabricJson` and produce the HTML structure.
+
+Let's focus on the `GeneratePdfHandler` and `TemplateProcessingService` first.
+
+---
+
+**14. `PDFGenerator.Infrastructure\Services\TemplateProcessingService.cs`**
+(Adding a method to process Fabric.js JSON into HTML)
+
+```csharp
+// ... (existing usings and class declaration) ...
+
+        // Regex to extract placeholder names from Fabric.js JSON text objects.
+        // Fabric.js uses properties like `text` and we'll assume it's structured to indicate a placeholder.
+        // A common convention might be to prefix text elements that are placeholders.
+        // For simplicity, let's assume a property like 'isPlaceholder' or a specific naming convention.
+        // If Fabric.js text elements contain the placeholder syntax directly, we can adapt.
+        // Example: If text is "Hello <<Name>>", we need to extract "<<Name>>".
+        // For now, let's assume a simple structure where text *is* the placeholder or contains it.
+        // If Fabric.js stores placeholder info separately, that's better.
+        // Let's consider a scenario where a text object has a 'placeholderName' property.
+
+        // A better approach might be to look for placeholders within the *text* property of Fabric.js objects
+        // OR to have a dedicated property like 'placeholderName' on the Fabric.js object itself.
+        // Let's assume for now, a text object's `text` property might contain the placeholder,
+        // or we might need to query for a custom `placeholderName` property if Fabric.js schema supports it.
+
+        // Regex to extract <<FieldName>> from string.
+        // This is used in ProcessTemplate and GenerateExampleJson, need to ensure consistency.
+        private static readonly Regex StandardPlaceholderRegex = new Regex(@"<<(\w+)>>", RegexOptions.Compiled);
+        // And its HTML entity version used by Summernote/Fabric.js output.
+        private static readonly Regex SummernotePlaceholderRegex = new Regex(@"&lt;&lt;(\w+)&gt;&gt;", RegexOptions.Compiled);
+
+
+        // ... (Existing ProcessTemplate, ResolveParameters, GenerateExampleJson, IsValidJson methods) ...
+
+        // NEW METHOD: Process Fabric.js JSON to generate HTML for images and overlaid text placeholders.
+        // This method will be called by GeneratePdfHandler.
+        public string ProcessFabricJson(string? fabricJson, JsonElement jsonData, string templateHtmlFallback)
+        {
+            // If Fabric.js JSON is null or empty, fall back to standard HTML processing.
+            if (string.IsNullOrWhiteSpace(fabricJson))
+            {
+                // We still need to process the standard HTML with provided jsonData.
+                // This falls back to the standard ProcessTemplate if no FabricJson is present.
+                // However, if FabricJson *is* present but empty/invalid, what should happen?
+                // For now, if fabricJson is null/empty, we assume the template might only use its basic HtmlContent.
+                // The overall flow should handle this: if FabricJson exists, use it; otherwise, use HtmlContent.
+                // Let's assume this method is called ONLY IF fabricJson is present.
+                // If called directly with null, it means fabricJson is not part of the template definition.
+                // The handler will need to decide the primary HTML source.
+
+                // For now, assume this method is called when fabricJson is available.
+                // If fabricJson is null/empty, it means no visual layout defined by Fabric.js, so just return fallback or empty.
+                // A better place to handle this logic might be in the Handler itself.
+                // This method assumes fabricJson *is* present and valid for a template using this feature.
+                return ""; // Or throw an error, or return the templateHtmlFallback.
+            }
+
+            string finalHtml = ""; // To build the output HTML.
+
+            try
+            {
+                using JsonDocument fabricDoc = JsonDocument.Parse(fabricJson);
+                JsonElement fabricRoot = fabricDoc.RootElement;
+
+                if (fabricRoot.ValueKind != JsonValueKind.Object)
+                {
+                    Console.WriteLine("Warning: Fabric.js JSON is not a valid object.");
+                    return templateHtmlFallback; // Fallback if Fabric JSON is malformed.
+                }
+
+                // Start building the HTML output. We'll create a container for the Fabric.js layout.
+                // The structure will typically involve:
+                // <div class="fabric-container" style="position: relative; width: ...; height: ...;">
+                //   <img src="..." style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"/>
+                //   <div class="placeholder-text-element" style="position: absolute; left: ...; top: ...; font-size: ...; color: ...; transform: rotate(...deg);">
+                //     Processed<<FieldName>>Value
+                //   </div>
+                //   ... more divs for text placeholders ...
+                // </div>
+
+                // Assuming Fabric.js JSON structure: { "version": "5.0.0", "objects": [ { "type": "image", "url": "data:...", "left": ..., "top": ...}, { "type": "textbox", "text": "<<FieldName>>", "left": ..., "top": ..., "fontFamily": "...", "fontSize": ..., "fill": "...", "angle": ... } ] }
+
+                string? imageUrl = null;
+                List<FabricTextObject> textPlaceholders = new List<FabricTextObject>();
+
+                // Iterate through Fabric.js objects to find images and text placeholders.
+                if (fabricRoot.TryGetProperty("objects", out JsonElement objectsElement) && objectsElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (JsonElement obj in objectsElement.EnumerateArray())
+                    {
+                        if (obj.TryGetProperty("type", out JsonElement typeElement))
+                        {
+                            string objType = typeElement.GetString() ?? "";
+
+                            if (objType == "image")
+                            {
+                                // We'll only use the first image as the base background for simplicity.
+                                // More complex layouts could handle multiple images or layering.
+                                if (imageUrl == null && obj.TryGetProperty("url", out JsonElement urlElement))
+                                {
+                                    imageUrl = urlElement.GetString();
+                                }
+                            }
+                            else if (objType == "textbox" || objType == "text") // Handle common text object types
+                            {
+                                if (obj.TryGetProperty("text", out JsonElement textElement) && !string.IsNullOrEmpty(textElement.GetString()))
+                                {
+                                    string textValue = textElement.GetString()!;
+                                    string placeholderName = "";
+                                    string plainText = textValue; // Text to display if it's not a placeholder
+
+                                    // Try to extract placeholder name from the text.
+                                    // Use the standard placeholder regex here.
+                                    var match = StandardPlaceholderRegex.Match(textValue);
+                                    if (match.Success && match.Groups.Count > 1)
+                                    {
+                                        placeholderName = match.Groups[1].Value;
+                                        // The text to be displayed will be determined by processing this placeholder later.
+                                        // For now, we store the placeholder name and the styling properties.
+                                        plainText = ""; // Reset plain text if it's a placeholder.
+                                    }
+
+                                    // Extract styling properties. Need to ensure these exist and are in expected formats.
+                                    // Default values are important if properties are missing.
+                                    double left = obj.TryGetProperty("left", out JsonElement leftElem) ? leftElem.GetDouble() : 0;
+                                    double top = obj.TryGetProperty("top", out JsonElement topElem) ? topElem.GetDouble() : 0;
+                                    string fontFamily = obj.TryGetProperty("fontFamily", out JsonElement fontFamilyElem) ? fontFamilyElem.GetString() ?? "Arial" : "Arial";
+                                    double fontSize = obj.TryGetProperty("fontSize", out JsonElement fontSizeElem) ? fontSizeElem.GetDouble() : 16;
+                                    string fill = obj.TryGetProperty("fill", out JsonElement fillElem) ? fillElem.GetString() ?? "#000000" : "#000000"; // Color as hex string.
+                                    double angle = obj.TryGetProperty("angle", out JsonElement angleElem) ? angleElem.GetDouble() : 0;
+
+                                    textPlaceholders.Add(new FabricTextObject
+                                    {
+                                        PlaceholderName = placeholderName, // Will be empty if not a placeholder.
+                                        OriginalText = textValue, // Store the original text for non-placeholders.
+                                        Left = left,
+                                        Top = top,
+                                        FontFamily = fontFamily,
+                                        FontSize = fontSize,
+                                        Fill = fill,
+                                        Angle = angle
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Start building the final HTML structure.
+                // The main container will hold the image and absolutely positioned text elements.
+                finalHtml += "<div class='fabric-layout-container' style='position: relative;'>";
+
+                // Embed the base image.
+                if (!string.IsNullOrEmpty(imageUrl))
+                {
+                    // The imageUrl is expected to be a data URL.
+                    // Apply styles to make it cover the container.
+                    finalHtml += $"<img src='{imageUrl}' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;' />";
+                }
+                else
+                {
+                    // If no image, maybe render the fallback HTML directly or log a warning.
+                    Console.WriteLine("Warning: No base image found in Fabric.js JSON for template.");
+                    // If we want to render standard HTML without images, that needs separate logic.
+                    // For now, let's assume if fabricJson is used, an image is expected.
+                    // If templateHtmlFallback is meant to be the base if no image, it should be placed here.
+                    // For this method's purpose, we'll assume image is primary and text overlays it.
+                }
+
+                // Add divs for text placeholders, processed with actual data.
+                // This part needs access to the actual data (jsonData) to replace placeholders.
+                // This suggests ProcessTemplate might need to be called *within* ProcessFabricJson,
+                // or ProcessFabricJson should receive the processed HTML or be integrated.
+
+                // Let's adjust: ProcessFabricJson will generate the structure, and actual replacement happens in ProcessTemplate.
+                // So, here we generate placeholders and their styles.
+                // The actual replacement logic will be in ProcessTemplate by searching for specific patterns within the generated text elements.
+
+                // Structure for each text element:
+                // <div class='fabric-text-overlay' style='position: absolute; left: ...px; top: ...px; transform: rotate(...deg); width: fit-content; white-space: nowrap; /* prevent wrapping */'>
+                //   <span style='font-family: ...; font-size: ...px; color: ...;'>
+                //     {{ProcessedPlaceholderValue}} <-- THIS IS WHERE REPLACEMENT HAPPENS
+                //   </span>
+                // </div>
+
+                // We can't do the actual <<FieldName>> replacement here without the jsonData.
+                // The ProcessTemplate method will need to be enhanced to look for these specific DIVs
+                // and perform the placeholder replacement within them.
+
+                // For now, let's generate the structure with placeholders and their styling.
+                // We'll need to ensure these generated DIVs are injected into the HTML structure processed by ProcessTemplate.
+
+                // A more robust approach: Generate the Fabric.js JSON *into* the HTML as part of the template processing.
+                // Or, use a template engine that can handle this structure.
+                // For now, let's generate HTML fragments.
+
+                // The issue: ProcessTemplate typically processes static HTML provided.
+                // Fabric.js JSON is NOT static HTML.
+                // The strategy is to *transform* Fabric.js JSON into static HTML.
+
+                // Let's refine: ProcessTemplate should generate the base HTML and THEN inject the processed Fabric.js elements.
+                // The Fabric.js JSON processing should yield a LIST of HTML fragments (divs) for each text element.
+                // The ProcessTemplate method will then need to parse these fragments and perform placeholder replacements.
+
+                // This is getting complex. Let's re-evaluate the hybrid approach:
+                // 1. Store Fabric.js JSON in Template/TemplateVersion.
+                // 2. ProcessTemplate receives HtmlContent AND FabricJson.
+                // 3. It parses FabricJson.
+                // 4. It constructs a primary HTML structure that includes:
+                //    a. The base image(s) from FabricJson.
+                //    b. For each text object in FabricJson that IS a placeholder:
+                //       - It generates a placeholder *marker* in the HTML, e.g., `<span data-fabric-placeholder="FieldName" data-fabric-style="..."></span>`
+                // 5. AFTER the standard placeholder replacement (<<FieldName>> -> DataValue), ProcessTemplate would then iterate through the generated HTML,
+                //    find these `data-fabric-placeholder` spans, and replace them with the styled divs containing the actual data.
+
+                // Let's try a simpler version first: generate the HTML directly.
+                // This method's responsibility is to RETURN the HTML fragment that PROCESS_TEMPLATE will work with.
+                // ProcessTemplate will be responsible for BOTH standard HTML processing AND placeholder replacement within the Fabric.js generated text.
+
+                // Re-think: ProcessTemplate takes `htmlContent` and `jsonData`.
+                // If `FabricJson` is present, it should be the primary source of HTML.
+                // `htmlContent` might be a fallback if FabricJson is missing or invalid.
+
+                // Let's assume ProcessTemplate gets `templateDataAccessDto.FabricJson` and `templateDataAccessDto.HtmlContent`
+                // as inputs.
+
+                // New signature for ProcessTemplate (if we embed this logic there):
+                // public string ProcessTemplate(string? fabricJson, string fallbackHtmlContent, JsonElement jsonData)
+
+                // For now, let's assume this `ProcessFabricJson` returns HTML *fragments* for the fabric elements,
+                // and the main `ProcessTemplate` will orchestrate their placement.
+
+                // Simplified strategy for THIS method:
+                // Generate HTML for the image and placeholder divs.
+                // The *replacement* of <<FieldName>> will happen in ProcessTemplate.
+                // So, we'll create static HTML with placeholder *markers* for the text.
+
+                foreach (var textObj in textPlaceholders)
+                {
+                    // Construct style string from Fabric.js properties.
+                    // Important: Fabric.js values like fontSize might need units (px). Colors are often hex.
+                    // Angles need rotation transform.
+                    string style = $"position: absolute; left: {textObj.Left}px; top: {textObj.Top}px; ";
+                    if (textObj.Angle != 0) {
+                        // Fabric.js rotation is usually around the center. For simple overlays,
+                        // rotating around the top-left might be acceptable, or we need to calculate offsets.
+                        // For simplicity, let's assume simple rotation.
+                        style += $"transform: rotate({textObj.Angle}deg); transform-origin: 0 0; ";
+                    }
+                    style += $"font-family: '{textObj.FontFamily}', sans-serif; "; // Fallback font.
+                    style += $"font-size: {textObj.FontSize}px; ";
+                    style += $"color: {textObj.Fill}; ";
+                    style += "white-space: nowrap; /* Prevent text from wrapping */ ";
+                    style += "pointer-events: none; /* Allow clicks to pass through if needed, or set to auto */ ";
+                    style += "overflow: hidden; /* Clip text if it exceeds bounds */ ";
+
+
+                    // If it's a placeholder, wrap it in a placeholder marker for ProcessTemplate.
+                    // The marker needs to contain the original placeholder name and the styling.
+                    // ProcessTemplate will then find this marker, look up data for placeholderName,
+                    // and replace the marker's content with the styled data.
+                    // Let's use a custom attribute for the placeholder name and embed styles.
+                    if (!string.IsNullOrEmpty(textObj.PlaceholderName))
+                    {
+                        // The actual replacement <<FieldName>> -> Data will happen inside ProcessTemplate later.
+                        // So, for now, we render the placeholder name itself, wrapped in a span that ProcessTemplate can target.
+                        // Example: <span class='fabric-placeholder-text' data-placeholder-name='Name' style='...' ><<Name>></span>
+                        finalHtml += $"<div class='fabric-text-overlay' style='{style}'><span><<{textObj.PlaceholderName}>></span></div>";
+                    }
+                    else
+                    {
+                        // If it's not a placeholder, display the original text (could also be processed).
+                        // For simplicity, we'll just display the original text directly for now.
+                        finalHtml += $"<div class='fabric-text-static' style='{style}'>{System.Net.WebUtility.HtmlEncode(textObj.OriginalText)}</div>";
+                    }
+                }
+
+                finalHtml += "</div>"; // Close fabric-layout-container.
+
+                // This generated HTML fragment will be *inserted* into the main HTML processed by ProcessTemplate.
+                // The ProcessTemplate method will need to be updated to use this fragment appropriately.
+                // It might replace the fallback HTML entirely or merge it.
+                // For now, this method returns the Fabric-generated part.
+
+                return finalHtml; // Return the generated HTML for fabric elements.
+            }
+            catch (JsonException jEx)
+            {
+                Console.WriteLine($"Error parsing Fabric.js JSON: {jEx.Message}");
+                return templateHtmlFallback; // Fallback if Fabric JSON is invalid.
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An unexpected error occurred processing Fabric.js JSON: {ex.Message}");
+                return templateHtmlFallback; // Fallback for other errors.
+            }
+        }
+
+        // Helper class to hold parsed text object properties from Fabric.js JSON.
+        private class FabricTextObject
+        {
+            public string PlaceholderName { get; set; } = ""; // The <<FieldName>> if it's a placeholder.
+            public string OriginalText { get; set; } = ""; // The original text value.
+            public double Left { get; set; }
+            public double Top { get; set; }
+            public string FontFamily { get; set; } = "Arial";
+            public double FontSize { get; set; } = 16;
+            public string Fill { get; set; } = "#000000"; // Hex color string.
+            public double Angle { get; set; } = 0; // Rotation in degrees.
+        }
+
+        // --- Modified ProcessTemplate to handle Fabric.js HTML ---
+        // This is the crucial part. ProcessTemplate needs to be aware of the Fabric JSON.
+        // It should ideally combine the static HTML content with the Fabric-generated HTML.
+        // Let's assume ProcessTemplate receives FabricJson separately or it's part of the template DTO.
+
+        // New signature proposal for ProcessTemplate that integrates Fabric.js handling.
+        // It would take template's base HTML, the Fabric JSON, and the actual data.
+        public string ProcessTemplateWithFabric(string? baseHtmlContent, string? fabricJson, JsonElement jsonData)
+        {
+            // If Fabric JSON is present, it takes precedence for structure.
+            if (!string.IsNullOrWhiteSpace(fabricJson))
+            {
+                try
+                {
+                    // Generate the core HTML structure from Fabric JSON (images and styled placeholder spans).
+                    string fabricGeneratedHtml = ProcessFabricJson(fabricJson, baseHtmlContent ?? "", jsonData); // Pass baseHtmlContent as fallback if no image.
+
+                    // Now, we have fabricGeneratedHtml containing static image(s) and placeholder spans like:
+                    // <div class='fabric-text-overlay' style='...'><span><<FieldName>></span></div>
+                    // We need to process these placeholder spans for their actual data.
+
+                    // This is the complex part: we need to perform data replacement *within* these generated spans.
+                    // The standard ProcessTemplate method needs to be aware of these special span elements.
+                    // One way: Let ProcessTemplate parse the fabricGeneratedHtml, find these spans,
+                    // extract placeholder name, get data, and replace the span's content.
+
+                    // For this example, let's integrate the logic here:
+                    // 1. Replace <<FieldName>> within fabricGeneratedHtml.
+                    // 2. Merge this with any other parts of baseHtmlContent if needed.
+                    //    However, the hybrid model suggests fabricJson *defines* the layout, and baseHtmlContent is a fallback.
+                    //    So, let's assume fabricJson defines the layout and potentially uses baseHtmlContent for non-Fabric elements if any.
+
+                    // For now, assume fabricGeneratedHtml REPLACES baseHtmlContent entirely for the core layout.
+
+                    // Perform the actual data replacement for <<FieldName>> placeholders within the generated fabric elements.
+                    // This requires a function that takes HTML string, data, and knows how to find and replace within specific elements.
+                    // This is getting deep into DOM manipulation or complex regex.
+
+                    // --- Simplified approach for this example ---
+                    // Let's assume ProcessTemplate is called AFTER ProcessFabricJson has been used to *prepare* the HTML.
+                    // Or, ProcessTemplate itself handles both.
+
+                    // Let's modify ProcessTemplate to handle this:
+                    // It will receive the templateData (which includes HtmlContent AND FabricJson)
+                    // The logic will be: if FabricJson is present, parse it, generate HTML structure, then do placeholder replacement on generated HTML.
+
+                    // Re-architecting ProcessTemplate to be aware of FabricJson.
+                    // The handler (GeneratePdfHandler) will fetch templateDto.FabricJson.
+                    // The ProcessTemplate method itself needs to receive it or access it.
+
+                    // Let's assume ProcessTemplate signature is updated to:
+                    // public string ProcessTemplate(string? htmlContent, string? fabricJson, JsonElement jsonData)
+
+                    // --- Inside the (new) ProcessTemplateWithFabric ---
+
+                    string processedHtmlWithFabric = ""; // This would be the final result.
+
+                    // 1. Get base image(s) and text element definitions from fabricJson.
+                    // 2. Construct HTML for these, potentially replacing <<FieldName>> placeholders within the text elements with actual data values.
+                    // 3. Combine this with any other parts of the template.
+
+                    // This requires a more sophisticated HTML builder that can parse the FabricJson structure.
+                    // The current placeholder replacement logic is string-based.
+                    // To overlay text correctly, the `ProcessTemplate` would need to:
+                    //    - Embed the base image (likely as `<img>` with `position: relative;` or `background-image`).
+                    //    - For each text element with a placeholder:
+                    //        - Look up the placeholder name in `jsonData`.
+                    //        - Get the data value.
+                    //        - Generate a `<span>` or `<div>` for this data value.
+                    //        - Apply inline styles to this span/div based on Fabric.js properties (position, font, color, rotation).
+                    //        - `position: absolute;` will be key for overlaying.
+
+                    // Let's revise the strategy: ProcessTemplate receives `HtmlContent`, `FabricJson`, and `jsonData`.
+                    // If FabricJson exists, it's prioritized. It defines the layout.
+                    // It will extract image(s) and text objects.
+                    // For each text object:
+                    //   If it's a placeholder, get the value from `jsonData` for that placeholder.
+                    //   If not a placeholder, use the literal text from Fabric.js.
+                    //   Construct a styled `<span>` or `<div>` for this text/data.
+                    //   Return the complete HTML string with image and styled text elements.
+
+                    // This implies a significant rewrite of ProcessTemplate.
+                    // For now, this method might just return the FabricJson itself or a basic representation.
+                    // Or, it might return a specific HTML structure that ProcessTemplate is aware of.
+
+                    // Let's go with the approach where ProcessTemplate will take FabricJson as an input.
+                    // The GeneratePdfHandler will call ProcessTemplate, passing the fetched FabricJson.
+
+                    // This `ProcessFabricJson` method's role is to convert FabricJson into HTML fragments.
+                    // It needs to know how to iterate Fabric.js objects and generate HTML.
+                    // This would typically require a JSON parsing and string building logic.
+                    // The actual replacement of <<FieldName>> needs to happen on the text content of these generated elements.
+
+                    // Let's assume `ProcessTemplate` is modified to handle a structure generated by Fabric.js.
+                    // This method might be removed if `ProcessTemplate` becomes responsible for parsing `FabricJson`.
+
+                    // For now, returning the fallback content to indicate this method isn't fully integrated yet.
+                    return templateHtmlFallback;
+                }
+            }
+            catch (JsonException jEx)
+            {
+                Console.WriteLine($"Error parsing Fabric.js JSON: {jEx.Message}");
+                return templateHtmlFallback;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An unexpected error occurred processing Fabric.js JSON: {ex.Message}");
+                return templateHtmlFallback;
+            }
+        }
+        // End of ProcessFabricJson
+
+        // --- MODIFIED ProcessTemplate Method ---
+        // This is the central change. ProcessTemplate will now handle Fabric.js JSON.
+        // It needs access to the FabricJson string. The handler will pass it.
+        // public string ProcessTemplate(string? htmlContent, string? fabricJson, JsonElement jsonData)
+        // The current signature is: public string ProcessTemplate(string htmlContent, JsonElement jsonData)
+        // We need to update the signature of ProcessTemplate in TemplateProcessingService.
+
+        // The GeneratePdfHandler needs to pass templateDataAccessDto.FabricJson to the processing service.
+
+        // Assuming ProcessTemplate signature change is done elsewhere.
+        // For THIS file, let's just ensure all necessary methods are available.
+        // The logic for handling FabricJson will reside WITHIN ProcessTemplate itself.
+
+        // The rest of the methods are fine for now, but the *calling* code needs to be aware of FabricJson.
+        // ... (rest of the methods) ...
+    }
+}
+```
+
+---
+
+**15. `PDFGenerator.Web\Services\GeneratePdfHandler.cs`**
+(Modified to pass FabricJson to `ProcessTemplate` and integrate its logic)
+
+This is where the major change happens. The `GeneratePdfHandler` needs to be updated to:
+1.  Fetch `FabricJson` from the `TemplateDataAccessDto`.
+2.  Pass `FabricJson` to `TemplateProcessingService.ProcessTemplate`.
+3.  The `TemplateProcessingService.ProcessTemplate` method itself needs to be modified to understand and process the `FabricJson`.
+
+Let's assume `TemplateProcessingService.ProcessTemplate` is modified to accept `string? fabricJson` and use it as the primary source of HTML structure.
+
+**Assumption: `TemplateProcessingService.ProcessTemplate` Signature Change**
+
+Let's assume the `TemplateProcessingService.ProcessTemplate` signature is changed to:
+`public string ProcessTemplate(string? htmlContent, string? fabricJson, JsonElement jsonData)`
+
+If this is the case, the `GeneratePdfHandler` will look like this:
+
+```csharp
+// File: Handlers/GeneratePdfHandler.cs
+using PdfGeneratorApp.Common;
+using PdfGeneratorApp.Services; // For TemplateProcessingService
+using System.Text.Json;
+using WkHtmlToPdfDotNet;
+using WkHtmlToPdfDotNet.Contracts;
+using PdfGeneratorApp.Infrastructure.Data.UnitOfWork;
+using System.Threading.Tasks;
+
+namespace PdfGeneratorApp.Handlers
+{
+    // Interface updated to include versionReferenceType in the request tuple.
+    public interface IGeneratePdfHandler : IHandler<(string templateName, JsonElement requestBodyJson, string mode, string? versionReferenceType), byte[]>
+    {
+    }
+
+    public class GeneratePdfHandler : IGeneratePdfHandler
+    {
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly IConverter _converter;
+        private readonly TemplateProcessingService _templateProcessingService;
+
+        public GeneratePdfHandler(IUnitOfWork unitOfWork, IConverter converter, TemplateProcessingService templateProcessingService)
+        {
+            _unitOfWork = unitOfWork;
+            _converter = converter;
+            _templateProcessingService = templateProcessingService;
+        }
+
+        public async Task<Result<byte[]>> HandleAsync((string templateName, JsonElement requestBodyJson, string mode, string? versionReferenceType) request)
+        {
+            try
+            {
+                string effectiveVersionType = VersionReferenceType.Testing;
+                if (!string.IsNullOrWhiteSpace(request.versionReferenceType) && VersionReferenceType.IsValid(request.versionReferenceType))
+                {
+                    effectiveVersionType = request.versionReferenceType;
+                }
+                else if (!string.IsNullOrWhiteSpace(request.versionReferenceType))
+                {
+                    Console.WriteLine($"Warning: Invalid versionReferenceType '{request.versionReferenceType}' provided. Defaulting to Testing.");
+                }
+
+                // Fetch template data, now including FabricJson.
                 var repoResult = await _unitOfWork.Templates.GetTemplateContentByVersionReferenceAsync(request.templateName, effectiveVersionType);
 
                 if (!repoResult.IsCompleteSuccessfully || repoResult.Data == null)
@@ -1321,96 +1834,813 @@ namespace PdfGeneratorApp.Handlers
                     return Result<byte[]>.Failure(repoResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
                 }
 
-                var templateDataAccessDto = repoResult.Data;
-                JsonElement finalDataForHtmlProcessing = request.requestBodyJson; // Default for outside mode
+                var templateDataAccessDto = repoResult.Data; // This DTO now contains HtmlContent, FabricJson, etc.
 
-                if (request.mode.ToLowerInvariant() == "inside")
+                JsonElement finalDataForHtmlProcessing;
+                JsonElement insideParameters = default;
+
+                // Determine data source based on 'mode'.
+                switch (request.mode.ToLowerInvariant())
                 {
-                    if (request.requestBodyJson.ValueKind != JsonValueKind.Object)
-                    {
-                        return Result<byte[]>.Failure(ErrorMessageUserConst.InsideModeBodyNotObject);
+                    case "outside":
+                        finalDataForHtmlProcessing = request.requestBodyJson;
+                        break;
+
+                    case "inside":
+                        if (request.requestBodyJson.ValueKind != JsonValueKind.Object)
+                        {
+                            return Result<byte[]>.Failure(ErrorMessageUserConst.InsideModeBodyNotObject);
+                        }
+                        if (request.requestBodyJson.TryGetProperty("parameters", out JsonElement parametersElement))
+                        {
+                            insideParameters = parametersElement;
+                        }
+                        // Resolve internal data using fetched config (from target version) and parameters.
+                        finalDataForHtmlProcessing = _templateProcessingService.ResolveInternalData(templateDataAccessDto.InternalDataConfigJson, insideParameters);
+                        break;
+
+                    default:
+                        return Result<byte[]>.Failure(ErrorMessageUserConst.InvalidMode);
+                }
+
+                // --- MAJOR CHANGE HERE ---
+                // Call ProcessTemplate, passing BOTH HtmlContent and FabricJson.
+                // ProcessTemplate is now responsible for deciding whether to use FabricJson or fallback HtmlContent,
+                // and importantly, processing placeholders within the Fabric-generated HTML.
+                string finalHtmlContent = _templateProcessingService.ProcessTemplate(
+                    templateDataAccessDto.HtmlContent,     // Fallback HTML
+                    templateDataAccessDto.FabricJson,      // Fabric.js JSON definition
+                    finalDataForHtmlProcessing             // Data for placeholders
+                );
+                // --- END MAJOR CHANGE ---
+
+                // Configure WkHtmlToPdf document settings with the final HTML content.
+                var doc = new HtmlToPdfDocument()
+                {
+                    GlobalSettings = {
+                        ColorMode = ColorMode.Color,
+                        Orientation = Orientation.Portrait,
+                        PaperSize = PaperKind.A4,
+                        Margins = new MarginSettings() { Top = 10, Bottom = 10, Left = 10, Right = 10 },
+                        DPI = 300
+                    },
+                    Objects = {
+                        new ObjectSettings() {
+                            HtmlContent = finalHtmlContent, // Use the HTML generated by ProcessTemplateWithFabric
+                            WebSettings = { DefaultEncoding = "utf-8" }
+                        }
                     }
-                    JsonElement insideParameters = request.requestBodyJson.TryGetProperty("parameters", out var p) ? p : default;
-                    finalDataForHtmlProcessing = _templateProcessingService.ResolveInternalData(templateDataAccessDto.InternalDataConfigJson, insideParameters);
-                }
-                else if (request.mode.ToLowerInvariant() != "outside")
+                };
+
+                byte[] pdf = _converter.Convert(doc);
+
+                if (pdf == null || pdf.Length == 0)
                 {
-                     return Result<byte[]>.Failure(ErrorMessageUserConst.InvalidMode);
+                    return Result<byte[]>.Failure(ErrorMessageUserConst.PdfGenerationFailed + " Ensure wkhtmltopdf is correctly installed and accessible.");
                 }
 
-
-                byte[]? pdfBytes = null;
-
-                if (templateDataAccessDto.TemplateType == TemplateTypeEnum.Html)
-                {
-                    if (string.IsNullOrWhiteSpace(templateDataAccessDto.HtmlContent))
-                    {
-                        return Result<byte[]>.Failure("HTML content is missing for this HTML template version.");
-                    }
-                    string processedHtml = _templateProcessingService.ProcessTemplate(templateDataAccessDto.HtmlContent, finalDataForHtmlProcessing);
-                    var doc = new HtmlToPdfDocument()
-                    {
-                        GlobalSettings = { /* ... */ },
-                        Objects = { new ObjectSettings() { HtmlContent = processedHtml, WebSettings = { DefaultEncoding = "utf-8" } } }
-                    };
-                    pdfBytes = _wkHtmlToPdfConverter.Convert(doc);
-                }
-                else if (templateDataAccessDto.TemplateType == TemplateTypeEnum.UploadedPdf)
-                {
-                    if (string.IsNullOrWhiteSpace(templateDataAccessDto.PageImagePathsJson) || string.IsNullOrWhiteSpace(templateDataAccessDto.CanvasLayoutJson))
-                    {
-                        return Result<byte[]>.Failure("Page images or canvas layout data is missing for this Uploaded PDF template version.");
-                    }
-                    var pageImagePaths = JsonSerializer.Deserialize<List<string>>(templateDataAccessDto.PageImagePathsJson);
-                    if (pageImagePaths == null || !pageImagePaths.Any())
-                    {
-                         return Result<byte[]>.Failure("No page images found for this Uploaded PDF template version.");
-                    }
-
-                    pdfBytes = await _pdfProcessingService.GeneratePdfFromCanvasLayoutAsync(
-                        pageImagePaths,
-                        templateDataAccessDto.CanvasLayoutJson,
-                        finalDataForHtmlProcessing
-                    );
-                }
-                else
-                {
-                    return Result<byte[]>.Failure("Unknown template type encountered.");
-                }
-
-
-                if (pdfBytes == null || pdfBytes.Length == 0)
-                {
-                    return Result<byte[]>.Failure(ErrorMessageUserConst.PdfGenerationFailed + " (Ensure tools are configured and template data is valid).");
-                }
-
-                return Result<byte[]>.Success(pdfBytes);
+                return Result<byte[]>.Success(pdf);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GeneratePdfHandler: {ex.Message}\n{ex.StackTrace}");
-                return Result<byte[]>.Failure($"An unexpected error occurred during PDF generation: {ex.Message}");
+                Console.WriteLine($"Error in GeneratePdfHandler: {ex.Message}");
+                return Result<byte[]>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
             }
         }
     }
 }
 ```
 
-**13. `PDFGenerator.Web\Controllers\TemplateController.cs`** (Updated `Create` and `Design` (POST) to handle file upload and `CanvasLayoutJson`)
+---
+
+**16. `PDFGenerator.Infrastructure\Services\TemplateProcessingService.cs`**
+(This file requires the most significant changes to implement the hybrid approach)
+
+**Key Modifications to `TemplateProcessingService.cs`:**
+
+*   **Modify `ProcessTemplate` Signature:** Change `public string ProcessTemplate(string htmlContent, JsonElement jsonData)` to `public string ProcessTemplate(string? fallbackHtmlContent, string? fabricJson, JsonElement jsonData)`.
+*   **Implement Fabric JSON Parsing in `ProcessTemplate`:** The `ProcessTemplate` method will now first check `fabricJson`.
+    *   If `fabricJson` is present, parse it and generate HTML for images and styled text elements (including placeholder markers).
+    *   If `fabricJson` is null or invalid, fall back to processing the `fallbackHtmlContent`.
+    *   Crucially, the *placeholder replacement* logic needs to be integrated to work on the HTML generated from `fabricJson` as well.
+
+Let's provide the modified `TemplateProcessingService.cs` file.
+
+```csharp
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using PdfGeneratorApp.Common;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System; // For Exception, DateTime, RegexOptions, Regex
+using System.Collections.Generic; // For List, Dictionary
+using System.Net; // For WebUtility
+
+namespace PdfGeneratorApp.Services
+{
+    public class TemplateProcessingService
+    {
+        private readonly IConfiguration _configuration;
+
+        // Regex for finding standard <<FieldName>> placeholders.
+        private static readonly Regex StandardPlaceholderRegex = new Regex(@"<<(\w+)>>", RegexOptions.Compiled);
+        // Regex for HTML entities of placeholders as output by Summernote/Fabric.js
+        private static readonly Regex SummernotePlaceholderRegex = new Regex(@"&lt;&lt;(\w+)&gt;&gt;", RegexOptions.Compiled);
+
+        // Regex for conditional expressions ${{condition ? true_part : false_part}}
+        private static readonly Regex ConditionalRegex = new Regex(@"\$\{\{\s*(.+?)\s*\?\s*(.+?)\s*:\s*(.+?)\s*\}\}", RegexOptions.Compiled | RegexOptions.Singleline);
+
+        // Regex for finding "inside parameter" placeholders <<param:parameterName>>
+        private static readonly Regex ParameterPlaceholderRegex = new Regex(@"<<param:(\w+)>>", RegexOptions.Compiled);
+
+        public TemplateProcessingService(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
+        // --- MODIFIED METHOD ---
+        // ProcessTemplate now handles both standard HTMLContent and Fabric.js JSON.
+        // It prioritizes FabricJson for layout and generates HTML structure accordingly.
+        // Placeholders within Fabric.js text elements are also processed.
+        public string ProcessTemplate(string? fallbackHtmlContent, string? fabricJson, JsonElement jsonData)
+        {
+            // If FabricJson is provided and valid, it defines the primary layout.
+            if (!string.IsNullOrWhiteSpace(fabricJson))
+            {
+                try
+                {
+                    // Parse the Fabric.js JSON.
+                    using JsonDocument fabricDoc = JsonDocument.Parse(fabricJson);
+                    JsonElement fabricRoot = fabricDoc.RootElement;
+
+                    if (fabricRoot.ValueKind != JsonValueKind.Object)
+                    {
+                        Console.WriteLine("Warning: Fabric.js JSON is not a valid object. Falling back to fallbackHtmlContent.");
+                        return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData); // Fallback
+                    }
+
+                    string generatedFabricHtml = BuildHtmlFromFabricJson(fabricRoot, jsonData);
+
+                    // If FabricJson was successfully processed, use it as the final HTML.
+                    if (!string.IsNullOrEmpty(generatedFabricHtml))
+                    {
+                        return generatedFabricHtml;
+                    }
+                    else
+                    {
+                        // If FabricJson was valid but generated no content, fallback.
+                        Console.WriteLine("Warning: Fabric.js JSON processed but resulted in empty HTML. Falling back to fallbackHtmlContent.");
+                        return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData);
+                    }
+                }
+                catch (JsonException jEx)
+                {
+                    Console.WriteLine($"Error parsing Fabric.js JSON: {jEx.Message}. Falling back to fallbackHtmlContent.");
+                    return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData); // Fallback on JSON error
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"An unexpected error occurred processing Fabric.js JSON: {ex.Message}. Falling back to fallbackHtmlContent.");
+                    return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData); // Fallback for other errors
+                }
+            }
+            else
+            {
+                // If FabricJson is null or empty, just process the standard fallback HTML.
+                return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData);
+            }
+        }
+
+        // Helper to process standard HTML content (placeholders and conditionals).
+        private string ProcessStandardHtml(string htmlContent, JsonElement jsonData)
+        {
+            // This method contains the original placeholder and conditional processing logic.
+            string processedHtml = htmlContent;
+
+            // 1. Process Conditional Expressions (${{...}}) FIRST
+            processedHtml = ConditionalRegex.Replace(processedHtml, match =>
+            {
+                if (match.Groups.Count != 4) return match.Value;
+                string conditionPart = match.Groups[1].Value.Trim();
+                string truePart = match.Groups[2].Value;
+                string falsePart = match.Groups[3].Value;
+
+                bool conditionResult = false;
+                bool conditionEvaluated = false;
+
+                if (bool.TryParse(conditionPart, out bool literalBool))
+                {
+                    conditionResult = literalBool;
+                    conditionEvaluated = true;
+                }
+                else
+                {
+                    var conditionPlaceholderMatch = SummernotePlaceholderRegex.Match(conditionPart); // Use Summernote regex for condition part
+                    if (conditionPlaceholderMatch.Success && conditionPlaceholderMatch.Groups.Count > 1)
+                    {
+                        string fieldName = conditionPlaceholderMatch.Groups[1].Value;
+                        if (jsonData.ValueKind == JsonValueKind.Object && jsonData.TryGetProperty(fieldName, out JsonElement conditionValueElement))
+                        {
+                            if (conditionValueElement.ValueKind == JsonValueKind.True) { conditionResult = true; conditionEvaluated = true; }
+                            else if (conditionValueElement.ValueKind == JsonValueKind.False) { conditionResult = false; conditionEvaluated = true; }
+                            else if (conditionValueElement.ValueKind == JsonValueKind.String)
+                            {
+                                if (bool.TryParse(conditionValueElement.GetString(), out bool parsedStringBool))
+                                {
+                                    conditionResult = parsedStringBool;
+                                    conditionEvaluated = true;
+                                }
+                            }
+                            if (!conditionEvaluated) { conditionResult = false; conditionEvaluated = true; }
+                        }
+                        else { conditionResult = false; conditionEvaluated = true; }
+                    }
+                    if (!conditionEvaluated) { conditionResult = false; /* Evaluated as false if unrecognized */ }
+                }
+                return conditionResult ? truePart : falsePart;
+            });
+
+            // 2. Process Simple Placeholders (<<FieldName>>) AFTER conditionals.
+            // Replace placeholders in the processed HTML string.
+            // This regex needs to find the placeholder markers we'll inject from Fabric.js JSON.
+            // We will use the SummernotePlaceholderRegex to find <<FieldName>> within the generated HTML structure.
+            processedHtml = SummernotePlaceholderRegex.Replace(processedHtml, match =>
+            {
+                if (match.Groups.Count > 1 && match.Groups[1].Success)
+                {
+                    string fieldName = match.Groups[1].Value;
+                    string replacementValue = "";
+
+                    if (jsonData.ValueKind == JsonValueKind.Object && jsonData.TryGetProperty(fieldName, out JsonElement valueElement))
+                    {
+                        replacementValue = valueElement.ValueKind switch
+                        {
+                            JsonValueKind.String => valueElement.GetString() ?? "",
+                            JsonValueKind.Number => valueElement.GetRawText(),
+                            JsonValueKind.True => "true",
+                            JsonValueKind.False => "false",
+                            JsonValueKind.Null => "",
+                            JsonValueKind.Object or JsonValueKind.Array => valueElement.GetRawText(),
+                            _ => ""
+                        };
+                        replacementValue = WebUtility.HtmlEncode(replacementValue);
+                    }
+                    return replacementValue;
+                }
+                return match.Value; // Return original match if something goes wrong.
+            });
+
+            // Remove any residual placeholder syntax that wasn't replaced.
+            // This regex must match both standard <<FieldName>> and HTML entity versions.
+            // Simpler to use the more specific summernote regex if that's what we inject.
+            processedHtml = Regex.Replace(processedHtml, @"<<.*?>>", "", RegexOptions.Singleline); // Clean up leftover <<...>>
+
+            return processedHtml;
+        }
+
+        // Helper to build HTML structure from Fabric.js JSON.
+        // This method will generate the base HTML with images and styled divs for text placeholders.
+        private string BuildHtmlFromFabricJson(JsonElement fabricRoot, JsonElement jsonData)
+        {
+            string htmlOutput = "";
+            string? imageUrl = null;
+            List<FabricTextObject> textElements = new List<FabricTextObject>();
+
+            // Parse Fabric.js objects
+            if (fabricRoot.TryGetProperty("objects", out JsonElement objectsElement) && objectsElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement obj in objectsElement.EnumerateArray())
+                {
+                    if (obj.TryGetProperty("type", out JsonElement typeElement))
+                    {
+                        string objType = typeElement.GetString() ?? "";
+
+                        if (objType == "image")
+                        {
+                            if (imageUrl == null && obj.TryGetProperty("url", out JsonElement urlElement))
+                            {
+                                imageUrl = urlElement.GetString(); // Take the first image as background
+                            }
+                        }
+                        else if (objType == "textbox" || objType == "text")
+                        {
+                            if (obj.TryGetProperty("text", out JsonElement textElement) && !string.IsNullOrEmpty(textElement.GetString()))
+                            {
+                                string textValue = textElement.GetString()!;
+                                string placeholderName = "";
+                                string plainText = textValue; // Default to literal text
+
+                                // Check if this text object is a placeholder.
+                                // Assumes placeholders are in the format "<<FieldName>>" within the text property itself,
+                                // or that Fabric.js stores this info in a custom property (e.g., 'placeholderName').
+                                // For this implementation, we'll check if the text *is* or *contains* a placeholder.
+                                // A more robust solution would use a dedicated 'placeholderName' property from Fabric.js.
+
+                                // For simplicity, let's assume if text starts with << and ends with >>, it's a placeholder.
+                                // Or better, check for <<FieldName>> anywhere in the text.
+                                var match = StandardPlaceholderRegex.Match(textValue);
+                                if (match.Success && match.Groups.Count > 1)
+                                {
+                                    placeholderName = match.Groups[1].Value;
+                                    plainText = ""; // Indicate this is a placeholder, data will be injected later.
+                                }
+
+                                double left = obj.TryGetProperty("left", out JsonElement leftElem) ? leftElem.GetDouble() : 0;
+                                double top = obj.TryGetProperty("top", out JsonElement topElem) ? topElem.GetDouble() : 0;
+                                string fontFamily = obj.TryGetProperty("fontFamily", out JsonElement fontFamilyElem) ? fontFamilyElem.GetString() ?? "Arial" : "Arial";
+                                double fontSize = obj.TryGetProperty("fontSize", out JsonElement fontSizeElem) ? fontSizeElem.GetDouble() : 16;
+                                string fill = obj.TryGetProperty("fill", out JsonElement fillElem) ? fillElem.GetString() ?? "#000000" : "#000000";
+                                double angle = obj.TryGetProperty("angle", out JsonElement angleElem) ? angleElem.GetDouble() : 0;
+
+                                textElements.Add(new FabricTextObject
+                                {
+                                    PlaceholderName = placeholderName,
+                                    OriginalText = textValue, // Store original for non-placeholders or if fallback needed
+                                    Left = left,
+                                    Top = top,
+                                    FontFamily = fontFamily,
+                                    FontSize = fontSize,
+                                    Fill = fill,
+                                    Angle = angle
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Start building the final HTML structure for the Fabric.js layout.
+            // The container will manage the overall layout.
+            // We'll use inline styles for positioning and formatting.
+            htmlOutput += "<div class='fabric-layout-container' style='position: relative; width: 100%; height: auto; overflow: hidden;'>"; // Ensure container has relative positioning.
+
+            // Embed the base image as an <img> tag.
+            if (!string.IsNullOrEmpty(imageUrl))
+            {
+                // Apply styles to make the image cover the container.
+                // If the image is a data URL, it's directly embeddable.
+                // The `object-fit: cover;` property helps maintain aspect ratio.
+                htmlOutput += $"<img src='{imageUrl}' alt='Template Background Image' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;' />";
+            }
+            else
+            {
+                // If no image is defined in Fabric.js JSON, we might fall back to using
+                // the provided fallbackHtmlContent as the base structure, or just render text overlays.
+                // For now, we'll log a warning. The `ProcessTemplate` method will combine these parts.
+                Console.WriteLine("Warning: No base image found in Fabric.js JSON. Rendering text elements without background image.");
+                // Consider injecting fallbackHtmlContent here if it's meant to be a base layer when no image.
+                // For now, it's handled by the calling method (ProcessTemplate) deciding which HTML source to use primarily.
+            }
+
+            // For each text element (placeholder or static text):
+            foreach (var textObj in textElements)
+            {
+                // Construct the inline style string.
+                string style = $"position: absolute; left: {textObj.Left}px; top: {textObj.Top}px; ";
+                if (textObj.Angle != 0)
+                {
+                    // Apply rotation transform. Fabric.js typically rotates around the center.
+                    // CSS transform-origin defaults to 50% 50%. For simple text overlays, this might be okay.
+                    // If precise rotation around a specific point is needed, calculate transform-origin.
+                    style += $"transform: rotate({textObj.Angle}deg); ";
+                    // style += $"transform-origin: 0 0; "; // Example if rotating from top-left needed.
+                }
+                // Font family with fallback. Ensure `fontFamily` is a safe CSS value.
+                style += $"font-family: '{WebUtility.HtmlEncode(textObj.FontFamily)}', sans-serif; ";
+                // Font size with units. Ensure it's a valid CSS unit.
+                style += $"font-size: {textObj.FontSize}px; ";
+                // Color needs to be a valid CSS color string (hex, rgb, named color).
+                // Fabric.js 'fill' property is usually a hex string.
+                style += $"color: {WebUtility.HtmlEncode(textObj.Fill)}; ";
+                // Prevent text wrapping by default.
+                style += "white-space: nowrap; ";
+                // Handle potential text overflow or ensure it doesn't break layout.
+                style += "overflow: hidden; ";
+                // Ensure text doesn't interfere with pointer events on underlying elements if they were interactive.
+                style += "pointer-events: none; ";
+
+
+                // If it's a placeholder, we wrap it in a span with a special marker and attribute for ProcessTemplate.
+                if (!string.IsNullOrEmpty(textObj.PlaceholderName))
+                {
+                    // The content of the span will be the placeholder syntax itself, e.g., "<<FieldName>>".
+                    // ProcessTemplate will then find these spans using their class and data-placeholder-name attribute
+                    // and replace their inner content with the actual data, formatted according to the styles.
+                    htmlOutput += $"<div class='fabric-text-overlay' style='{style}'><span><<{textObj.PlaceholderName}>></span></div>";
+                }
+                else
+                {
+                    // If it's static text, display it directly. Escape it for safety.
+                    htmlOutput += $"<div class='fabric-text-static' style='{style}'>{WebUtility.HtmlEncode(textObj.OriginalText)}</div>";
+                }
+            }
+
+            htmlOutput += "</div>"; // Close fabric-layout-container.
+
+            return htmlOutput; // Return the generated HTML fragment.
+        }
+
+        // Helper class for Fabric.js text object properties.
+        private class FabricTextObject
+        {
+            public string PlaceholderName { get; set; } = "";
+            public string OriginalText { get; set; } = "";
+            public double Left { get; set; }
+            public double Top { get; set; }
+            public string FontFamily { get; set; } = "Arial";
+            public double FontSize { get; set; } = 16;
+            public string Fill { get; set; } = "#000000";
+            public double Angle { get; set; } = 0;
+        }
+
+
+        // This method is kept for standard HTML processing (when no FabricJson is used).
+        // It needs to be called by the main ProcessTemplate if FabricJson is null or invalid.
+        private string ProcessStandardHtml(string htmlContent, JsonElement jsonData)
+        {
+            string processedHtml = htmlContent;
+
+            // 1. Process Conditional Expressions (${{...}}) FIRST
+            processedHtml = ConditionalRegex.Replace(processedHtml, match =>
+            {
+                if (match.Groups.Count != 4) return match.Value;
+                string conditionPart = match.Groups[1].Value.Trim();
+                string truePart = match.Groups[2].Value;
+                string falsePart = match.Groups[3].Value;
+
+                bool conditionResult = false;
+                bool conditionEvaluated = false;
+
+                if (bool.TryParse(conditionPart, out bool literalBool))
+                {
+                    conditionResult = literalBool;
+                    conditionEvaluated = true;
+                }
+                else
+                {
+                    var conditionPlaceholderMatch = SummernotePlaceholderRegex.Match(conditionPart);
+                    if (conditionPlaceholderMatch.Success && conditionPlaceholderMatch.Groups.Count > 1)
+                    {
+                        string fieldName = conditionPlaceholderMatch.Groups[1].Value;
+                        if (jsonData.ValueKind == JsonValueKind.Object && jsonData.TryGetProperty(fieldName, out JsonElement conditionValueElement))
+                        {
+                            if (conditionValueElement.ValueKind == JsonValueKind.True) { conditionResult = true; conditionEvaluated = true; }
+                            else if (conditionValueElement.ValueKind == JsonValueKind.False) { conditionResult = false; conditionEvaluated = true; }
+                            else if (conditionValueElement.ValueKind == JsonValueKind.String)
+                            {
+                                if (bool.TryParse(conditionValueElement.GetString(), out bool parsedStringBool))
+                                {
+                                    conditionResult = parsedStringBool;
+                                    conditionEvaluated = true;
+                                }
+                            }
+                            if (!conditionEvaluated) { conditionResult = false; conditionEvaluated = true; }
+                        }
+                        else { conditionResult = false; conditionEvaluated = true; }
+                    }
+                    if (!conditionEvaluated) { conditionResult = false; }
+                }
+                return conditionResult ? truePart : falsePart;
+            });
+
+            // 2. Process Simple Placeholders (<<FieldName>>) AFTER conditionals.
+            // This needs to handle both regular <<FieldName>> and the ones generated by Fabric.js: <span class='fabric-text-overlay'><span><<FieldName>></span></span>
+            // The original ProcessTemplate method needs to be aware of the new span structure.
+            // We'll need a new regex or update the existing one for ProcessTemplate if it directly finds placeholders.
+            // The current ProcessTemplate uses SummernotePlaceholderRegex to find <<FieldName>> in plain HTML.
+            // For the Fabric.js generated HTML, we have `<span><<FieldName>></span>` inside a div.
+            // The simple `<<FieldName>>` replacement within the span is handled by the current regex correctly.
+            // If FabricJson styling is applied to the span, it needs to be preserved.
+
+            // Process any remaining standard placeholders in the HTML content.
+            // The challenge is to replace <<FieldName>> *only* within static HTML if FabricJson defines the layout.
+            // Or, ensure the generated Fabric HTML has placeholders that ProcessTemplate can target.
+
+            // Let's assume the FabricJson processing injects `<span><<FieldName>></span>` tags with appropriate styling.
+            // Then, ProcessTemplate's existing logic should replace those tags correctly.
+
+            processedHtml = SummernotePlaceholderRegex.Replace(processedHtml, match =>
+            {
+                if (match.Groups.Count > 1 && match.Groups[1].Success)
+                {
+                    string fieldName = match.Groups[1].Value;
+                    string replacementValue = "";
+
+                    if (jsonData.ValueKind == JsonValueKind.Object && jsonData.TryGetProperty(fieldName, out JsonElement valueElement))
+                    {
+                        replacementValue = valueElement.ValueKind switch
+                        {
+                            JsonValueKind.String => valueElement.GetString() ?? "",
+                            JsonValueKind.Number => valueElement.GetRawText(),
+                            JsonValueKind.True => "true",
+                            JsonValueKind.False => "false",
+                            JsonValueKind.Null => "",
+                            JsonValueKind.Object or JsonValueKind.Array => valueElement.GetRawText(),
+                            _ => ""
+                        };
+                        replacementValue = WebUtility.HtmlEncode(replacementValue);
+                    }
+                    return replacementValue;
+                }
+                return match.Value;
+            });
+
+            // Clean up any leftover placeholder syntax that wasn't replaced.
+            // This must also match the format that could appear after Fabric processing.
+            processedHtml = Regex.Replace(processedHtml, @"<<.*?>>", "", RegexOptions.Singleline);
+
+            return processedHtml;
+        }
+
+
+        // Main method to process template with data.
+        // This method will now be responsible for selecting the primary HTML source (Fabric or fallback)
+        // and then processing placeholders within it.
+        public string ProcessTemplate(string? fallbackHtmlContent, string? fabricJson, JsonElement jsonData)
+        {
+            string baseHtmlForProcessing = fallbackHtmlContent ?? ""; // Default to fallback HTML.
+
+            // If Fabric JSON is provided and valid, use it to generate the primary HTML structure.
+            if (!string.IsNullOrWhiteSpace(fabricJson))
+            {
+                try
+                {
+                    using JsonDocument fabricDoc = JsonDocument.Parse(fabricJson);
+                    JsonElement fabricRoot = fabricDoc.RootElement;
+
+                    if (fabricRoot.ValueKind == JsonValueKind.Object)
+                    {
+                        // Generate HTML structure from Fabric.js JSON.
+                        // This generated HTML will include images and styled spans for text placeholders.
+                        // The text in these spans will be like `<span><<FieldName>></span>`.
+                        string generatedFabricHtml = BuildHtmlFromFabricJson(fabricRoot, jsonData);
+                        if (!string.IsNullOrEmpty(generatedFabricHtml))
+                        {
+                            baseHtmlForProcessing = generatedFabricHtml; // Use Fabric-generated HTML as base.
+                        }
+                        else
+                        {
+                            // Fabric JSON was valid but produced empty HTML. Fallback.
+                            Console.WriteLine("Warning: Fabric.js JSON processed but resulted in empty HTML. Falling back to fallbackHtmlContent.");
+                        }
+                    }
+                    else
+                    {
+                        // Fabric JSON was not a valid object. Fallback.
+                        Console.WriteLine("Warning: Fabric.js JSON is not a valid object. Falling back to fallbackHtmlContent.");
+                    }
+                }
+                catch (JsonException jEx)
+                {
+                    Console.WriteLine($"Error parsing Fabric.js JSON: {jEx.Message}. Falling back to fallbackHtmlContent.");
+                    // Fallback if Fabric JSON parsing fails.
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"An unexpected error occurred processing Fabric.js JSON: {ex.Message}. Falling back to fallbackHtmlContent.");
+                    // Fallback for other processing errors.
+                }
+            }
+
+            // Now, process the determined base HTML content (either from FabricJson or fallbackHtmlContent)
+            // for standard placeholders (<<FieldName>>) and conditionals (${{...}}).
+            // The placeholders generated by BuildHtmlFromFabricJson (like `<span><<FieldName>></span>`)
+            // will be processed by this standard logic.
+            return ProcessStandardHtml(baseHtmlForProcessing, jsonData);
+        }
+
+
+        // The following methods (ResolveParameters, GenerateExampleJson, IsValidJson, ExecuteScalarSql)
+        // are helper methods and remain as they were.
+        // ResolveParameters is used for <<param:parameterName>> within SQL strings.
+        // GenerateExampleJson needs to potentially use FabricJson to create a better example.
+
+        // Helper to resolve <<param:parameterName>> placeholders within a string.
+        private string ResolveParameters(string inputString, JsonElement insideParameters)
+        {
+            string processedString = inputString;
+            if (insideParameters.ValueKind != JsonValueKind.Object)
+            {
+                Console.WriteLine("Warning: Provided inside parameters are not a JSON object. Parameter placeholders will not be resolved.");
+                processedString = ParameterPlaceholderRegex.Replace(processedString, "''");
+                return processedString;
+            }
+            var parameterMatches = ParameterPlaceholderRegex.Matches(inputString);
+            foreach (Match match in parameterMatches)
+            {
+                if (match.Groups.Count > 1 && match.Groups[1].Success)
+                {
+                    string placeholder = match.Value;
+                    string parameterName = match.Groups[1].Value;
+                    string replacementValue = "''";
+                    bool parameterFound = false;
+                    if (insideParameters.TryGetProperty(parameterName, out JsonElement paramValueElement))
+                    {
+                        parameterFound = true;
+                        replacementValue = paramValueElement.ValueKind switch
+                        {
+                            JsonValueKind.String => $"'{paramValueElement.GetString()?.Replace("'", "''")}'",
+                            JsonValueKind.Number => paramValueElement.GetRawText(),
+                            JsonValueKind.True => "1",
+                            JsonValueKind.False => "0",
+                            JsonValueKind.Null => "NULL",
+                            JsonValueKind.Object or JsonValueKind.Array => "''",
+                            _ => "''"
+                        };
+                        if (paramValueElement.ValueKind == JsonValueKind.String && paramValueElement.GetString() == null)
+                        {
+                            replacementValue = "NULL";
+                        }
+                    }
+                    if (!parameterFound)
+                    {
+                        Console.WriteLine($"Warning: Inside parameter '<<param:{parameterName}>>' not found in provided parameters. Replacing with empty string literal.");
+                    }
+                    processedString = processedString.Replace(placeholder, replacementValue);
+                }
+                else
+                {
+                    Console.WriteLine($"Warning: Malformed parameter placeholder match: '{match.Value}'. Skipping resolution.");
+                }
+            }
+            return processedString;
+        }
+
+        // Generates an example JSON string from <<FieldName>> placeholders.
+        // For Fabric.js, this should ideally parse FabricJson and extract placeholders from text elements.
+        public string GenerateExampleJson(string htmlContent)
+        {
+            var exampleData = new Dictionary<string, string>();
+            var placeholderMatches = SummernotePlaceholderRegex.Matches(htmlContent); // Use Summernote regex
+
+            foreach (Match match in placeholderMatches)
+            {
+                if (match.Groups.Count > 1 && match.Groups[1].Success)
+                {
+                    string fieldName = match.Groups[1].Value;
+                    if (!exampleData.ContainsKey(fieldName))
+                    {
+                        exampleData.Add(fieldName, "");
+                    }
+                }
+            }
+
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            return JsonSerializer.Serialize(exampleData, options);
+        }
+
+        public bool IsValidJson(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return false;
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        // This method needs to be called with actual JSON data to produce sample output.
+        // The current implementation assumes it's called with HTML content to extract placeholders.
+        // For Fabric.js JSON, a separate parsing method would extract text elements and their placeholders.
+        // This method might need an overload or adjustment if it's also meant to generate example JSON from FabricJson.
+        // For now, it only processes standard HTML.
+
+        // If GenerateExampleJson is called with FabricJson, it won't work as expected.
+        // The logic to generate example JSON from FabricJson would need to be added here or called separately.
+        // Let's assume GenerateExampleJson is called ONLY with htmlContent for now.
+
+        public JsonElement ResolveInternalData(string? internalDataConfigJson, JsonElement insideParameters)
+        {
+            var resolvedData = new Dictionary<string, object?>();
+            if (string.IsNullOrWhiteSpace(internalDataConfigJson))
+            {
+                using var doc = JsonDocument.Parse("{}");
+                return doc.RootElement.Clone();
+            }
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(internalDataConfigJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    Console.WriteLine("InternalDataConfigJson is not a valid JSON object.");
+                    using var emptyDoc = JsonDocument.Parse("{}");
+                    return emptyDoc.RootElement.Clone();
+                }
+                foreach (JsonProperty property in doc.RootElement.EnumerateObject())
+                {
+                    string fieldName = property.Name;
+                    string configValue = property.Value.GetString() ?? "";
+                    object? resolvedValue = "--";
+                    var sqlMatch = Regex.Match(configValue.Trim(), @"^sql\s*\(\s*'(.*)'\s*,\s*'(.*)'\s*\)$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                    if (sqlMatch.Success)
+                    {
+                        string sqlQuery = sqlMatch.Groups[1].Value.Replace("''", "'");
+                        string parameterizedSqlQuery = ResolveParameters(sqlQuery, insideParameters);
+                        string dbAlias = sqlMatch.Groups[2].Value;
+                        try
+                        {
+                            resolvedValue = ExecuteScalarSql(dbAlias, parameterizedSqlQuery);
+                            if (resolvedValue == DBNull.Value || resolvedValue == null)
+                            {
+                                resolvedValue = "--";
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error executing SQL query '{parameterizedSqlQuery}' for field '{fieldName}' from db '{dbAlias}': {ex.Message}");
+                            resolvedValue = "--";
+                        }
+                    }
+                    else
+                    {
+                        resolvedValue = ResolveParameters(configValue, insideParameters);
+                    }
+                    resolvedData[fieldName] = resolvedValue;
+                }
+                var options = new JsonSerializerOptions { WriteIndented = false };
+                string resolvedJsonString = JsonSerializer.Serialize(resolvedData, options);
+                using var resolvedJsonDoc = JsonDocument.Parse(resolvedJsonString);
+                return resolvedJsonDoc.RootElement.Clone();
+            }
+            catch (JsonException jEx)
+            {
+                Console.WriteLine($"Error parsing InternalDataConfigJson: {jEx.Message}");
+                using var emptyDoc = JsonDocument.Parse("{}");
+                return emptyDoc.RootElement.Clone();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An unexpected error occurred resolving internal data: {ex.Message}");
+                using var emptyDoc = JsonDocument.Parse("{}");
+                return emptyDoc.RootElement.Clone();
+            }
+        }
+
+        private object? ExecuteScalarSql(string dbAlias, string sqlQuery)
+        {
+            var connectionStringsSection = _configuration.GetSection("InternalDataConnections");
+            string? connectionString = connectionStringsSection[dbAlias];
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                Console.WriteLine($"Connection string for alias '{dbAlias}' not found in InternalDataConnections.");
+                return null;
+            }
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                using (var command = new SqlCommand(sqlQuery, connection))
+                {
+                    connection.Open();
+                    object? result = command.ExecuteScalar();
+                    return result;
+                }
+            }
+        }
+    }
+}
+```
+
+---
+
+**17. `PDFGenerator.Web\Controllers\TemplateController.cs`**
+(Added logic for "Download Test PDF" to use versionType from query string, and modified revert logic to handle versionReferenceType)
 
 ```csharp
 // File: Controllers/TemplateController.cs
-// ... (usings as before)
-using Microsoft.AspNetCore.Http; // For IFormFile
-using PdfGeneratorApp.Common; // For TemplateTypeEnum
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PDFGenerator.Web.Dtos.Template;
+using PDFGenerator.Web.Dtos.TemplateVersion;
+using PdfGeneratorApp.Common;
+using PdfGeneratorApp.Data;
+using PdfGeneratorApp.Handlers;
+using PDFGenerator.Web.Handlers; // For new handlers
+using System.Collections.Generic; // For List<T>
+using System.Linq; // For .Select()
 
 namespace PdfGeneratorApp.Controllers
 {
     [Authorize]
     public class TemplateController : Controller
     {
-        // ... (constructor and other methods as before, including GetDatabaseAliases)
-        private readonly IPdfProcessingService _pdfProcessingService; // For Create/Update
+        private readonly ApplicationDbContext _context;
+        private readonly IConfiguration _configuration;
+
+        private readonly IGetTemplateDesignHandler _getTemplateDesignHandler;
+        private readonly IUpdateTemplateHandler _updateTemplateHandler;
+        private readonly ICreateTemplateHandler _createTemplateHandler;
+        private readonly IGetTemplateHistoryHandler _getTemplateHistoryHandler;
+        private readonly IRevertTemplateHandler _revertTemplateHandler;
+        private readonly IPublishTemplateHandler _publishTemplateHandler;
+        private readonly ISoftDeleteTemplateVersionHandler _softDeleteTemplateVersionHandler;
+
 
         public TemplateController(ApplicationDbContext context, IConfiguration configuration,
                                   IGetTemplateDesignHandler getTemplateDesignHandler,
@@ -1419,8 +2649,7 @@ namespace PdfGeneratorApp.Controllers
                                   IGetTemplateHistoryHandler getTemplateHistoryHandler,
                                   IRevertTemplateHandler revertTemplateHandler,
                                   IPublishTemplateHandler publishTemplateHandler,
-                                  ISoftDeleteTemplateVersionHandler softDeleteTemplateVersionHandler,
-                                  IPdfProcessingService pdfProcessingService) // Inject new service
+                                  ISoftDeleteTemplateVersionHandler softDeleteTemplateVersionHandler)
         {
             _context = context;
             _configuration = configuration;
@@ -1431,135 +2660,50 @@ namespace PdfGeneratorApp.Controllers
             _revertTemplateHandler = revertTemplateHandler;
             _publishTemplateHandler = publishTemplateHandler;
             _softDeleteTemplateVersionHandler = softDeleteTemplateVersionHandler;
-            _pdfProcessingService = pdfProcessingService; // Assign
         }
 
+        private List<string> GetDatabaseAliases()
+        {
+            return _configuration.GetSection("InternalDataConnections").GetChildren().Select(c => c.Key).ToList();
+        }
 
-        // GET: /templates/design/{templateName} - Updated for new DTO structure
+        // GET: /templates/design/{templateName}
         [HttpGet("templates/design/{templateName}")]
         public async Task<IActionResult> Design(string templateName)
         {
             Result<TemplateDetailDto> result = await _getTemplateDesignHandler.HandleAsync(templateName);
 
-            if (!result.IsCompleteSuccessfully || result.Data == null)
+            if (!result.IsCompleteSuccessfully)
             {
-                // ... (error handling as before)
                 if (result.ErrorMessages == ErrorMessageUserConst.TemplateNotFound)
+                {
                     return NotFound($"Template '{templateName}' not found.");
+                }
                 return StatusCode(500, result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
             }
-            // For UploadedPdf, convert PageImagePathsJson to PageImageUrls for the view
-            // This logic is better placed in the GetTemplateDesignHandler or by AutoMapper if paths are simple.
-            // For now, let's assume the DTO already has PageImageUrls populated if it's UploadedPdf.
-            // If not, you'd do something like this (simplified):
-            // if (result.Data.TemplateType == TemplateTypeEnum.UploadedPdf && !string.IsNullOrEmpty(result.Data.PageImagePathsJson))
-            // {
-            //     var paths = JsonSerializer.Deserialize<List<string>>(result.Data.PageImagePathsJson);
-            //     result.Data.PageImageUrls = paths.Select(p => Url.Content("~" + p)).ToList(); // Url.Content needs HttpContext
-            // }
 
             ViewBag.DatabaseAliases = GetDatabaseAliases();
             return View(result.Data);
         }
 
-
-        // POST: /templates/create - Updated to handle TemplateType, file upload, canvas layout
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(
-            [Bind("Name,TemplateType,Description,HtmlContent,CanvasLayoutJson,ExampleJsonData,InternalDataConfigJson")] TemplateCreateDto templateDto,
-            IFormFile? uploadedPdfFile) // Separate IFormFile parameter
-        {
-            templateDto.UploadedPdfFile = uploadedPdfFile; // Assign to DTO property for the handler
-
-            if (!ModelState.IsValid)
-            {
-                ViewBag.DatabaseAliases = GetDatabaseAliases();
-                return View(templateDto);
-            }
-             // Basic validation for template type specifics
-            if (templateDto.TemplateType == TemplateTypeEnum.Html && string.IsNullOrWhiteSpace(templateDto.HtmlContent))
-            {
-                ModelState.AddModelError(nameof(TemplateCreateDto.HtmlContent), "HTML Content is required for HTML templates.");
-            }
-            if (templateDto.TemplateType == TemplateTypeEnum.UploadedPdf && templateDto.UploadedPdfFile == null)
-            {
-                ModelState.AddModelError(nameof(TemplateCreateDto.UploadedPdfFile), "A PDF file upload is required for Uploaded PDF templates.");
-            }
-            if (templateDto.TemplateType == TemplateTypeEnum.UploadedPdf && string.IsNullOrWhiteSpace(templateDto.CanvasLayoutJson))
-            {
-                // CanvasLayoutJson might be initially empty if user hasn't added text yet, but should be at least "{}"
-                // Let's make it optional on create, assuming user can add text later.
-                // ModelState.AddModelError(nameof(TemplateCreateDto.CanvasLayoutJson), "Canvas Layout JSON is required for Uploaded PDF templates.");
-            }
-             if (!ModelState.IsValid)
-            {
-                ViewBag.DatabaseAliases = GetDatabaseAliases();
-                return View(templateDto);
-            }
-
-
-            var result = await _createTemplateHandler.HandleAsync(templateDto); // Handler now processes file
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                // ... (error handling as before) ...
-                ModelState.AddModelError("", result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-                ViewBag.DatabaseAliases = GetDatabaseAliases();
-                return View(templateDto);
-            }
-
-            TempData["Message"] = $"Template '{result.Data}' created successfully!";
-            return RedirectToAction(nameof(Design), new { templateName = result.Data });
-        }
-
-        // POST: /templates/design/{templateName} - Updated for TemplateType, file upload, canvas layout
+        // POST: /templates/design/{templateName}
         [HttpPost("templates/design/{templateName}")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Design(string templateName,
-            [Bind("Id,Description,HtmlContent,CanvasLayoutJson,ExampleJsonData,InternalDataConfigJson")] TemplateUpdateDto templateDto,
-            IFormFile? uploadedPdfFile) // Separate IFormFile parameter
+        public async Task<IActionResult> Design(string templateName, [Bind("Id,Description,HtmlContent,ExampleJsonData,InternalDataConfigJson,FabricJson")] TemplateUpdateDto templateDto) // Added FabricJson to Bind
         {
-            templateDto.UploadedPdfFile = uploadedPdfFile; // Assign to DTO property
-
-             // Fetch original details to display view correctly on error, and to get TemplateType
              Result<TemplateDetailDto> detailDtoOnError = await _getTemplateDesignHandler.HandleAsync(templateName);
-             if (!detailDtoOnError.IsCompleteSuccessfully || detailDtoOnError.Data == null)
+             if (detailDtoOnError.IsCompleteSuccessfully && detailDtoOnError.Data != null)
              {
-                 TempData["Error"] = detailDtoOnError.ErrorMessages ?? "Could not load template details for update.";
-                 return RedirectToAction(nameof(Index), "Home");
+                 detailDtoOnError.Data.Description = templateDto.Description;
+                 detailDtoFormatting.Data.HtmlContent = templateDto.HtmlContent;
+                 detailDtoOnError.Data.ExampleJsonData = templateDto.ExampleJsonData;
+                 detailDtoOnError.Data.InternalDataConfigJson = templateDto.InternalDataConfigJson;
+                 detailDtoOnError.Data.FabricJson = templateDto.FabricJson; // Also update FabricJson in view data for error display
              }
              ViewBag.DatabaseAliases = GetDatabaseAliases();
 
-            // Update the properties of detailDtoOnError.Data from templateDto for re-display if validation fails
-            if (detailDtoOnError.Data != null)
-            {
-                 detailDtoOnError.Data.Description = templateDto.Description;
-                 if (detailDtoOnError.Data.TemplateType == TemplateTypeEnum.Html)
-                 {
-                     detailDtoOnError.Data.HtmlContent = templateDto.HtmlContent;
-                 }
-                 else if (detailDtoOnError.Data.TemplateType == TemplateTypeEnum.UploadedPdf)
-                 {
-                     detailDtoOnError.Data.CanvasLayoutJson = templateDto.CanvasLayoutJson;
-                 }
-                 detailDtoOnError.Data.ExampleJsonData = templateDto.ExampleJsonData;
-                 detailDtoOnError.Data.InternalDataConfigJson = templateDto.InternalDataConfigJson;
-            }
-
-
             if (!ModelState.IsValid) return View(detailDtoOnError.Data);
-
-            // Basic validation based on existing template type (type cannot be changed on update)
-            if (detailDtoOnError.Data.TemplateType == TemplateTypeEnum.Html && string.IsNullOrWhiteSpace(templateDto.HtmlContent))
-            {
-                 ModelState.AddModelError(nameof(TemplateUpdateDto.HtmlContent), "HTML Content is required for HTML templates.");
-            }
-            // For UploadedPdf, CanvasLayoutJson should ideally always be submitted, even if empty "{}".
-            // A new PDF file upload is optional on update.
-             if (!ModelState.IsValid) return View(detailDtoOnError.Data);
-
-
+            
             var result = await _updateTemplateHandler.HandleAsync(templateDto);
 
             if (!result.IsCompleteSuccessfully)
@@ -1572,271 +2716,167 @@ namespace PdfGeneratorApp.Controllers
             return RedirectToAction(nameof(Design), new { templateName = templateName });
         }
 
-        // ... (History, Revert, Publish, SoftDeleteVersion actions remain largely the same,
-        // but ensure they redirect appropriately and handle errors if a template/version is unexpectedly missing)
+        // GET: /templates/create
+        public IActionResult Create()
+        {
+            ViewBag.DatabaseAliases = GetDatabaseAliases();
+            // Initialize FabricJson as empty JSON object for a new template
+            return View(new TemplateCreateDto { HtmlContent = "", FabricJson = "{}" });
+        }
+
+        // POST: /templates/create
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Name,HtmlContent,Description,ExampleJsonData,InternalDataConfigJson,FabricJson")] TemplateCreateDto templateDto) // Added FabricJson to Bind
+        {
+            if (!ModelState.IsValid)
+            {
+                ViewBag.DatabaseAliases = GetDatabaseAliases();
+                return View(templateDto);
+            }
+
+            var result = await _createTemplateHandler.HandleAsync(templateDto);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                ModelState.AddModelError("", result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+
+                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNameExists)
+                {
+                    ModelState.AddModelError("Name", result.ErrorMessages);
+                }
+                else if (result.ErrorMessages == ErrorMessageUserConst.InternalDataConfigInvalidJson || result.ErrorMessages == ErrorMessageUserConst.InternalDataConfigNotObject)
+                {
+                    ModelState.AddModelError(nameof(TemplateCreateDto.InternalDataConfigJson), result.ErrorMessages);
+                }
+
+                ViewBag.DatabaseAliases = GetDatabaseAliases();
+                return View(templateDto);
+            }
+
+            TempData["Message"] = $"Template '{result.Data}' created successfully!";
+            return RedirectToAction(nameof(Design), new { templateName = result.Data });
+        }
+
+        // GET: /templates/{templateName}/history
+        [HttpGet("templates/{templateName}/history")]
+        public async Task<IActionResult> History(string templateName)
+        {
+            Result<TemplateDetailDto> templateDetailResult = await _getTemplateDesignHandler.HandleAsync(templateName);
+            if (!templateDetailResult.IsCompleteSuccessfully || templateDetailResult.Data == null)
+            {
+                 TempData["ErrorMessage"] = templateDetailResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+                 return RedirectToAction(nameof(Index), "Home");
+            }
+
+            // Fetch version history (handler now returns only non-deleted versions)
+            var versionsResult = await _getTemplateHistoryHandler.HandleAsync(templateDetailResult.Data.Id);
+
+            if (!versionsResult.IsCompleteSuccessfully)
+            {
+                TempData["ErrorMessage"] = versionsResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+                ViewBag.TemplateVersions = new List<TemplateVersionDto>();
+            }
+            else
+            {
+                ViewBag.TemplateVersions = versionsResult.Data;
+            }
+
+            return View(templateDetailResult.Data);
+        }
+
+        // POST: /templates/{TemplateName}/revert/{VersionNumber}
+        [HttpPost("templates/{TemplateName}/revert/{VersionNumber}")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Revert([FromRoute] TemplateRevertRequestDto routeRequest, [FromForm] string versionReferenceType)
+        {
+            var request = new TemplateRevertRequestDto
+            {
+                TemplateName = routeRequest.TemplateName,
+                VersionNumber = routeRequest.VersionNumber,
+                VersionReferenceType = versionReferenceType
+            };
+
+            var result = await _revertTemplateHandler.HandleAsync(request);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+                return RedirectToAction(nameof(History), new { templateName = request.TemplateName });
+            }
+
+            TempData["Message"] = $"Template '{request.TemplateName}' {request.VersionReferenceType} version successfully reverted to {result.Data}.";
+            return RedirectToAction(nameof(History), new { templateName = request.TemplateName });
+        }
+
+        // POST: /templates/{TemplateName}/publish
+        [HttpPost("templates/{TemplateName}/publish")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Publish([FromRoute] string templateName)
+        {
+            var result = await _publishTemplateHandler.HandleAsync(templateName);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+                return RedirectToAction(nameof(Design), new { templateName = templateName });
+            }
+
+            TempData["Message"] = $"Template '{templateName}' successfully published to Production Version {result.Data}.";
+            return RedirectToAction(nameof(Design), new { templateName = templateName });
+        }
+
+         // POST: /templates/versions/{versionId}/delete
+        [HttpPost("templates/versions/{VersionId}/delete")]
+        [ValidateAntiForgeryToken]
+         public async Task<IActionResult> SoftDeleteVersion([FromRoute] int versionId)
+         {
+             // Fetch the version to get template name for redirect, and check if it's currently referenced.
+             var versionEntity = await _context.TemplateVersions
+                                        .Include(tv => tv.Template)
+                                        .FirstOrDefaultAsync(tv => tv.Id == versionId);
+
+             if (versionEntity == null)
+             {
+                 TempData["ErrorMessage"] = $"Template version with ID {versionId} not found.";
+                 return RedirectToAction(nameof(Index), "Home"); // Or a more appropriate redirect.
+             }
+
+             string templateName = versionEntity.Template?.Name ?? ""; // Get template name for redirect.
+
+             // Call the soft delete handler.
+             var result = await _softDeleteTemplateVersionHandler.HandleAsync(versionId);
+
+             if (!result.IsCompleteSuccessfully)
+             {
+                 TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+             }
+             else
+             {
+                 TempData["Message"] = $"Template version {versionEntity.VersionNumber} for '{templateName}' soft-deleted successfully.";
+             }
+
+             // Redirect back to the History page of the template.
+             if (!string.IsNullOrEmpty(templateName))
+             {
+                return RedirectToAction(nameof(History), new { templateName = templateName });
+             }
+             else
+             {
+                 return RedirectToAction(nameof(Index), "Home"); // Fallback redirect.
+             }
+         }
     }
 }
 ```
 
-**14. `PDFGenerator.Web\Views\Template\Create.cshtml` (Updated for TemplateType and PDF upload)**
+---
+
+**18. `PDFGenerator.Web\Views\Template\Design.cshtml`**
+(Modified to include Fabric.js JSON editor and potentially upload)
 
 ```html
 @using PDFGenerator.Web.Dtos.Template
-@using PdfGeneratorApp.Common // For TemplateTypeEnum
-@model TemplateCreateDto
-@{
-    ViewData["Title"] = "Create New Template";
-    var dbAliases = ViewBag.DatabaseAliases as List<string> ?? new List<string>();
-}
-
-<div class="container">
-    <div class="page-header">
-        <h1>@ViewData["Title"]</h1>
-        <p class="page-subtitle">Define the details for your new PDF template.</p>
-    </div>
-
-    <div class="row">
-        <div class="col-md-12">
-            <!-- Add enctype for file uploads -->
-            <form asp-action="Create" method="post" enctype="multipart/form-data">
-                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-
-                <div class="form-group mb-3">
-                    <label asp-for="Name" class="control-label"></label>
-                    <input asp-for="Name" class="form-control" />
-                    <span asp-validation-for="Name" class="text-danger"></span>
-                </div>
-                <div class="form-group mb-3">
-                    <label asp-for="Description" class="control-label"></label>
-                    <input asp-for="Description" class="form-control" />
-                    <span asp-validation-for="Description" class="text-danger"></span>
-                </div>
-
-                <!-- Template Type Selection -->
-                <div class="form-group mb-3">
-                    <label asp-for="TemplateType" class="control-label">Template Type</label>
-                    <select asp-for="TemplateType" class="form-select" id="templateTypeSelector">
-                        <option value="@TemplateTypeEnum.Html">HTML Editor</option>
-                        <option value="@TemplateTypeEnum.UploadedPdf">Upload PDF (Canvas)</option>
-                    </select>
-                    <span asp-validation-for="TemplateType" class="text-danger"></span>
-                </div>
-
-                <!-- HTML Editor Section (Conditional) -->
-                <div id="htmlEditorSection" class="mb-3 @(Model.TemplateType == TemplateTypeEnum.UploadedPdf ? "d-none" : "")">
-                    <h5>HTML Content Source:</h5>
-                    <div class="form-group mb-3">
-                        <label for="htmlEditor" class="control-label">Edit HTML Content:</label>
-                        <textarea asp-for="HtmlContent" class="form-control" rows="15" id="htmlEditor"></textarea>
-                        <span asp-validation-for="HtmlContent" class="text-danger"></span>
-                        <small class="form-text text-muted">Use <code>&lt;&lt;FieldName&gt;&gt;</code> for placeholders and <code>${{condition ? true_part : false_part}}</code> for conditionals.</small>
-                    </div>
-                    <!-- ... (HTML file upload for editor - optional) ... -->
-                </div>
-
-                <!-- PDF Upload and Canvas Editor Section (Conditional) -->
-                <div id="pdfCanvasSection" class="mb-3 @(Model.TemplateType == TemplateTypeEnum.Html ? "d-none" : "")">
-                    <h5>PDF Upload & Canvas Editor:</h5>
-                    <div class="form-group mb-3">
-                        <label asp-for="UploadedPdfFile" class="form-label">Upload PDF File (.pdf):</label>
-                        <input asp-for="UploadedPdfFile" type="file" class="form-control" accept=".pdf" id="pdfFileUploader" />
-                        <span asp-validation-for="UploadedPdfFile" class="text-danger"></span>
-                    </div>
-                    <!-- Placeholder for Canvas Editor UI -->
-                    <div id="canvasEditorPlaceholder" class="border p-3" style="min-height: 400px;">
-                        <p><em>PDF preview and canvas editor will appear here after PDF upload. (Not yet implemented)</em></p>
-                        <!-- This is where Fabric.js canvases would be dynamically created. -->
-                    </div>
-                    <input type="hidden" asp-for="CanvasLayoutJson" id="canvasLayoutJsonInput" />
-                    <span asp-validation-for="CanvasLayoutJson" class="text-danger"></span>
-                </div>
-
-
-                <hr class="my-4">
-                <h5>Data Configuration (Common for all types):</h5>
-                <!-- ... (Placeholder list, Example JSON, Internal Data Config sections as before) ... -->
-                 <div class="card card-body mb-3">
-                    <h6>Detected Placeholders (from HTML or Canvas Text):</h6>
-                    <ul id="placeholderList" class="list-inline mb-0 small text-muted">
-                        <li class="list-inline-item"><em>(Edit content to detect placeholders)</em></li>
-                    </ul>
-                </div>
-                <div class="form-group mb-3">
-                    <label asp-for="ExampleJsonData" class="control-label">Example JSON Data (for API docs & testing):</label>
-                    <textarea asp-for="ExampleJsonData" class="form-control" rows="10" id="exampleJsonData"></textarea>
-                    <span asp-validation-for="ExampleJsonData" class="text-danger"></span>
-                </div>
-                <div class="form-group mb-3">
-                    <label asp-for="InternalDataConfigJson" class="control-label">Internal Data Configuration (for "Inside" mode):</label>
-                    <textarea asp-for="InternalDataConfigJson" class="form-control" rows="10" id="internalDataConfigJson"></textarea>
-                    <span asp-validation-for="InternalDataConfigJson" class="text-danger"></span>
-                    <small class="form-text text-muted">
-                        Available database aliases: @string.Join(", ", dbAliases).
-                    </small>
-                </div>
-
-
-                <div class="form-group mt-4">
-                    <input type="submit" value="Create Template" class="btn btn-primary" />
-                    <a asp-action="Index" asp-controller="Home" class="btn btn-secondary">Back to List</a>
-                </div>
-                 @Html.AntiForgeryToken()
-            </form>
-        </div>
-    </div>
-</div>
-
-@section Scripts {
-    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
-    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
-    <!-- Fabric.js (You'd host this locally or use a reliable CDN) -->
-    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script> -->
-
-
-    <script>
-        $(document).ready(function() {
-            var htmlEditor = $('#htmlEditor');
-            var exampleJsonDataTextarea = $('#exampleJsonData');
-            var internalDataConfigJsonTextarea = $('#internalDataConfigJson');
-            var placeholderListElement = $('#placeholderList');
-            var templateTypeSelector = $('#templateTypeSelector');
-            var htmlEditorSection = $('#htmlEditorSection');
-            var pdfCanvasSection = $('#pdfCanvasSection');
-            var canvasLayoutJsonInput = $('#canvasLayoutJsonInput');
-            var pdfFileUploader = $('#pdfFileUploader');
-            var canvasEditorPlaceholder = $('#canvasEditorPlaceholder'); // Where canvases will go
-
-            // Initialize Summernote if HTML type is selected
-            if (templateTypeSelector.val() === '@TemplateTypeEnum.Html') {
-                initializeSummernote();
-            }
-
-            function initializeSummernote() {
-                if (!htmlEditor.data('summernote')) { // Check if already initialized
-                    htmlEditor.summernote({
-                        height: 300, // Adjusted height
-                        toolbar: [ /* ... toolbar config ... */ ],
-                        callbacks: {
-                            onChange: _.debounce(function(contents, $editable) {
-                                updatePlaceholdersListFromHtml(contents);
-                            }, 500)
-                        }
-                    });
-                }
-            }
-            function destroySummernote() {
-                if (htmlEditor.data('summernote')) {
-                    htmlEditor.summernote('destroy');
-                }
-            }
-
-            // Toggle sections based on TemplateType
-            templateTypeSelector.on('change', function() {
-                var selectedType = $(this).val();
-                if (selectedType === '@TemplateTypeEnum.Html') {
-                    htmlEditorSection.removeClass('d-none');
-                    pdfCanvasSection.addClass('d-none');
-                    initializeSummernote();
-                    updatePlaceholdersListFromHtml(htmlEditor.summernote('code'));
-                } else if (selectedType === '@TemplateTypeEnum.UploadedPdf') {
-                    htmlEditorSection.addClass('d-none');
-                    pdfCanvasSection.removeClass('d-none');
-                    destroySummernote();
-                    // Placeholder list for canvas will be updated by canvas interaction logic
-                    updatePlaceholdersListFromCanvas(); // Implement this
-                }
-            }).trigger('change'); // Trigger on load
-
-            // --- Placeholder Detection ---
-            function updatePlaceholdersListFromHtml(html) {
-                const placeholderRegex = /&lt;&lt;(\w+)&gt;&gt;/g; // For Summernote
-                // const placeholderRegex = /<<(\w+)>>/g; // If direct HTML input
-                let match;
-                const placeholders = new Set();
-                while ((match = placeholderRegex.exec(html)) !== null) {
-                    placeholders.add(match[1]);
-                }
-                renderPlaceholderList(placeholders);
-            }
-
-            // TODO: Implement placeholder detection from Fabric.js canvas text objects
-            function updatePlaceholdersListFromCanvas() {
-                var allTextObjects = []; // This would come from Fabric.js objects
-                // Example:
-                // fabricCanvases.forEach(canvas => {
-                //    canvas.getObjects('i-text').forEach(obj => allTextObjects.push(obj.text));
-                // });
-                const placeholders = new Set();
-                const placeholderRegex = /<<(\w+)>>/g;
-                allTextObjects.forEach(text => {
-                    let match;
-                    while((match = placeholderRegex.exec(text)) !== null) {
-                        placeholders.add(match[1]);
-                    }
-                });
-                renderPlaceholderList(placeholders);
-                // Also, serialize canvas layout to canvasLayoutJsonInput.val()
-            }
-
-            function renderPlaceholderList(placeholdersSet) {
-                placeholderListElement.empty();
-                if (placeholdersSet.size === 0) {
-                    placeholderListElement.html('<li class="list-inline-item"><em>(No placeholders detected)</em></li>');
-                } else {
-                    placeholdersSet.forEach(p => placeholderListElement.append(`<li class="list-inline-item"><code><<${p}>></code></li>`));
-                }
-            }
-
-
-            // --- JSON Formatting ---
-            function formatJsonTextarea(textarea) { /* ... as before ... */ }
-            formatJsonTextarea(exampleJsonDataTextarea);
-            formatJsonTextarea(internalDataConfigJsonTextarea);
-            if(canvasLayoutJsonInput.val() === "") canvasLayoutJsonInput.val('{}'); // Default canvas layout
-            formatJsonTextarea(canvasLayoutJsonInput); // Format if it's visible/editable directly
-
-
-            // --- PDF File Upload & Canvas Initialization (Skeleton) ---
-            var fabricCanvases = []; // Array to hold Fabric.js canvas instances
-
-            pdfFileUploader.on('change', function(event) {
-                var file = event.target.files[0];
-                if (!file || file.type !== 'application/pdf') {
-                    alert('Please select a PDF file.');
-                    pdfFileUploader.val(''); // Clear the input
-                    return;
-                }
-                canvasEditorPlaceholder.html('<p>Processing PDF... (This requires client-side PDF rendering to images)</p>');
-                // TODO: Client-side PDF to Image conversion (e.g., using pdf.js + canvas)
-                // This is a complex step. For each page:
-                // 1. Render PDF page to an image (or directly to a canvas).
-                // 2. Create a Fabric.js canvas for it.
-                // 3. Set the rendered page image as the Fabric canvas background.
-                // 4. Add to fabricCanvases array.
-                // 5. Implement Fabric.js tools for adding/editing text.
-                // 6. On text change/add/move, call updatePlaceholdersListFromCanvas() and serialize to canvasLayoutJsonInput.
-                alert("PDF Uploaded. Client-side PDF page rendering and Fabric.js editor setup is NOT YET IMPLEMENTED in this example.");
-            });
-
-
-            // Initial placeholder detection (for HTML type if selected)
-            if (templateTypeSelector.val() === '@TemplateTypeEnum.Html') {
-                updatePlaceholdersListFromHtml(htmlEditor.summernote('code'));
-            } else {
-                updatePlaceholdersListFromCanvas(); // Will be empty initially
-            }
-        });
-    </script>
-}
-```
-
-**15. `PDFGenerator.Web\Views\Template\Design.cshtml` (Updated for TemplateType and PDF display/Canvas editor)**
-
-```html
-@using PDFGenerator.Web.Dtos.Template
-@using PdfGeneratorApp.Common // For TemplateTypeEnum
 @model TemplateDetailDto
 @{
     ViewData["Title"] = $"Design Template: {Model.Name}";
@@ -1846,22 +2886,21 @@ namespace PdfGeneratorApp.Controllers
 <div class="container">
     <div class="page-header">
         <h1>@ViewData["Title"]</h1>
-        <p class="page-subtitle">Edit the content and configurations for <strong>@Model.Name</strong> (Type: @Model.TemplateType).</p>
+        <p class="page-subtitle">Edit the HTML content and data configurations for the <strong>@Model.Name</strong> template.</p>
     </div>
 
     <div class="row">
         <div class="col-md-12">
-            <form asp-action="Design" asp-route-templateName="@Model.Name" method="post" enctype="multipart/form-data">
+            <form asp-action="Design" asp-route-templateName="@Model.Name" method="post">
                 <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                 <input type="hidden" asp-for="Id" />
-                <input type="hidden" asp-for="TemplateType" /> <!-- Keep track of type, usually not changed on update -->
 
-
-                <!-- ... (Read-only fields for Name, Versions, LastModified as before) ... -->
                 <div class="form-group mb-3">
                     <label class="control-label">Template Name:</label>
                     <input value="@Model.Name" class="form-control" readonly />
                 </div>
+
+                <!-- Display Testing and Production versions -->
                 <div class="row mb-3">
                     <div class="col-md-6">
                          <label class="control-label">Testing Version:</label>
@@ -1872,11 +2911,11 @@ namespace PdfGeneratorApp.Controllers
                          <input value="@(Model.ProductionVersion?.ToString() ?? "N/A")" class="form-control" readonly />
                     </div>
                 </div>
-                 <div class="form-group mb-3">
+
+                <div class="form-group mb-3">
                     <label class="control-label">Last Modified:</label>
                     <input value="@Model.LastModified.ToString("g")" class="form-control" readonly />
                 </div>
-
 
                 <div class="form-group mb-3">
                     <label asp-for="Description" class="control-label"></label>
@@ -1884,100 +2923,77 @@ namespace PdfGeneratorApp.Controllers
                     <span asp-validation-for="Description" class="text-danger"></span>
                 </div>
 
-                @if (Model.TemplateType == TemplateTypeEnum.Html)
-                {
-                    <div id="htmlEditorSection" class="mb-3">
-                        <h5>HTML Content:</h5>
-                        <div class="form-group mb-3">
-                            <label asp-for="HtmlContent" class="control-label"></label>
-                            <textarea asp-for="HtmlContent" class="form-control" rows="15" id="htmlEditor"></textarea>
-                            <span asp-validation-for="HtmlContent" class="text-danger"></span>
-                            <small class="form-text text-muted">Use <code>&lt;&lt;FieldName&gt;&gt;</code> and <code>${{condition ? true_part : false_part}}</code>.</small>
-                        </div>
+                <!-- HTML Content section -->
+                <div class="mb-3">
+                    <h5>HTML Content Source:</h5>
+                    <div class="form-group mb-3">
+                        <label for="htmlEditor" class="control-label">Edit HTML Content:</label>
+                        <textarea asp-for="HtmlContent" class="form-control" rows="15" id="htmlEditor"></textarea>
+                        <span asp-validation-for="HtmlContent" class="text-danger"></span>
+                        <small class="form-text text-muted">Use <code>&lt;&lt;FieldName&gt;&gt;</code> for dynamic data placeholders and <code>${{condition ? true_part : false_part}}</code> for conditionals.</small>
                     </div>
-                }
-                else if (Model.TemplateType == TemplateTypeEnum.UploadedPdf)
-                {
-                    <div id="pdfCanvasSection" class="mb-3">
-                        <h5>PDF Canvas Editor:</h5>
-                        <div class="form-group mb-3">
-                            <label asp-for="UploadedPdfFile" class="form-label">Replace PDF File (Optional):</label>
-                            <input asp-for="UploadedPdfFile" type="file" class="form-control" accept=".pdf" id="pdfFileUploader" />
-                            <span asp-validation-for="UploadedPdfFile" class="text-danger"></span>
-                            @if(!string.IsNullOrEmpty(Model.OriginalPdfStorageIdentifier))
-                            {
-                                <small class="form-text text-muted">Current PDF: <a href="@Url.Content("~/" + Model.OriginalPdfStorageIdentifier)" target="_blank">View Original</a></small>
-                            }
-                        </div>
-
-                        <!-- Canvas Editor UI -->
-                        <div id="canvasPagesContainer" class="mb-3">
-                            @if (Model.PageImageUrls != null && Model.PageImageUrls.Any())
-                            {
-                                foreach (var imageUrl in Model.PageImageUrls.Select((url, index) => new { url, index }))
-                                {
-                                    <div class="canvas-page-wrapper border mb-3 p-2">
-                                        <h6>Page @(imageUrl.index + 1)</h6>
-                                        <!-- The actual canvas where Fabric.js will operate -->
-                                        <canvas id="pageCanvas_@(imageUrl.index)" class="pdf-page-canvas" style="border:1px solid #ccc;"></canvas>
-                                         <!-- Store background image URL for JS -->
-                                        <input type="hidden" class="page-image-url" value="@Url.Content(imageUrl.url)" />
-                                    </div>
-                                }
-                            }
-                            else
-                            {
-                                <p><em>No pages to display. Upload a PDF if this is a new 'UploadedPdf' template or if images are missing.</em></p>
-                            }
-                        </div>
-                        <input type="hidden" asp-for="CanvasLayoutJson" id="canvasLayoutJsonInput" />
-                        <span asp-validation-for="CanvasLayoutJson" class="text-danger"></span>
-                         <!-- Button to trigger placeholder detection from canvas -->
-                        <button type="button" class="btn btn-sm btn-secondary mb-2" id="detectCanvasPlaceholdersBtn">Detect Placeholders from Canvas</button>
+                    <p class="text-center my-3">OR Upload an HTML file to populate the editor:</p>
+                    <div class="form-group mb-3">
+                        <label for="htmlFile" class="form-label">Upload HTML File (.html):</label>
+                        <input type="file" id="htmlFile" name="htmlFile" class="form-control" accept=".html,.htm" />
                     </div>
-                }
+                    <div id="uploadStatus" class="mt-2"></div>
+                </div>
 
                 <hr class="my-4">
-                <h5>Data Configuration (Common for all types):</h5>
-                <!-- ... (Placeholder list, Example JSON, Internal Data Config sections as before) ... -->
-                <div class="card card-body mb-3">
-                    <h6>Detected Placeholders:</h6>
-                    <ul id="placeholderList" class="list-inline mb-0 small text-muted">
-                        <li class="list-inline-item"><em>(Loading...)</em></li>
-                    </ul>
-                </div>
+
+                <h5>Visual Layout (Fabric.js JSON):</h5>
+                <p class="text-muted">Define the visual layout, including images and text placeholders, using Fabric.js. This will be overlaid on your HTML content.</p>
+
+                 <!-- Fabric.js JSON input group -->
                  <div class="form-group mb-3">
-                    <label asp-for="ExampleJsonData" class="control-label">Example JSON Data:</label>
-                    <textarea asp-for="ExampleJsonData" class="form-control" rows="10" id="exampleJsonData"></textarea>
+                    <label asp-for="FabricJson" class="control-label">Fabric.js JSON:</label>
+                    <textarea asp-for="FabricJson" class="form-control" rows="10" id="fabricJsonEditor"></textarea>
+                    <span asp-validation-for="FabricJson" class="text-danger"></span>
+                    <small class="form-text text-muted">Paste your Fabric.js canvas JSON here. Ensure text elements intended as placeholders are marked or named appropriately.</small>
                  </div>
-                 <div class="form-group mb-3">
-                    <label asp-for="InternalDataConfigJson" class="control-label">Internal Data Configuration:</label>
-                    <textarea asp-for="InternalDataConfigJson" class="form-control" rows="10" id="internalDataConfigJson"></textarea>
-                    <small class="form-text text-muted">Aliases: @string.Join(", ", dbAliases).</small>
+                 <!-- Optional: Add a button to open a Fabric.js editor or a sample JSON -->
+                 <div class="mb-3">
+                     <button type="button" class="btn btn-secondary btn-sm" id="loadFabricSampleBtn">Load Sample Fabric JSON</button>
+                     <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFabricJsonBtn">Clear Fabric JSON</button>
                  </div>
 
+                <!-- Data Configuration section -->
+                <h5>Data Configuration:</h5>
+                <p class="text-muted">Define how placeholders in the HTML content will be populated for "Outside" (API provided) and "Inside" (system sourced) data modes.</p>
+
+                 <!-- Placeholder list -->
+                 <div class="card card-body mb-3">
+                     <h6>Detected Placeholders:</h6>
+                     <ul id="placeholderList" class="list-inline mb-0 small text-muted">
+                         <li class="list-inline-item"><em>(Edit HTML or Load Fabric JSON to detect placeholders)</em></li>
+                     </ul>
+                 </div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="ExampleJsonData" class="control-label">Example JSON Data (for "Outside" mode & docs):</label>
+                    <textarea asp-for="ExampleJsonData" class="form-control" rows="10" id="exampleJsonData"></textarea>
+                    <span asp-validation-for="ExampleJsonData" class="text-danger"></span>
+                    <small class="form-text text-muted">Provide a sample JSON payload for this template's API documentation and testing in "Outside" mode.</small>
+                </div>
+
+                 <div class="form-group mb-3">
+                    <label asp-for="InternalDataConfigJson" class="control-label">Internal Data Configuration (for "Inside" mode):</label>
+                    <textarea asp-for="InternalDataConfigJson" class="form-control" rows="10" id="internalDataConfigJson"></textarea>
+                    <span asp-validation-for="InternalDataConfigJson" class="text-danger"></span>
+                    <small class="form-text text-muted">
+                         Configure data sources for "Inside" mode. Use JSON format like <code>{ "FieldName": "StaticValue", "AnotherField": "sql('SELECT Value FROM Table WHERE ID = &lt;&lt;param:RecordId&gt;&gt;', 'databaseAlias')" }</code>.
+                         Use <code>&lt;&lt;param:parameterName&gt;&gt;</code> to include values passed to the API when using "Inside" mode.
+                         Available database aliases: @string.Join(", ", dbAliases).
+                    </small>
+                </div>
 
                 <div class="form-group mt-4">
-                    <!-- ... (Save, Back, History, Publish buttons as before) ... -->
                     <input type="submit" value="Save Changes" class="btn btn-primary" />
                     <a asp-action="Index" asp-controller="Home" class="btn btn-secondary">Back to Templates</a>
                     <a asp-controller="Template" asp-action="History" asp-route-templateName="@Model.Name" class="btn btn-info">View History</a>
-                     @if (Model.ProductionVersion == null || Model.TestingVersion > Model.ProductionVersion.Value)
-                    {
-                        <form asp-action="Publish" asp-route-templateName="@Model.Name" method="post" class="d-inline needs-confirmation" data-confirmation-message="Are you sure you want to publish Testing Version @Model.TestingVersion to Production?">
-                            @Html.AntiForgeryToken()
-                             <button type="submit" class="btn btn-success">
-                                 <i class="fas fa-arrow-alt-circle-up"></i> Publish to Production
-                             </button>
-                        </form>
-                    }
-                    else
-                    {
-                         <button type="button" class="btn btn-success" disabled title="Production is already up-to-date">
-                             <i class="fas fa-arrow-alt-circle-up"></i> Published (v @(Model.ProductionVersion?.ToString() ?? "N/A"))
-                         </button>
-                    }
-                    <button type="button" id="downloadPdfBtn" class="btn btn-outline-success">Download Test PDF (Testing Version)</button>
+                    <!-- Download Test PDF button - this should ideally test the *Testing* version -->
+                    <button type="button" id="downloadPdfBtn" class="btn btn-success">Download Test PDF (Testing Version)</button>
                 </div>
                  @Html.AntiForgeryToken()
             </form>
@@ -1987,250 +3003,504 @@ namespace PdfGeneratorApp.Controllers
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-    @if (Model.TemplateType == TemplateTypeEnum.Html)
-    {
-        <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
-        <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
-    }
-    else if (Model.TemplateType == TemplateTypeEnum.UploadedPdf)
-    {
-        <!-- Fabric.js - Make sure you have this library available -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
-    }
+
+    <!-- Summernote CSS/JS -->
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <!-- Lodash JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+
+    <!-- Fabric.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
 
     <script>
         $(document).ready(function() {
-            var templateType = "@Model.TemplateType";
+            var htmlEditor = $('#htmlEditor');
+            var fabricJsonEditor = $('#fabricJsonEditor');
+            var exampleJsonDataTextarea = $('#exampleJsonData');
+            var internalDataConfigJsonTextarea = $('#internalDataConfigJson');
             var placeholderListElement = $('#placeholderList');
-            var canvasLayoutJsonInput = $('#canvasLayoutJsonInput');
-            var fabricCanvases = []; // Array to store Fabric.js canvas instances
 
-            // --- Common JSON Formatting ---
-            function formatJsonTextarea(textarea) { /* ... as before ... */ }
-            formatJsonTextarea($('#exampleJsonData'));
-            formatJsonTextarea($('#internalDataConfigJson'));
-             if(templateType === '@TemplateTypeEnum.UploadedPdf' && canvasLayoutJsonInput.val() === "") {
-                canvasLayoutJsonInput.val('{}'); // Default for canvas layout
+            // Initialize Summernote editor
+            htmlEditor.summernote({
+                height: 600,
+                toolbar: [
+                    ['style', ['bold', 'italic', 'underline', 'clear']],
+                    ['font', ['strikethrough', 'superscript', 'subscript']],
+                    ['fontsize', ['fontsize']],
+                    ['color', ['color']],
+                    ['para', ['ul', 'ol', 'paragraph']],
+                    ['table', ['table']],
+                    ['insert', ['link', 'picture', 'video']],
+                    ['view', ['fullscreen', 'code', 'help']]
+                ],
+                 callbacks: {
+                    onChange: _.debounce(function(contents, $editable) {
+                         updatePlaceholdersList(contents); // Update placeholders from HTML editor
+                         // When HTML content changes, we don't auto-update Fabric JSON.
+                         // The user would need to explicitly save/load JSON or trigger placeholder detection on Fabric.
+                    }, 500)
+                 }
+            });
+
+            // Helper to update the detected placeholders list (reads from HTML editor and potentially Fabric JSON)
+            function updatePlaceholdersList(html) {
+                 const placeholderRegex = /&lt;&lt;(\w+)&gt;&gt;/g; // Matches HTML entities for <<...>>
+                 let match;
+                 const placeholders = new Set();
+
+                 // Add placeholders found in standard HTML content
+                 while ((match = placeholderRegex.exec(html)) !== null) {
+                      placeholders.add(match[1]);
+                 }
+
+                 // Add placeholders found in Fabric.js JSON (if available and parsed)
+                 if (fabricJsonEditor.val()) {
+                     try {
+                         const fabricJson = JSON.parse(fabricJsonEditor.val());
+                         if (fabricJson && fabricJson.objects && Array.isArray(fabricJson.objects)) {
+                             fabricJson.objects.forEach(obj => {
+                                 if (obj.type === 'textbox' || obj.type === 'text') {
+                                     const textValue = obj.text || '';
+                                     const phMatch = placeholderRegex.exec(textValue); // Match placeholder in Fabric text
+                                     if (phMatch && phMatch.Groups.Count > 1) {
+                                         placeholders.add(phMatch.Groups[1].Value);
+                                     }
+                                 }
+                             });
+                         }
+                     } catch (e) {
+                         console.warn("Could not parse Fabric JSON for placeholder detection:", e);
+                     }
+                 }
+
+
+                 // Update the list display
+                 placeholderListElement.empty();
+                 if (placeholders.size === 0) {
+                      placeholderListElement.html('<li class="list-inline-item"><em>(No data placeholders detected)</em></li>');
+                 } else {
+                      placeholders.forEach(placeholder => {
+                           placeholderListElement.append(`<li class="list-inline-item"><code><<${placeholder}>></code></li>`);
+                      });
+                 }
             }
-            formatJsonTextarea(canvasLayoutJsonInput);
 
+            // Helper function to format JSON textareas
+            function formatJsonTextarea(textarea) {
+                 try {
+                     var rawJson = textarea.val();
+                      if (rawJson && rawJson.trim() !== "{}" && rawJson.trim() !== "") {
+                         var parsedJson = JSON.parse(rawJson);
+                         textarea.val(JSON.stringify(parsedJson, null, 2));
+                     } else {
+                         textarea.val('{}');
+                     }
+                 } catch (e) {
+                     console.error("Failed to parse existing JSON:", textarea.attr('id'), e);
+                 }
+            }
 
-            // --- Placeholder List Update ---
-            function updatePlaceholdersList(placeholdersSet) {
-                placeholderListElement.empty();
-                if (placeholdersSet.size === 0) {
-                    placeholderListElement.html('<li class="list-inline-item"><em>(No placeholders detected)</em></li>');
+            // Format JSON textareas on load
+            formatJsonTextarea(exampleJsonDataTextarea);
+            formatJsonTextarea(internalDataConfigJsonTextarea);
+            formatJsonTextarea(fabricJsonEditor); // Also format Fabric JSON editor
+
+            // --- Handle Fabric JSON loading/clearing ---
+            $('#loadFabricSampleBtn').on('click', function() {
+                // Example Fabric.js JSON structure. You would replace this with actual sample data.
+                // This sample assumes a background image and two text placeholders.
+                const sampleFabricJson = JSON.stringify({
+                    "version": "5.0.0",
+                    "objects": [
+                        {
+                            "type": "image",
+                            "url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE2cHgiIGZpbGw9IiMzMzMiIHRleHQtYW5jaG9yPSJtaWRkbGUiPjwvZGVmcz48c3R5bGU+PC9zdHlsZT48L3N2Zz4=", // Placeholder SVG as base64 data URL
+                            "left": 0,
+                            "top": 0,
+                            "width": 400, // Assuming canvas width is 400px
+                            "height": 400, // Assuming canvas height is 400px
+                            "scaleX": 1, "scaleY": 1
+                        },
+                        {
+                            "type": "textbox",
+                            "text": "<<CustomerName>>", // Placeholder text
+                            "left": 50,
+                            "top": 80,
+                            "width": 300,
+                            "height": 40,
+                            "fontFamily": "Cairo",
+                            "fontSize": 24,
+                            "fill": "#333333",
+                            "angle": 0,
+                            "originX": "left", "originY": "top"
+                        },
+                        {
+                            "type": "textbox",
+                            "text": "Order Date: <<OrderDate>>", // Another placeholder
+                            "left": 50,
+                            "top": 120,
+                            "width": 300,
+                            "height": 30,
+                            "fontFamily": "Cairo",
+                            "fontSize": 18,
+                            "fill": "#555555",
+                            "angle": 5, // Rotated slightly
+                            "originX": "left", "originY": "top"
+                        },
+                         {
+                            "type": "textbox",
+                            "text": "This is static text", // Non-placeholder static text
+                            "left": 50,
+                            "top": 160,
+                            "width": 300,
+                            "height": 30,
+                            "fontFamily": "Arial",
+                            "fontSize": 16,
+                            "fill": "#777777",
+                            "angle": 0,
+                            "originX": "left", "originY": "top"
+                        }
+                    ],
+                    "background": "transparent" // Example background property
+                }, JSON.stringify(null, 2)); // Pretty print with 2 spaces.
+
+                fabricJsonEditor.val(sampleFabricJson); // Set the editor's value.
+                showStatus('Loaded sample Fabric.js JSON.', 'info');
+                updatePlaceholdersList(htmlEditor.val()); // Update placeholders based on current HTML + loaded JSON.
+            });
+
+            $('#clearFabricJsonBtn').on('click', function() {
+                fabricJsonEditor.val('{}'); // Set to empty JSON object.
+                showStatus('Cleared Fabric.js JSON.', 'info');
+                updatePlaceholdersList(htmlEditor.val()); // Update placeholders after clearing.
+            });
+
+            // --- HTML File Upload ---
+            $('#htmlFile').on('change', function() {
+                var file = this.files[0];
+                if (file) {
+                    showStatus('Reading HTML file...');
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        htmlEditor.summernote('code', e.target.result);
+                        showStatus('HTML file loaded into editor.', 'success');
+                        // When HTML is loaded, it might contain <<placeholders>> that need to be detected.
+                        updatePlaceholdersList(e.target.result);
+                        // We DO NOT auto-update Fabric JSON here. User should manage it separately.
+                    };
+                    reader.onerror = function() {
+                        showStatus('Error reading HTML file.', 'danger');
+                    };
+                    reader.readAsText(file);
                 } else {
-                    placeholdersSet.forEach(p => placeholderListElement.append(`<li class="list-inline-item"><code><<${p}>></code></li>`));
-                }
-            }
-
-
-            if (templateType === '@TemplateTypeEnum.Html') {
-                var htmlEditor = $('#htmlEditor');
-                htmlEditor.summernote({
-                    height: 400,
-                    toolbar: [ /* ... */ ],
-                    callbacks: {
-                        onChange: _.debounce(function(contents, $editable) {
-                            const regex = /&lt;&lt;(\w+)&gt;&gt;/g; let m; const p = new Set();
-                            while ((m = regex.exec(contents)) !== null) p.add(m[1]);
-                            updatePlaceholdersList(p);
-                        }, 500)
-                    }
-                });
-                // Initial load for HTML
-                const initialHtmlContent = htmlEditor.summernote('code');
-                const initialRegex = /&lt;&lt;(\w+)&gt;&gt;/g; let im; const ip = new Set();
-                while((im = initialRegex.exec(initialHtmlContent)) !== null) ip.add(im[1]);
-                updatePlaceholdersList(ip);
-            }
-            else if (templateType === '@TemplateTypeEnum.UploadedPdf') {
-                // --- Fabric.js Canvas Setup ---
-                initializeFabricCanvases();
-                // Load initial layout if present
-                loadCanvasLayoutFromJson();
-
-                $('#detectCanvasPlaceholdersBtn').on('click', function() {
-                    detectAndListCanvasPlaceholders();
-                    serializeCanvasLayoutToJson(); // Also save layout when detecting
-                });
-
-                // PDF file uploader change - might re-initialize canvases if a new PDF is chosen
-                $('#pdfFileUploader').on('change', function(event) {
-                     alert("Replacing PDF requires server-side processing to get new page images. This demo won't re-render pages on client. Save changes to process new PDF.");
-                     // In a full implementation, you might AJAX upload the PDF, get new image URLs,
-                     // and then re-call initializeFabricCanvases with the new URLs.
-                });
-            }
-
-            function initializeFabricCanvases() {
-                $('.pdf-page-canvas').each(function(index) {
-                    var canvasId = $(this).attr('id');
-                    var imageUrl = $(this).siblings('.page-image-url').val();
-                    var fabricCanvas = new fabric.Canvas(canvasId);
-                    fabricCanvases[index] = fabricCanvas;
-
-                    if (imageUrl) {
-                        fabric.Image.fromURL(imageUrl, function(img) {
-                            // Calculate scale to fit image within a max width/height if needed
-                            // For simplicity, using original image size for canvas, then scaling image
-                            fabricCanvas.setWidth(img.width);
-                            fabricCanvas.setHeight(img.height);
-                            img.set({selectable: false, evented: false}); // Make background not selectable
-                            fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas), {
-                                // Scale if necessary:
-                                // scaleX: canvas.width / img.width,
-                                // scaleY: canvas.height / img.height
-                            });
-                        });
-                    } else {
-                        // Fallback canvas size if no image
-                        fabricCanvas.setWidth(600);
-                        fabricCanvas.setHeight(800);
-                    }
-
-                    // Event listener for when objects are modified (moved, text changed)
-                    fabricCanvas.on('object:modified', function(e) {
-                        serializeCanvasLayoutToJson();
-                        detectAndListCanvasPlaceholders();
-                    });
-                     fabricCanvas.on('text:changed', function(e) { // Specifically for text content changes
-                        serializeCanvasLayoutToJson();
-                        detectAndListCanvasPlaceholders();
-                    });
-                });
-                 // Add dummy text tool
-                $('#canvasPagesContainer').prepend('<button type="button" id="addTextBtn" class="btn btn-sm btn-info mb-2">Add Placeholder Text</button>');
-                $('#addTextBtn').on('click', function() {
-                    if (fabricCanvases.length > 0) {
-                        // Add to the first canvas by default, or implement page selection
-                        var activeCanvas = fabricCanvases[0]; // Or based on selected page
-                        var text = new fabric.IText('<<Placeholder>>', {
-                            left: 50,
-                            top: 50,
-                            fontFamily: 'helvetica',
-                            fontSize: 20,
-                            fill: '#000000'
-                        });
-                        activeCanvas.add(text);
-                        activeCanvas.setActiveObject(text); // Make it active for immediate editing
-                        serializeCanvasLayoutToJson();
-                        detectAndListCanvasPlaceholders();
-                    } else {
-                        alert("No canvas pages initialized. Upload a PDF first or ensure pages are loaded.");
-                    }
-                });
-            }
-
-            function serializeCanvasLayoutToJson() {
-                var layoutData = [];
-                fabricCanvases.forEach((canvas, pageIndex) => {
-                    var pageObjects = [];
-                    canvas.getObjects().forEach(obj => {
-                        if (obj.type === 'i-text') { // Only save IText objects
-                            pageObjects.push({
-                                type: obj.type,
-                                text: obj.text,
-                                left: obj.left,
-                                top: obj.top,
-                                fontSize: obj.fontSize,
-                                fontFamily: obj.fontFamily,
-                                fill: obj.fill,
-                                angle: obj.angle,
-                                scaleX: obj.scaleX,
-                                scaleY: obj.scaleY
-                                // Add other properties you want to save
-                            });
-                        }
-                    });
-                    layoutData.push({ page: pageIndex, objects: pageObjects });
-                });
-                var jsonString = JSON.stringify(layoutData, null, 2);
-                canvasLayoutJsonInput.val(jsonString);
-            }
-
-            function loadCanvasLayoutFromJson() {
-                var jsonString = canvasLayoutJsonInput.val();
-                if (jsonString && jsonString.trim() !== "" && jsonString.trim() !== "{}") {
-                    try {
-                        var layoutData = JSON.parse(jsonString);
-                        layoutData.forEach(pageData => {
-                            var canvas = fabricCanvases[pageData.page];
-                            if (canvas && pageData.objects) {
-                                pageData.objects.forEach(objData => {
-                                    if (objData.type === 'i-text') {
-                                        var text = new fabric.IText(objData.text, objData);
-                                        canvas.add(text);
-                                    }
-                                });
-                                canvas.renderAll();
-                            }
-                        });
-                         detectAndListCanvasPlaceholders(); // Update placeholders after loading
-                    } catch (e) {
-                        console.error("Error loading canvas layout from JSON:", e);
-                    }
-                }
-            }
-
-            function detectAndListCanvasPlaceholders() {
-                const allPlaceholders = new Set();
-                const placeholderRegex = /<<(\w+)>>/g;
-                fabricCanvases.forEach(canvas => {
-                    canvas.getObjects('i-text').forEach(obj => {
-                        let match;
-                        while((match = placeholderRegex.exec(obj.text)) !== null) {
-                            allPlaceholders.add(match[1]);
-                        }
-                    });
-                });
-                updatePlaceholdersList(allPlaceholders);
-            }
-
-
-            // --- Confirmation for forms (Publish, Revert, Delete) ---
-            document.querySelectorAll('.needs-confirmation').forEach(form => { /* ... as before ... */ });
-
-            // --- Test PDF Download ---
-            $('#downloadPdfBtn').on('click', function() { /* ... as before ... */ });
-
-            // Call this before submitting the form to ensure the latest canvas state is captured
-            $('form').on('submit', function() {
-                if (templateType === '@TemplateTypeEnum.UploadedPdf') {
-                    serializeCanvasLayoutToJson();
+                    uploadStatus.html('');
                 }
             });
 
-        }); // End document ready
+            // Function to show status messages.
+            function showStatus(message, type = 'info') {
+                uploadStatus.html(`<div class="alert alert-${type}">${message}</div>`);
+            }
+
+            // Initial placeholder detection on page load.
+            // This should scan both the HTML editor AND the Fabric JSON editor for placeholders.
+            updatePlaceholdersList(htmlEditor.val()); // Initial scan of HTML editor.
+
+        }); // End of jQuery document ready.
     </script>
 }
 ```
 
-**Key Considerations for the Canvas Feature:**
+---
 
-*   **Client-Side PDF to Image:** The provided `Create.cshtml` and `Design.cshtml` skeletons assume that when a PDF is uploaded for the "UploadedPdf" type, the server (`CreateTemplateHandler`/`UpdateTemplateHandler` via `PdfProcessingService`) converts it to images and stores their paths. The `Design.cshtml` then receives these image URLs (`Model.PageImageUrls`) to display as backgrounds for Fabric.js canvases.
-    *   A more interactive "Create" page might involve client-side PDF rendering (using `pdf.js`) to show previews immediately and then send the PDF to the server for robust conversion and storage.
-*   **Fabric.js Implementation:**
-    *   You'll need to write JavaScript to initialize Fabric.js for each page.
-    *   Implement tools to add text elements (using `fabric.IText` is good as it allows in-canvas editing).
-    *   Handle text properties (font, size, color) via a UI.
-    *   **Serialization:** Before the form is submitted, you *must* iterate through all Fabric.js canvases, get the properties of all text objects (text content, x, y, font, size, color, angle, scale, etc.), and serialize this into a JSON string. This JSON string is then put into the hidden input field `CanvasLayoutJson`.
-    *   **Deserialization:** When editing an existing "UploadedPdf" template, parse `Model.CanvasLayoutJson` and use Fabric.js to re-create the text objects on their respective canvases.
-*   **Placeholder Detection (Canvas):** The `updatePlaceholdersListFromCanvas()` JavaScript function will need to iterate through all text objects on all Fabric canvases, extract their text, find `<<FieldName>>` patterns, and update the UI list.
-*   **Server-Side PDF Generation (`GeneratePdfFromCanvasLayoutAsync` in `PdfProcessingService`):**
-    *   This method will receive the `PageImagePathsJson` (which it resolves to actual image files from `wwwroot`) and the `CanvasLayoutJson`.
-    *   It will use a library like iText 7 or PdfSharp.
-    *   For each page:
-        1.  Create a new page in the output PDF.
-        2.  Load the corresponding background image.
-        3.  Draw the background image onto the PDF page.
-        4.  Parse the `CanvasLayoutJson` for that page's text objects.
-        5.  For each text object:
-            *   Perform placeholder replacement on `object.text` using the `jsonData` input.
-            *   Draw the (processed) text onto the PDF page at `object.left`, `object.top` with the specified `object.fontFamily`, `object.fontSize`, `object.fill`, `object.angle`, etc. Font handling can be tricky across libraries.
-*   **User Experience:** Managing multiple canvases for multiple pages can be complex. Consider a UI with thumbnails for page navigation, where clicking a thumbnail loads the corresponding page into a main editor canvas.
-*   **Error Handling and Robustness:** PDF processing and canvas manipulation can have many edge cases.
+**19. `PDFGenerator.Web\Controllers\TemplateController.cs`**
+(Updated Design POST action to bind `FabricJson` and added a button for it)
 
-This is a substantial feature, and the client-side Fabric.js part is a mini-application in itself. Start with one page, get the text addition and serialization working, then expand.
+```csharp
+// File: Controllers/TemplateController.cs
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PDFGenerator.Web.Dtos.Template;
+using PDFGenerator.Web.Dtos.TemplateVersion;
+using PdfGeneratorApp.Common;
+using PdfGeneratorApp.Data;
+using PdfGeneratorApp.Handlers;
+using PDFGenerator.Web.Handlers;
+using System.Collections.Generic;
+using System.Linq;
+
+
+namespace PdfGeneratorApp.Controllers
+{
+    [Authorize]
+    public class TemplateController : Controller
+    {
+        private readonly ApplicationDbContext _context;
+        private readonly IConfiguration _configuration;
+
+        private readonly IGetTemplateDesignHandler _getTemplateDesignHandler;
+        private readonly IUpdateTemplateHandler _updateTemplateHandler;
+        private readonly ICreateTemplateHandler _createTemplateHandler;
+        private readonly IGetTemplateHistoryHandler _getTemplateHistoryHandler;
+        private readonly IRevertTemplateHandler _revertTemplateHandler;
+        private readonly IPublishTemplateHandler _publishTemplateHandler;
+        private readonly ISoftDeleteTemplateVersionHandler _softDeleteTemplateVersionHandler;
+
+
+        public TemplateController(ApplicationDbContext context, IConfiguration configuration,
+                                  IGetTemplateDesignHandler getTemplateDesignHandler,
+                                  IUpdateTemplateHandler updateTemplateHandler,
+                                  ICreateTemplateHandler createTemplateHandler,
+                                  IGetTemplateHistoryHandler getTemplateHistoryHandler,
+                                  IRevertTemplateHandler revertTemplateHandler,
+                                  IPublishTemplateHandler publishTemplateHandler,
+                                  ISoftDeleteTemplateVersionHandler softDeleteTemplateVersionHandler)
+        {
+            _context = context;
+            _configuration = configuration;
+            _getTemplateDesignHandler = getTemplateDesignHandler;
+            _updateTemplateHandler = updateTemplateHandler;
+            _createTemplateHandler = createTemplateHandler;
+            _getTemplateHistoryHandler = getTemplateHistoryHandler;
+            _revertTemplateHandler = revertTemplateHandler;
+            _publishTemplateHandler = publishTemplateHandler;
+            _softDeleteTemplateVersionHandler = softDeleteTemplateVersionHandler;
+        }
+
+        private List<string> GetDatabaseAliases()
+        {
+            return _configuration.GetSection("InternalDataConnections").GetChildren().Select(c => c.Key).ToList();
+        }
+
+        // GET: /templates/design/{templateName}
+        [HttpGet("templates/design/{templateName}")]
+        public async Task<IActionResult> Design(string templateName)
+        {
+            Result<TemplateDetailDto> result = await _getTemplateDesignHandler.HandleAsync(templateName);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNotFound)
+                {
+                    return NotFound($"Template '{templateName}' not found.");
+                }
+                return StatusCode(500, result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+            }
+
+            ViewBag.DatabaseAliases = GetDatabaseAliases();
+            // Ensure FabricJson is initialized in the DTO if it's null for display/editing purposes
+            if (result.Data != null && string.IsNullOrEmpty(result.Data.FabricJson))
+            {
+                result.Data.FabricJson = "{}"; // Initialize with empty JSON object
+            }
+            return View(result.Data);
+        }
+
+        // POST: /templates/design/{templateName}
+        [HttpPost("templates/design/{templateName}")]
+        [ValidateAntiForgeryToken]
+        // Added FabricJson to the Bind attribute.
+        public async Task<IActionResult> Design(string templateName, [Bind("Id,Description,HtmlContent,ExampleJsonData,InternalDataConfigJson,FabricJson")] TemplateUpdateDto templateDto)
+        {
+             Result<TemplateDetailDto> detailDtoOnError = await _getTemplateDesignHandler.HandleAsync(templateName);
+             if (detailDtoOnError.IsCompleteSuccessfully && detailDtoOnError.Data != null)
+             {
+                 // Update the DTO for the view with submitted values, including FabricJson
+                 detailDtoOnError.Data.Description = templateDto.Description;
+                 detailDtoOnError.Data.HtmlContent = templateDto.HtmlContent;
+                 detailDtoOnError.Data.ExampleJsonData = templateDto.ExampleJsonData;
+                 detailDtoOnError.Data.InternalDataConfigJson = templateDto.InternalDataConfigJson;
+                 detailDtoOnError.Data.FabricJson = templateDto.FabricJson; // Assign FabricJson for error display
+             }
+             ViewBag.DatabaseAliases = GetDatabaseAliases();
+
+            if (!ModelState.IsValid) return View(detailDtoOnError.Data);
+            
+            var result = await _updateTemplateHandler.HandleAsync(templateDto);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                ModelState.AddModelError("", result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+                return View(detailDtoOnError.Data);
+            }
+
+            TempData["Message"] = $"Template '{templateName}' updated. New Testing Version is {result.Data}.";
+            return RedirectToAction(nameof(Design), new { templateName = templateName });
+        }
+
+        // GET: /templates/create
+        public IActionResult Create()
+        {
+            ViewBag.DatabaseAliases = GetDatabaseAliases();
+            // Initialize FabricJson as empty JSON object for a new template
+            return View(new TemplateCreateDto { HtmlContent = "", FabricJson = "{}" });
+        }
+
+        // POST: /templates/create
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Name,HtmlContent,Description,ExampleJsonData,InternalDataConfigJson,FabricJson")] TemplateCreateDto templateDto) // Added FabricJson to Bind
+        {
+            if (!ModelState.IsValid)
+            {
+                ViewBag.DatabaseAliases = GetDatabaseAliases();
+                return View(templateDto);
+            }
+
+            var result = await _createTemplateHandler.HandleAsync(templateDto);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                ModelState.AddModelError("", result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+
+                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNameExists)
+                {
+                    ModelState.AddModelError("Name", result.ErrorMessages);
+                }
+                else if (result.ErrorMessages == ErrorMessageUserConst.InternalDataConfigInvalidJson || result.ErrorMessages == ErrorMessageUserConst.InternalDataConfigNotObject)
+                {
+                    ModelState.AddModelError(nameof(TemplateCreateDto.InternalDataConfigJson), result.ErrorMessages);
+                }
+
+                ViewBag.DatabaseAliases = GetDatabaseAliases();
+                return View(templateDto);
+            }
+
+            TempData["Message"] = $"Template '{result.Data}' created successfully!";
+            return RedirectToAction(nameof(Design), new { templateName = result.Data });
+        }
+
+        // GET: /templates/{templateName}/history
+        [HttpGet("templates/{templateName}/history")]
+        public async Task<IActionResult> History(string templateName)
+        {
+            Result<TemplateDetailDto> templateDetailResult = await _getTemplateDesignHandler.HandleAsync(templateName);
+            if (!templateDetailResult.IsCompleteSuccessfully || templateDetailResult.Data == null)
+            {
+                 TempData["ErrorMessage"] = templateDetailResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+                 return RedirectToAction(nameof(Index), "Home");
+            }
+
+            var versionsResult = await _getTemplateHistoryHandler.HandleAsync(templateDetailResult.Data.Id);
+
+            if (!versionsResult.IsCompleteSuccessfully)
+            {
+                TempData["ErrorMessage"] = versionsResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+                ViewBag.TemplateVersions = new List<TemplateVersionDto>();
+            }
+            else
+            {
+                ViewBag.TemplateVersions = versionsResult.Data;
+            }
+
+            return View(templateDetailResult.Data);
+        }
+
+        // POST: /templates/{TemplateName}/revert/{VersionNumber}
+        [HttpPost("templates/{TemplateName}/revert/{VersionNumber}")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Revert([FromRoute] TemplateRevertRequestDto routeRequest, [FromForm] string versionReferenceType)
+        {
+            var request = new TemplateRevertRequestDto
+            {
+                TemplateName = routeRequest.TemplateName,
+                VersionNumber = routeRequest.VersionNumber,
+                VersionReferenceType = versionReferenceType
+            };
+
+            var result = await _revertTemplateHandler.HandleAsync(request);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+                return RedirectToAction(nameof(History), new { templateName = request.TemplateName });
+            }
+
+            TempData["Message"] = $"Template '{request.TemplateName}' {request.VersionReferenceType} version successfully reverted to {result.Data}.";
+            return RedirectToAction(nameof(History), new { templateName = request.TemplateName });
+        }
+
+        // POST: /templates/{TemplateName}/publish
+        [HttpPost("templates/{TemplateName}/publish")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Publish([FromRoute] string templateName)
+        {
+            var result = await _publishTemplateHandler.HandleAsync(templateName);
+
+            if (!result.IsCompleteSuccessfully)
+            {
+                TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+                return RedirectToAction(nameof(Design), new { templateName = templateName });
+            }
+
+            TempData["Message"] = $"Template '{templateName}' successfully published to Production Version {result.Data}.";
+            return RedirectToAction(nameof(Design), new { templateName = templateName });
+        }
+
+         // POST: /templates/versions/{versionId}/delete
+        [HttpPost("templates/versions/{VersionId}/delete")]
+        [ValidateAntiForgeryToken]
+         public async Task<IActionResult> SoftDeleteVersion([FromRoute] int versionId)
+         {
+             var versionEntity = await _context.TemplateVersions
+                                        .Include(tv => tv.Template)
+                                        .FirstOrDefaultAsync(tv => tv.Id == versionId);
+
+             if (versionEntity == null)
+             {
+                 TempData["ErrorMessage"] = $"Template version with ID {versionId} not found.";
+                 return RedirectToAction(nameof(Index), "Home");
+             }
+
+             string templateName = versionEntity.Template?.Name ?? "";
+
+             var result = await _softDeleteTemplateVersionHandler.HandleAsync(versionId);
+
+             if (!result.IsCompleteSuccessfully)
+             {
+                 TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
+             }
+             else
+             {
+                 TempData["Message"] = $"Template version {versionEntity.VersionNumber} for '{templateName}' soft-deleted successfully.";
+             }
+
+             if (!string.IsNullOrEmpty(templateName))
+             {
+                return RedirectToAction(nameof(History), new { templateName = templateName });
+             }
+             else
+             {
+                 return RedirectToAction(nameof(Index), "Home");
+             }
+         }
+    }
+}
+```
+
+---
+
+**Steps to complete the Fabric.js integration:**
+
+1.  **UI for Fabric.js Design:** You'll need to build a UI component (likely a separate page or modal) where users can actually design templates using Fabric.js. This UI would allow:
+    *   Uploading background images.
+    *   Adding text elements, configuring their properties, and associating them with `<<PlaceholderName>>` values.
+    *   Saving the canvas state as Fabric.js JSON.
+    *   This JSON would then be saved into the `Template.FabricJson` or `TemplateVersion.FabricJson` field.
+
+2.  **Update `TemplateCreateDto` and `TemplateUpdateDto`:** Ensure `FabricJson` is included in the `[Bind]` attributes for the `Create` and `Design` (POST) actions in `TemplateController`. (Done in the modified `TemplateController.cs` above).
+
+3.  **Update `TemplateRepository`:** The `CreateNewTemplateAsync` and `UpdateTemplateAsync` methods should correctly handle saving/updating the `FabricJson` field. The current modifications seem to handle this mapping.
+
+4.  **Modify `GeneratePdfHandler.cs`:** As shown in the updated `GeneratePdfHandler.cs`, it now calls `_templateProcessingService.ProcessTemplate(templateDataAccessDto.HtmlContent, templateDataAccessDto.FabricJson, finalDataForHtmlProcessing)` passing the `FabricJson` along.
+
+5.  **Update `TemplateProcessingService.ProcessTemplate`:** This is the most critical part where the new hybrid logic resides, as demonstrated in the modified `TemplateProcessingService.cs` file above. This method is now responsible for:
+    *   Parsing the `FabricJson`.
+    *   Extracting images and text objects.
+    *   Generating HTML (`<img>` tags for images, styled `<div>` or `<span>` for text/placeholders).
+    *   Replacing `<<FieldName>>` placeholders within the Fabric.js text objects using the `jsonData`.
+    *   The logic in `ProcessTemplate` needs to correctly assemble the final HTML for WkHtmlToPdf.
+
+Let me know if you need further assistance with the `ProcessTemplate` method's intricate logic for parsing Fabric.js JSON and generating the overlay HTML!

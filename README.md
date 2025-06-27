@@ -1,3506 +1,2165 @@
-This is a great feature request that leverages the power of both Fabric.js for rich visual design and HTML for dynamic content placement. The "Hybrid" approach you've outlined is indeed the most efficient for web applications, as it moves the rendering responsibility to the client's browser.
+Okay, let's integrate the provided Flask API functionality into your existing JavaScript code.
 
-Here's a breakdown of the implementation strategy and the necessary code modifications.
+Based on the API endpoints and your existing scripts, here's the plan:
 
-**Core Strategy:**
+1.  **Identify API Actions:**
+    *   `/search/<string:query>` (GET): Text search.
+    *   `/find_similar` (GET): Visual search for similar items by image URL.
+    *   `/predict_price` (GET): Price prediction by image URL.
 
-1.  **Fabric.js for Design:** The template editor (likely a separate UI or part of the Design view) will use Fabric.js to allow users to:
-    *   Upload and place static images.
-    *   Add text elements, position them, style them (font, size, color, rotation).
-    *   Crucially, associate these text elements with specific `<<PlaceholderName>>` values.
-    *   The final design of these elements (image, text position, style) will be saved as a Fabric.js JSON object.
+2.  **Map API Actions to Frontend Scripts:**
+    *   Text search belongs in `search-integration.js`, which currently handles text search and the mobile search toggle.
+    *   Visual search (similar items) and price prediction belong in `popup.js`, which manages the visual search modal and its action buttons.
 
-2.  **Storing Fabric.js JSON:** The `Template` model and its DTOs will need a new field to store this Fabric.js JSON.
+3.  **Analyze API Data Structures:**
+    *   Text Search (`/search/<query>`) and Similar Items (`/find_similar`) return a JSON object with `isCompleteSuccessfully` (boolean), `data` (array of product objects on success, `null` on failure), and `errorMessages` (array of strings on failure, `null` on success). The product objects in `data` have keys like `productId`, `name`, `price`, `description`, `image`, `categoryId`, `categoryName`.
+    *   Price Prediction (`/predict_price`) returns a simpler JSON object with `image_url` and `predicted_price_egp` on success, or an `error` string on failure.
 
-3.  **`ProcessTemplate` Method:**
-    *   When processing a template for PDF generation:
-        *   The `HtmlContent` will be processed as usual for `<<FieldName>>` and `{{conditional}}`.
-        *   The *Fabric.js JSON* will be parsed.
-        *   For each text object in the Fabric.js JSON that is marked as a placeholder (i.e., it has `<<PlaceholderName>>` associated with it):
-            *   The `<<PlaceholderName>>` will be replaced with the actual data value (from `jsonData` or resolved internal data).
-            *   An HTML `<div>` element will be generated for this processed text.
-            *   This `<div>` will be positioned and styled precisely according to the properties stored in the Fabric.js JSON ( `left`, `top`, `fontFamily`, `fontSize`, `fill` for color, `angle` for rotation, etc.).
-        *   The base image(s) from Fabric.js JSON will be embedded in the HTML, likely as `<img>` tags with `src` pointing to data URLs.
-        *   The generated HTML `<div>`s for placeholders will be absolutely positioned within a container that holds the image(s), effectively overlaying the text on the image.
+4.  **Consolidate Product Display Logic:**
+    *   The function `displayProducts(products, containerId)` exists in `api-integration.js` and is duplicated (with slight variations or comments) in `resultpage.js`. This function is crucial for rendering products into a grid regardless of whether they came from a category fetch, text search, or visual search.
+    *   **Decision:** Move the canonical `displayProducts` function to `product-grid.js` as it interacts closely with the `.pro` elements and their click handlers (also in `product-grid.js`). All other scripts will then call this shared function.
 
-**Implementation Steps & Code Modifications:**
+5.  **Address Image Handling:**
+    *   The frontend visual search modal (`popup.js`, `search.js`) gets the uploaded image as a Data URL (Base64 string).
+    *   The provided Flask API endpoints (`/find_similar`, `/predict_price`) are defined as `GET` requests expecting an `image_url` *query parameter*. This doesn't directly accept a Base64 string.
+    *   **Assumption/Correction:** It's highly probable that the backend API is *designed* to receive the image Data URL in a POST request body to the endpoints already used in your frontend (`/search-by-image` and `/predict-price`) or similar. Sending large Data URLs in GET query parameters is bad practice. Given the frontend code already attempts POSTing Data URLs, we will proceed assuming the backend is, or will be, configured to receive POST requests with JSON bodies containing the `image` key with the Base64 string at these or slightly adjusted paths like `/api/ai/search-by-image` and `/api/ai/predict-price`.
 
-First, let's define the new field in our data models and DTOs.
+6.  **Refactor Frontend Scripts:**
 
----
+    *   **`api-integration.js`**:
+        *   Keep `fetchProducts`. Update the base URL if the backend is at `http://localhost:5000`.
+        *   Remove the `displayProducts` function definition.
+    *   **`product-grid.js`**:
+        *   **Add** the `displayProducts` function definition here.
+        *   Keep the event listener for clicks on `.pro` cards (for adding to cart and navigating to `sproduct.html`). Ensure it calls the *local* `displayProducts` for related products on `sproduct.html`.
+        *   Keep the global `window.updateCartIcon` definition and call.
+    *   **`search-integration.js`**:
+        *   Update the `API_BASE_URL`.
+        *   Modify `performTextSearch` to make a POST request to `/api/ai/search` (or `/search` if that's the intended POST route for text search) with the query in the body.
+        *   Adjust error handling based on the API response structure (`isCompleteSuccessfully`, `errorMessages`).
+        *   Call the `displayProducts` function (now defined in `product-grid.js`) with the `result.data`.
+        *   Remove the redundant `displayTextSearchResults` function.
+    *   **`popup.js`**:
+        *   Update the `API_BASE_URL`.
+        *   Modify `predictPriceFromAPI` and `searchSimilarFromAPI`. They already use POST requests to `/api/ai/predict-price` and `/api/ai/search-by-image` respectively, sending the image data in the body, which aligns better with handling Base64. Adapt the response handling to the specified JSON formats (`predicted_price_egp` for price; `isCompleteSuccessfully`, `data` for similar items).
+        *   Ensure `searchSimilarFromAPI` saves `result.data` (the array of products) to `sessionStorage`, as `resultpage.js` expects this format.
+    *   **`resultpage.js`**:
+        *   Keep the logic to read `sessionStorage`.
+        *   Call the `displayProducts` function (now defined in `product-grid.js`) with the parsed `products` array.
+        *   Remove the redundant `displaySearchResults` function.
+    *   **`sproduct.js`**:
+        *   Ensure it calls `window.updateCartIcon()` instead of its local `updateCartCount` duplicate.
+        *   It relies on `products.js` for initial data load and `product-grid.js` for related products clicks.
+    *   **`auth.js`**: Keep as is. It correctly defines and calls `window.updateCartIcon`.
+    *   **`cart.js`**: Keep as is. It correctly uses `window.updateCartIcon`.
+    *   **`change-password.js`**: Keep as is. No API search dependency.
+    *   **`checkout.js`**: Keep as is. Uses `window.updateCartIcon` and saves orders to `localStorage`. No API search dependency.
+    *   **Remove Redundant Scripts:** Remove `search.js` (its mobile toggle is likely covered by `search-integration.js` and CSS, and its visual search file handling is superseded by `popup.js`) and `predict-price.js` (its product card navigation logic is in `product-grid.js`, and price prediction calling is in `popup.js`).
 
-**1. `PDFGenerator.Infrastructure\DataAccess\Models\Template.cs`**
-(Adding `FabricJson` field)
+7.  **Review Script Inclusion Order:** Ensure scripts defining global functions (`auth.js`, `product-grid.js`) are loaded before scripts that call them.
 
-```csharp
-using System.ComponentModel.DataAnnotations;
-using System.Collections.Generic;
-using System;
+Here are the modified JavaScript files:
 
-namespace PdfGeneratorApp.Models
-{
-    public class Template
-    {
-        public int Id { get; set; }
+**--- START OF FILE auth.js ---**
 
-        [Required]
-        [StringLength(100)]
-        public string Name { get; set; }
+(No changes needed in this file for the API integration itself, as it already defines the global cart function and handles auth/profile independently).
 
-        public int TestingVersion { get; set; } = 1;
-        public int? ProductionVersion { get; set; } = 1;
-
-        public DateTime LastModified { get; set; } = DateTime.Now;
-
-        // New field to store Fabric.js JSON definition of the template's visual layout
-        public string? FabricJson { get; set; }
-
-        public ICollection<TemplateVersion> Versions { get; set; }
+```javascript
+// --- NEW: Global function to update the cart count in the navbar ---
+// Made global by attaching to the window object so other scripts can call it.
+window.updateCartIcon = () => {
+    const cart = JSON.parse(localStorage.getItem('shoppingCart')) || [];
+    // Calculates the total number of items, not just unique entries
+    const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+    const cartCountEl = document.getElementById('cart-count');
+    if (cartCountEl) {
+        cartCountEl.textContent = totalQuantity;
     }
-}
-```
+};
 
----
+document.addEventListener('DOMContentLoaded', () => {
+    // === AUTH & PROFILE MODAL ELEMENTS ===
+    const profileBtn = document.getElementById('profile-icon-btn');
+    const authModal = document.getElementById('authModal');
+    const profileModal = document.getElementById('userProfileModal');
+    
+    // Auth Modal Specific
+    const authBox = document.getElementById('auth-box');
+    const signUpBtn = document.getElementById('signUpBtnModal');
+    const signInBtn = document.getElementById('signInBtnModal');
 
-**2. `PDFGenerator.Infrastructure\DataAccess\Dtos\TemplateDataAccessDto.cs`**
-(Adding `FabricJson` field)
+    // Auth Form Elements
+    const signUpNameInput = document.getElementById('signUpName');
+    const signUpEmailInput = document.getElementById('signUpEmail');
+    const signUpPasswordInput = document.getElementById('signUpPassword');
+    const signUpActionBtn = document.getElementById('signUpActionBtn');
+    const signInEmailInput = document.getElementById('signInEmail');
+    const signInPasswordInput = document.getElementById('signInPassword');
+    const signInActionBtn = document.getElementById('signInActionBtn');
 
-```csharp
-// File: Infrastructure/Data/Dtos/TemplateDataAccessDto.cs
-using PdfGeneratorApp.Models;
-using System;
-using System.Collections.Generic;
+    // Profile Modal elements
+    const closeProfileBtn = document.querySelector('.profile-modal-close-btn');
+    const userProfileForm = document.getElementById('userProfileForm');
+    const logoutBtn = document.getElementById('profile-logout-btn');
+    const profileFirstNameInput = document.getElementById('profile-firstname');
+    const profileLastNameInput = document.getElementById('profile-lastname');
+    const profileEmailInput = document.getElementById('profile-email');
+    const profilePhoneInput = document.getElementById('profile-phone');
+    const profileLocationInput = document.getElementById('profile-location');
+    const profileCardNumberInput = document.getElementById('profile-cardnumber');
+    const displayNameEl = document.getElementById('profile-display-name');
+    const displayLocationEl = document.getElementById('profile-display-location');
+    const avatarUploadInput = document.getElementById('avatarUpload');
+    const profileAvatarImg = document.getElementById('profile-avatar-img');
+    const navProfileImg = document.getElementById('nav-profile-img');
 
-namespace PDFGenerator.Infrastructure.DataAccess.Dtos
-{
-    public class TemplateDataAccessDto
-    {
-        public int Id { get; set; }
-        public string Name { get; set; }
-        public string HtmlContent { get; set; } // Standard HTML content
-        public string? Description { get; set; }
-        public string? ExampleJsonData { get; set; }
-        public string? InternalDataConfigJson { get; set; }
+    // Success Prompt Modal Elements
+    const successModal = document.getElementById('successPromptModal');
+    const successModalTitle = document.getElementById('successModalTitle');
+    const successModalMessage = document.getElementById('successModalMessage');
+    const successModalBtn = document.getElementById('successModalBtn');
 
-        // Versioning properties
-        public int TestingVersion { get; set; }
-        public int? ProductionVersion { get; set; }
 
-        public DateTime LastModified { get; set; }
+    // Data & State Management
+    const getUsersDB = () => JSON.parse(localStorage.getItem('usersDB')) || {};
+    const saveUsersDB = (db) => localStorage.setItem('usersDB', JSON.stringify(db));
+    const getCurrentUserEmail = () => localStorage.getItem('currentUserEmail');
+    const setCurrentUserEmail = (email) => localStorage.setItem('currentUserEmail', email);
+    const logoutCurrentUser = () => localStorage.removeItem('currentUserEmail');
+    const isLoggedIn = () => getCurrentUserEmail() !== null;
 
-        // New field for Fabric.js JSON
-        public string? FabricJson { get; set; }
-
-        public ICollection<TemplateVersionDataAccessDto> Versions { get; set; }
+    // Function to show the success modal
+    const showSuccessModal = (title, message) => {
+        if (!successModal) return;
+        successModalTitle.textContent = title;
+        successModalMessage.textContent = message;
+        successModal.style.display = 'flex';
+        // Use requestAnimationFrame for better transition timing
+        requestAnimationFrame(() => {
+             requestAnimationFrame(() => {
+                 successModal.classList.add('show');
+             });
+        });
+        
+        // Only reload if the button doesn't exist (fallback) or if needed for specific actions
+        // For auth success, we might want to reload to update UI elements like the profile icon/cart
+         setTimeout(() => {
+             window.location.reload();
+         }, 1500); // Reduced delay for quicker feedback
+    };
+    
+    // Ensure the success modal button closes the modal if it exists
+    if (successModalBtn) {
+        successModalBtn.addEventListener('click', () => {
+            if (successModal) successModal.classList.remove('show');
+             setTimeout(() => {
+                 if (successModal) successModal.style.display = 'none';
+             }, 300); // Match CSS transition duration
+        });
     }
-}
-```
-
----
-
-**3. `PDFGenerator.Infrastructure\DataAccess\Dtos\TemplateVersionDataAccessDto.cs`**
-(Adding `FabricJson` field for versions if it's per-version)
-
-*   **Decision:** Should Fabric.js JSON be stored per `TemplateVersion` or per `Template`?
-    *   If it's per `TemplateVersion`, it means each version can have a different layout. This is more flexible but potentially more complex.
-    *   If it's per `Template`, it implies the layout is global for the template, and the `HtmlContent` might be considered deprecated or for simpler fallbacks.
-    *   Given the requirement "add static image at my template", it implies a visual layout that might change over template versions. Let's assume it's per `TemplateVersion` for maximum flexibility.
-
-```csharp
-// File: Infrastructure/Data/Dtos/TemplateVersionDataAccessDto.cs
-using System;
-
-namespace PDFGenerator.Infrastructure.DataAccess.Dtos
-{
-    public class TemplateVersionDataAccessDto
-    {
-        public int Id { get; set; }
-        public int TemplateId { get; set; }
-        public int VersionNumber { get; set; }
-        public string HtmlContent { get; set; } // Fallback/standard HTML content
-        public string? Description { get; set; }
-        public string? ExampleJsonData { get; set; }
-        public string? InternalDataConfigJson { get; set; }
-        public DateTime CreatedDate { get; set; }
-
-        // Soft delete properties
-        public bool IsDeleted { get; set; }
-        public DateTime? DeletedDate { get; set; }
-
-        // New field for Fabric.js JSON specific to this version
-        public string? FabricJson { get; set; }
-    }
-}
-```
-
----
-
-**4. `PDFGenerator.Infrastructure\DataAccess\MappingProfile\DataAccessMappingProfile.cs`**
-(Updating mappings for `FabricJson`)
-
-```csharp
-// File: Infrastructure/Mapping/DataAccessMappingProfile.cs
-using AutoMapper;
-using PDFGenerator.Infrastructure.DataAccess.Dtos;
-using PdfGeneratorApp.Models;
-
-namespace PdfGeneratorApp.Infrastructure.Mapping
-{
-    public class DataAccessMappingProfile : Profile
-    {
-        public DataAccessMappingProfile()
-        {
-            CreateMap<Template, TemplateDataAccessDto>()
-                .ForMember(dest => dest.TestingVersion, opt => opt.MapFrom(src => src.TestingVersion))
-                .ForMember(dest => dest.ProductionVersion, opt => opt.MapFrom(src => src.ProductionVersion))
-                .ForMember(dest => dest.FabricJson, opt => opt.MapFrom(src => src.FabricJson)) // Map FabricJson from Template
-                .ForMember(dest => dest.Versions, opt => opt.Ignore()); // Explicitly ignore Versions if not mapping here
-
-            CreateMap<TemplateDataAccessDto, Template>()
-                .ForMember(dest => dest.TestingVersion, opt => opt.MapFrom(src => src.TestingVersion))
-                .ForMember(dest => dest.ProductionVersion, opt => opt.MapFrom(src => src.ProductionVersion))
-                .ForMember(dest => dest.FabricJson, opt => opt.MapFrom(src => src.FabricJson)) // Map FabricJson back to Template
-                .ForMember(dest => dest.Versions, opt => opt.Ignore()); // Ignore Versions collection for simplicity in this mapping
 
 
-            CreateMap<TemplateVersion, TemplateDataAccessDto>()
-                 .ForMember(dest => dest.Id, opt => opt.Ignore())
-                 .ForMember(dest => dest.Name, opt => opt.Ignore())
-                 .ForMember(dest => dest.TestingVersion, opt => opt.Ignore())
-                 .ForMember(dest => dest.ProductionVersion, opt => opt.Ignore())
-                 .ForMember(dest => dest.LastModified, opt => opt.Ignore())
-                 .ForMember(dest => dest.Versions, opt => opt.Ignore())
-                 // Map FabricJson from TemplateVersion
-                 .ForMember(dest => dest.FabricJson, opt => opt.MapFrom(src => src.FabricJson))
-                 .ReverseMap();
-
-            CreateMap<TemplateVersion, TemplateVersionDataAccessDto>()
-                .ForMember(dest => dest.IsDeleted, opt => opt.MapFrom(src => src.IsDeleted))
-                .ForMember(dest => dest.DeletedDate, opt => opt.MapFrom(src => src.DeletedDate))
-                // Map FabricJson from TemplateVersion
-                .ForMember(dest => dest.FabricJson, opt => opt.MapFrom(src => src.FabricJson))
-                .ReverseMap();
-
-            CreateMap<Template, TemplateSimpleDto>()
-                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
-                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
-                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
-                .ForMember(dest => dest.TestingVersion, opt => opt.MapFrom(src => src.TestingVersion))
-                .ForMember(dest => dest.ProductionVersion, opt => opt.MapFrom(src => src.ProductionVersion))
-                .ForMember(dest => dest.LastModified, opt => opt.MapFrom(src => src.LastModified));
-
-             CreateMap<Template, TemplatesDocDataAccessDto>()
-                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
-                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
-                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
-                .ForMember(dest => dest.TestingVersion, opt => opt.MapFrom(src => src.TestingVersion))
-                .ForMember(dest => dest.ProductionVersion, opt => opt.MapFrom(src => src.ProductionVersion));
+    const loadProfileData = () => {
+        if (!isLoggedIn() || !profileModal) return;
+        const userProfile = getUsersDB()[getCurrentUserEmail()];
+        if (!userProfile) {
+            logoutCurrentUser();
+            return;
         }
-    }
-}
-```
-
----
-
-**5. `PDFGenerator.Web\Dtos\Template\TemplateDetailDto.cs`**
-(Adding `FabricJson` field)
-
-```csharp
-using System.ComponentModel.DataAnnotations;
-
-namespace PDFGenerator.Web.Dtos.Template
-{
-    public class TemplateDetailDto
-    {
-        public int Id { get; set; }
-
-        [Required]
-        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
-        public string Name { get; set; }
-
-        public string? Description { get; set; }
-
-        [Required(ErrorMessage = "HTML Content is required.")]
-        public string HtmlContent { get; set; }
-
-        public string? ExampleJsonData { get; set; }
-
-        public string? InternalDataConfigJson { get; set; }
-
-        // Versioning properties
-        public int TestingVersion { get; set; }
-        public int? ProductionVersion { get; set; }
-
-        public DateTime LastModified { get; set; }
-
-        // New field for Fabric.js JSON
-        public string? FabricJson { get; set; }
-    }
-}
-```
-
----
-
-**6. `PDFGenerator.Web\Dtos\Template\TemplateCreateDto.cs`**
-(Adding `FabricJson` field)
-
-```csharp
-using System.ComponentModel.DataAnnotations;
-
-namespace PDFGenerator.Web.Dtos.Template
-{
-    public class TemplateCreateDto
-    {
-        [Required]
-        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
-        public string Name { get; set; }
-
-        public string? Description { get; set; }
-
-        [Required(ErrorMessage = "HTML Content is required.")]
-        public string HtmlContent { get; set; }
-
-        public string? ExampleJsonData { get; set; }
-
-        public string? InternalDataConfigJson { get; set; }
-
-        // New field for Fabric.js JSON
-        public string? FabricJson { get; set; }
-    }
-}
-```
-
----
-
-**7. `PDFGenerator.Web\Dtos\Template\TemplateUpdateDto.cs`**
-(Adding `FabricJson` field)
-
-```csharp
-using System.ComponentModel.DataAnnotations;
-
-namespace PDFGenerator.Web.Dtos.Template
-{
-    public class TemplateUpdateDto
-    {
-        public int Id { get; set; }
-
-        public string? Description { get; set; }
-
-        [Required(ErrorMessage = "HTML Content is required.")]
-        public string HtmlContent { get; set; }
-
-        public string? ExampleJsonData { get; set; }
-
-        public string? InternalDataConfigJson { get; set; }
-
-        // New field for Fabric.js JSON
-        public string? FabricJson { get; set; }
-    }
-}
-```
-
----
-
-**8. `PDFGenerator.Web\Dtos\Template\TemplateListDto.cs`**
-(Already updated in the previous step to include versioning, now adding FabricJson if needed for list view, though not strictly required)
-
-```csharp
-namespace PDFGenerator.Web.Dtos.Template
-{
-    public class TemplateListDto
-    {
-        public int Id { get; set; }
-        public string Name { get; set; }
-        public string? Description { get; set; }
-        public int TestingVersion { get; set; }
-        public int? ProductionVersion { get; set; }
-        public DateTime LastModified { get; set; }
-        // public string? FabricJson { get; set; } // Only add if needed for list view
-    }
-}
-```
-
----
-
-**9. `PDFGenerator.Web\Dtos\Template\TemplatesDocDto.cs`**
-(Already updated in the previous step to include versioning, adding FabricJson if needed for doc view)
-
-```csharp
-﻿using System.ComponentModel.DataAnnotations;
-
-namespace PDFGenerator.Web.Dtos.Template
-{
-    public class TemplatesDocDto
-    {
-        public int Id { get; set; }
-        [Required]
-        [StringLength(100, ErrorMessage = "Template Name cannot exceed 100 characters.")]
-        public string Name { get; set; }
-        public string? Description { get; set; }
-        public string? ExampleJsonData { get; set; }
-        public string? InternalDataConfigJson { get; set; }
-        public int TestingVersion { get; set; }
-        public int? ProductionVersion { get; set; }
-        // public string? FabricJson { get; set; } // Only add if needed for doc view
-    }
-}
-```
-
----
-
-**10. `PDFGenerator.Infrastructure\DataAccess\Repositories\Interfaces\ITemplateRepository.cs`**
-(Adding the new `GetTemplateContentByVersionReferenceAsync` method)
-
-```csharp
-// File: Infrastructure/Data/Repositories/ITemplateRepository.cs
-using PDFGenerator.Infrastructure.DataAccess.Dtos;
-using PdfGeneratorApp.Common;
-using PdfGeneratorApp.Infrastructure.Data.Repositories.Base;
-using PdfGeneratorApp.Models;
-using System.Threading.Tasks;
-
-namespace PdfGeneratorApp.Infrastructure.Data.Repositories
-{
-    public interface ITemplateRepository : IBaseRepository<Template, TemplateDataAccessDto>
-    {
-        Task<Result<List<TemplateSimpleDto>>> GetAllTemplateSimplAsync();
-        Task<Result<List<TemplatesDocDataAccessDto>>> GetAllAsync();
-
-        // This method remains for UI Design page, fetches Testing version content
-        Task<Result<TemplateDataAccessDto>> GetByNameAsync(string name);
-
-        Task<Result<bool>> AnyByNameAsync(string name);
-        Task<Result<TemplateDataAccessDto>> CreateNewTemplateAsync(TemplateDataAccessDto templateDataAccessDto);
-        Task<Result<TemplateDataAccessDto>> UpdateTemplateAsync(TemplateDataAccessDto templateDataAccessDto);
-        Task<Result<int>> RevertTemplateAsync(string templateName, int targetVersionNumber, string versionReferenceType);
-        Task<Result<int>> PublishTemplateAsync(string templateName);
-
-        // NEW: Method to get template content based on version reference type.
-        // Used by the PDF generation handler to fetch content for Testing or Production.
-        Task<Result<TemplateDataAccessDto>> GetTemplateContentByVersionReferenceAsync(string templateName, string versionReferenceType);
-    }
-}
-```
-
----
-
-**11. `PDFGenerator.Infrastructure\DataAccess\Repositories\Implementation\TemplateRepository.cs`**
-(Implementing `GetTemplateContentByVersionReferenceAsync`)
-
-```csharp
-// File: Infrastructure/Data/Repositories/TemplateRepository.cs
-using AutoMapper;
-using Microsoft.EntityFrameworkCore;
-using PDFGenerator.Infrastructure.DataAccess.Dtos;
-using PdfGeneratorApp.Common;
-using PdfGeneratorApp.Data;
-using PdfGeneratorApp.Infrastructure.Data.Repositories.Base;
-using PdfGeneratorApp.Models;
-using PdfGeneratorApp.Services;
-using System.Text.Json;
-using System.Linq;
-using System;
-using System.Collections.Generic; // Ensure List<T> is available
-
-namespace PdfGeneratorApp.Infrastructure.Data.Repositories
-{
-    public class TemplateRepository : BaseRepository<Template, TemplateDataAccessDto>, ITemplateRepository
-    {
-        private readonly ApplicationDbContext context;
-        private readonly IMapper _mapper;
-        private readonly TemplateProcessingService _templateProcessingService;
-
-        public TemplateRepository(ApplicationDbContext context, IMapper mapper, TemplateProcessingService templateProcessingService) : base(context, mapper)
-        {
-            this.context = context;
-            _mapper = mapper;
-            _templateProcessingService = templateProcessingService;
+        if (profileFirstNameInput) profileFirstNameInput.value = userProfile.firstname || '';
+        if (profileLastNameInput) profileLastNameInput.value = userProfile.lastname || '';
+        if (profileEmailInput) {
+            profileEmailInput.value = userProfile.email || '';
+            profileEmailInput.disabled = true;
         }
-
-        public async Task<Result<List<TemplateSimpleDto>>> GetAllTemplateSimplAsync()
-        {
-            try
-            {
-                List<TemplateSimpleDto> data = await context.Templates.Select(t => new TemplateSimpleDto()
-                {
-                    Id = t.Id,
-                    Name = t.Name,
-                    Description = t.Description,
-                    LastModified = t.LastModified,
-                    TestingVersion = t.TestingVersion,
-                    ProductionVersion = t.ProductionVersion
-
-                }).ToListAsync();
-                return Result<List<TemplateSimpleDto>>.Success(data);
+        if (profilePhoneInput) profilePhoneInput.value = userProfile.phone || '';
+        if (profileLocationInput) profileLocationInput.value = userProfile.location || '';
+        if (profileCardNumberInput) profileCardNumberInput.value = userProfile.cardnumber || '';
+        const fullName = `${userProfile.firstname || ''} ${userProfile.lastname || ''}`.trim();
+        if (displayNameEl) displayNameEl.textContent = fullName || 'Your Name';
+        if (displayLocationEl) displayLocationEl.textContent = userProfile.location || 'Your Location';
+        const avatarSrc = userProfile.avatarUrl || 'Icons/user.png';
+        if (profileAvatarImg) profileAvatarImg.src = avatarSrc;
+        updateNavIcon();
+    };
+    
+    const updateNavIcon = () => {
+        if (!navProfileImg) return;
+        if (isLoggedIn()) {
+            const currentUser = getUsersDB()[getCurrentUserEmail()];
+            if (currentUser && currentUser.avatarUrl) {
+                navProfileImg.src = currentUser.avatarUrl;
+                navProfileImg.style.borderRadius = '50%'; // Ensure circle if custom avatar is used
+            } else {
+                 navProfileImg.src = 'Icons/user.png'; // Default if logged in but no custom avatar
+                 navProfileImg.style.borderRadius = '0%'; // Reset if default icon isn't round
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in TemplateRepository.GetAllTemplateSimplAsync: {ex.Message}");
-                return Result<List<TemplateSimpleDto>>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
-            }
+        } else {
+            navProfileImg.src = 'Icons/user.png'; // Default if logged out
+             navProfileImg.style.borderRadius = '0%'; // Reset if default icon isn't round
         }
+    };
 
-        public async Task<Result<List<TemplatesDocDataAccessDto>>> GetAllAsync()
-        {
-             try
-             {
-                 var templates = await (from t in context.Templates
-                                        join tv in context.TemplateVersions
-                                        on new { TemplateId = t.Id, Version = t.TestingVersion }
-                                        equals new { tv.TemplateId, Version = tv.VersionNumber }
-                                        where !tv.IsDeleted
-                                        select new TemplatesDocDataAccessDto
-                                        {
-                                            Id = t.Id,
-                                            Name = t.Name,
-                                            Description = t.Description,
-                                            ExampleJsonData = tv.ExampleJsonData,
-                                            InternalDataConfigJson = tv.InternalDataConfigJson,
-                                            TestingVersion = t.TestingVersion,
-                                            ProductionVersion = t.ProductionVersion
-                                        }).ToListAsync();
-                return Result<List<TemplatesDocDataAccessDto>>.Success(templates);
-             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in TemplateRepository.GetAllAsync: {ex.Message}");
-                return Result<List<TemplatesDocDataAccessDto>>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
-            }
-        }
+    if (profileBtn) {
+        profileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+             // Prevent multiple modals opening immediately
+            if (authModal && authModal.style.display !== 'none') authModal.style.display = 'none';
+            if (profileModal && profileModal.style.display !== 'none') profileModal.style.display = 'none';
 
-        // Remains the same: fetches Testing version content for Design UI.
-        public async Task<Result<TemplateDataAccessDto>> GetByNameAsync(string name)
-        {
-            Template? template = await context.Templates
-                                      .Include(t => t.Versions)
-                                      .SingleOrDefaultAsync(t => t.Name == name);
-
-            if (template == null)
-            {
-                return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.TemplateNotFound);
-            }
-            TemplateVersion? currentTestingVersionContent = template.Versions
-                .SingleOrDefault(tv => tv.VersionNumber == template.TestingVersion && !tv.IsDeleted);
-
-            if (currentTestingVersionContent == null)
-            {
-                 return Result<TemplateDataAccessDto>.Failure(string.Format(ErrorMessageUserConst.VersionNotFound, template.TestingVersion, name));
-            }
-            var templateDto = _mapper.Map<TemplateDataAccessDto>(template);
-            templateDto.HtmlContent = currentTestingVersionContent.HtmlContent;
-            templateDto.Description = currentTestingVersionContent.Description;
-            templateDto.ExampleJsonData = currentTestingVersionContent.ExampleJsonData;
-            templateDto.InternalDataConfigJson = currentTestingVersionContent.InternalDataConfigJson;
-            templateDto.TestingVersion = template.TestingVersion;
-            templateDto.ProductionVersion = template.ProductionVersion;
-            return Result<TemplateDataAccessDto>.Success(templateDto);
-        }
-
-        public async Task<Result<bool>> AnyByNameAsync(string name)
-        {
-            try
-            {
-                var exists = await context.Templates.AnyAsync(t => t.Name == name);
-                return Result<bool>.Success(exists);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in TemplateRepository.AnyByNameAsync: {ex.Message}");
-                return Result<bool>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
-            }
-        }
-
-        public async Task<Result<TemplateDataAccessDto>> CreateNewTemplateAsync(TemplateDataAccessDto templateDto)
-        {
-            templateDto.Name = templateDto.Name.Replace(" ", "_");
-            var nameExistsResult = await context.Templates.AnyAsync(t => t.Name == templateDto.Name);
-            if (nameExistsResult) return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.TemplateNameExists);
-            try
-            {
-                templateDto.ExampleJsonData = _templateProcessingService.GenerateExampleJson(templateDto.HtmlContent);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error generating example JSON on create: {ex.Message}");
-                return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.ExampleJsonGenerationFailed);
-            }
-            if (!string.IsNullOrWhiteSpace(templateDto.InternalDataConfigJson))
-            {
-                try
-                {
-                    using JsonDocument doc = JsonDocument.Parse(templateDto.InternalDataConfigJson);
-                    if (doc.RootElement.ValueKind != JsonValueKind.Object)
-                    {
-                        return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InternalDataConfigNotObject);
-                    }
+            if (isLoggedIn()) {
+                if (profileModal) {
+                    loadProfileData();
+                    profileModal.style.display = 'flex';
                 }
-                catch (JsonException)
-                {
-                    return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InternalDataConfigInvalidJson);
-                }
+            } else {
+                if (authModal) authModal.style.display = 'flex';
             }
-            templateDto.TestingVersion = 1;
-            templateDto.ProductionVersion = 1;
-            templateDto.LastModified = DateTime.Now;
-            var initialVersion = new TemplateVersion
-            {
-                VersionNumber = 1, CreatedDate = DateTime.Now, HtmlContent = templateDto.HtmlContent,
-                Description = templateDto.Description, ExampleJsonData = templateDto.ExampleJsonData,
-                InternalDataConfigJson = templateDto.InternalDataConfigJson, IsDeleted = false
-            };
-            try
-            {
-                Template template = new Template
-                {
-                    Name = templateDto.Name, Description = templateDto.Description, TestingVersion = templateDto.TestingVersion,
-                    ProductionVersion = templateDto.ProductionVersion, LastModified = templateDto.LastModified,
-                    Versions = new List<TemplateVersion> { initialVersion }
-                };
-                await context.Templates.AddAsync(template);
-                return Result<TemplateDataAccessDto>.Success(templateDto);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in TemplateRepository.CreateNewTemplateAsync: {ex.Message}");
-                return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
-            }
-        }
-
-        public async Task<Result<TemplateDataAccessDto>> UpdateTemplateAsync(TemplateDataAccessDto templateDto)
-        {
-            if (!string.IsNullOrWhiteSpace(templateDto.InternalDataConfigJson))
-            {
-                 try {
-                     using JsonDocument doc = JsonDocument.Parse(templateDto.InternalDataConfigJson);
-                     if (doc.RootElement.ValueKind != JsonValueKind.Object)
-                     {
-                         return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InternalDataConfigNotObject);
-                     }
-                } catch (JsonException) {
-                     return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InternalDataConfigInvalidJson);
-                }
-            }
-            Template? existingTemplate = await context.Templates
-                                              .Include(t => t.Versions)
-                                              .FirstOrDefaultAsync(t => t.Id == templateDto.Id);
-            if (existingTemplate == null)
-            {
-                return Result<TemplateDataAccessDto>.Failure(string.Format(ErrorMessageUserConst.TemplateIdNotFound, templateDto.Id));
-            }
-            int lastVersionNumber = existingTemplate.Versions.Any() ? existingTemplate.Versions.Max(tv => tv.VersionNumber) : 0;
-            int nextVersionNumber = lastVersionNumber + 1;
-            TemplateVersion newVersion = new TemplateVersion()
-            {
-                TemplateId = templateDto.Id, VersionNumber = nextVersionNumber, HtmlContent = templateDto.HtmlContent,
-                Description = templateDto.Description, ExampleJsonData = _templateProcessingService.GenerateExampleJson(templateDto.HtmlContent),
-                InternalDataConfigJson = templateDto.InternalDataConfigJson, CreatedDate = DateTime.Now, IsDeleted = false
-            };
-            existingTemplate.Versions.Add(newVersion);
-            existingTemplate.TestingVersion = newVersion.VersionNumber;
-            existingTemplate.Description = templateDto.Description;
-            existingTemplate.LastModified = DateTime.Now;
-            var updatedTemplateDto = _mapper.Map<TemplateDataAccessDto>(existingTemplate);
-            updatedTemplateDto.HtmlContent = newVersion.HtmlContent;
-            updatedTemplateDto.ExampleJsonData = newVersion.ExampleJsonData;
-            updatedTemplateDto.InternalDataConfigJson = newVersion.InternalDataConfigJson;
-            return Result<TemplateDataAccessDto>.Success(updatedTemplateDto);
-        }
-
-        public async Task<Result<int>> RevertTemplateAsync(string templateName, int targetVersionNumber, string versionReferenceType)
-        {
-            Template? existingTemplate = await context.Templates
-                                              .Include(t => t.Versions)
-                                              .FirstOrDefaultAsync(t => t.Name == templateName);
-            if (existingTemplate == null) return Result<int>.Failure(ErrorMessageUserConst.TemplateNotFound);
-            TemplateVersion? targetVersion = existingTemplate.Versions
-                .SingleOrDefault(tv => tv.VersionNumber == targetVersionNumber);
-            if (targetVersion == null)
-            {
-                 return Result<int>.Failure(string.Format(ErrorMessageUserConst.VersionNotFound, targetVersionNumber, templateName));
-            }
-             if (targetVersion.IsDeleted)
-            {
-                 return Result<int>.Failure($"Version {targetVersionNumber} for template '{templateName}' is deleted and cannot be reverted to.");
-            }
-            switch (versionReferenceType.ToLowerInvariant())
-            {
-                case string s when s == VersionReferenceType.Testing.ToLowerInvariant():
-                     existingTemplate.TestingVersion = targetVersionNumber;
-                    break;
-                case string s when s == VersionReferenceType.Production.ToLowerInvariant():
-                     if (targetVersionNumber > existingTemplate.TestingVersion)
-                     {
-                          return Result<int>.Failure($"Cannot set Production version to {targetVersionNumber} because the current Testing version is {existingTemplate.TestingVersion}. Production must be less than or equal to Testing.");
-                     }
-                     existingTemplate.ProductionVersion = targetVersionNumber;
-                    break;
-                default:
-                    return Result<int>.Failure(ErrorMessageUserConst.InvalidVersionReferenceType);
-            }
-            existingTemplate.LastModified = DateTime.Now;
-            return Result<int>.Success(targetVersionNumber);
-        }
-
-        public async Task<Result<int>> PublishTemplateAsync(string templateName)
-        {
-            Template? existingTemplate = await context.Templates.FirstOrDefaultAsync(t => t.Name == templateName);
-            if (existingTemplate == null) return Result<int>.Failure(ErrorMessageUserConst.TemplateNotFound);
-            if (existingTemplate.ProductionVersion.HasValue && existingTemplate.TestingVersion <= existingTemplate.ProductionVersion.Value)
-            {
-                 return Result<int>.Failure("Production version is already up-to-date with or ahead of the Testing version.");
-            }
-            existingTemplate.ProductionVersion = existingTemplate.TestingVersion;
-            existingTemplate.LastModified = DateTime.Now;
-            return Result<int>.Success(existingTemplate.ProductionVersion.Value);
-        }
-
-        // NEW METHOD IMPLEMENTATION: Get Template Content based on a specified version reference type
-        public async Task<Result<TemplateDataAccessDto>> GetTemplateContentByVersionReferenceAsync(string templateName, string versionReferenceType)
-        {
-             Template? template = await context.Templates
-                                       .Include(t => t.Versions) // Crucial to include versions to find the target
-                                       .SingleOrDefaultAsync(t => t.Name == templateName);
-
-             if (template == null)
-             {
-                 return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.TemplateNotFound);
-             }
-
-             int targetVersionNumber;
-             string normalizedVersionReferenceType = versionReferenceType.ToLowerInvariant(); // Normalize input for comparison
-
-             // Determine the target version number based on the reference type.
-             switch (normalizedVersionReferenceType)
-             {
-                 case string s when s == VersionReferenceType.Testing.ToLowerInvariant():
-                     targetVersionNumber = template.TestingVersion;
-                     break;
-                 case string s when s == VersionReferenceType.Production.ToLowerInvariant():
-                     if (!template.ProductionVersion.HasValue)
-                     {
-                          return Result<TemplateDataAccessDto>.Failure($"Production version is not set for template '{templateName}'.");
-                     }
-                     targetVersionNumber = template.ProductionVersion.Value;
-                     break;
-                 default:
-                     // This case should ideally be caught by handler's IsValid check, but good as a fallback.
-                     return Result<TemplateDataAccessDto>.Failure(ErrorMessageUserConst.InvalidVersionReferenceType);
-             }
-
-             // Find the TemplateVersion entity matching the determined version number.
-             // Ensure it's not deleted.
-             TemplateVersion? targetVersionContent = template.Versions
-                 .SingleOrDefault(tv => tv.VersionNumber == targetVersionNumber && !tv.IsDeleted);
-
-             if (targetVersionContent == null)
-             {
-                  // This indicates an inconsistency: the template points to a version number that doesn't exist or is deleted.
-                  string referencedVersionType = (normalizedVersionReferenceType == VersionReferenceType.Testing.ToLowerInvariant()) ? "Testing" : "Production";
-                  return Result<TemplateDataAccessDto>.Failure($"Content for {referencedVersionType} version {targetVersionNumber} not found or is deleted for template '{templateName}'.");
-             }
-
-             // Create the TemplateDataAccessDto with properties from the Template entity and content from the target version.
-             var templateDto = _mapper.Map<TemplateDataAccessDto>(template); // Maps Id, Name, TestingVersion, ProductionVersion, LastModified, Description, FabricJson
-
-             // Manually map the content properties from the specific target version.
-             templateDto.HtmlContent = targetVersionContent.HtmlContent;
-             templateDto.Description = targetVersionContent.Description; // Use version's description if available and preferred.
-             templateDto.ExampleJsonData = targetVersionContent.ExampleJsonData;
-             templateDto.InternalDataConfigJson = targetVersionContent.InternalDataConfigJson;
-             // The version numbers on the DTO should reflect the template's current state.
-
-             return Result<TemplateDataAccessDto>.Success(templateDto);
-        }
-    }
-}
-```
-
----
-
-**12. `PDFGenerator.Web\Services\GeneratePdfHandler.cs`**
-(Modified to accept and use `versionReferenceType`)
-
-```csharp
-// File: Handlers/GeneratePdfHandler.cs
-using PdfGeneratorApp.Common;
-using PdfGeneratorApp.Services;
-using System.Text.Json;
-using WkHtmlToPdfDotNet;
-using WkHtmlToPdfDotNet.Contracts;
-using PdfGeneratorApp.Infrastructure.Data.UnitOfWork;
-using System.Threading.Tasks;
-
-namespace PdfGeneratorApp.Handlers
-{
-    // Interface updated to include versionReferenceType in the request tuple.
-    public interface IGeneratePdfHandler : IHandler<(string templateName, JsonElement requestBodyJson, string mode, string? versionReferenceType), byte[]>
-    {
+        });
     }
 
-    public class GeneratePdfHandler : IGeneratePdfHandler
-    {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IConverter _converter;
-        private readonly TemplateProcessingService _templateProcessingService;
-
-        public GeneratePdfHandler(IUnitOfWork unitOfWork, IConverter converter, TemplateProcessingService templateProcessingService)
-        {
-            _unitOfWork = unitOfWork;
-            _converter = converter;
-            _templateProcessingService = templateProcessingService;
-        }
-
-        public async Task<Result<byte[]>> HandleAsync((string templateName, JsonElement requestBodyJson, string mode, string? versionReferenceType) request)
-        {
-            try
-            {
-                // Determine the effective version type to use. Default to Testing if invalid or null.
-                string effectiveVersionType = VersionReferenceType.Testing; // Default
-                if (!string.IsNullOrWhiteSpace(request.versionReferenceType) && VersionReferenceType.IsValid(request.versionReferenceType))
-                {
-                    effectiveVersionType = request.versionReferenceType;
-                }
-                else if (!string.IsNullOrWhiteSpace(request.versionReferenceType))
-                {
-                    // Log or handle invalid type if it's explicitly provided but invalid.
-                    Console.WriteLine($"Warning: Invalid versionReferenceType '{request.versionReferenceType}' provided. Defaulting to Testing.");
-                }
-
-
-                // Fetch template content using the NEW repository method, specifying the desired version type.
-                var repoResult = await _unitOfWork.Templates.GetTemplateContentByVersionReferenceAsync(request.templateName, effectiveVersionType);
-
-                if (!repoResult.IsCompleteSuccessfully)
-                {
-                    // Propagate failure from repository (e.g., Template Not Found, Version Content Not Found/Deleted, Production version not set).
-                    return Result<byte[]>.Failure(repoResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-                }
-
-                var templateDataAccessDto = repoResult.Data; // Get the DTO with content from the target version.
-
-                // Logic for determining finalDataForHtmlProcessing based on 'mode' remains the same.
-                JsonElement finalDataForHtmlProcessing;
-                JsonElement insideParameters = default;
-
-                switch (request.mode.ToLowerInvariant())
-                {
-                    case "outside":
-                        finalDataForHtmlProcessing = request.requestBodyJson;
-                        break;
-
-                    case "inside":
-                        if (request.requestBodyJson.ValueKind != JsonValueKind.Object)
-                        {
-                            return Result<byte[]>.Failure(ErrorMessageUserConst.InsideModeBodyNotObject);
-                        }
-                        if (request.requestBodyJson.TryGetProperty("parameters", out JsonElement parametersElement))
-                        {
-                            insideParameters = parametersElement;
-                        }
-                        // Resolve internal data using the fetched template's InternalDataConfigJson (which comes from the target version)
-                        finalDataForHtmlProcessing = _templateProcessingService.ResolveInternalData(templateDataAccessDto.InternalDataConfigJson, insideParameters);
-                        break;
-
-                    default:
-                        return Result<byte[]>.Failure(ErrorMessageUserConst.InvalidMode);
-                }
-
-                // Process the HTML content (from the fetched version) with the determined data.
-                string processedHtml = _templateProcessingService.ProcessTemplate(templateDataAccessDto.HtmlContent, finalDataForHtmlProcessing);
-
-                var doc = new HtmlToPdfDocument()
-                {
-                    GlobalSettings = {
-                        ColorMode = ColorMode.Color,
-                        Orientation = Orientation.Portrait,
-                        PaperSize = PaperKind.A4,
-                        Margins = new MarginSettings() { Top = 10, Bottom = 10, Left = 10, Right = 10 },
-                        DPI = 300
-                    },
-                    Objects = {
-                        new ObjectSettings() {
-                            HtmlContent = processedHtml,
-                            WebSettings = { DefaultEncoding = "utf-8" }
-                        }
-                    }
-                };
-
-                byte[] pdf = _converter.Convert(doc);
-
-                if (pdf == null || pdf.Length == 0)
-                {
-                    return Result<byte[]>.Failure(ErrorMessageUserConst.PdfGenerationFailed + " Ensure wkhtmltopdf is correctly installed and accessible.");
-                }
-
-                return Result<byte[]>.Success(pdf);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in GeneratePdfHandler: {ex.Message}");
-                return Result<byte[]>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
-            }
-        }
+    if (signUpBtn && signInBtn && authBox) {
+        signUpBtn.addEventListener('click', () => { authBox.classList.add("right-panel-active"); });
+        signInBtn.addEventListener('click', () => { authBox.classList.remove("right-panel-active"); });
     }
-}
-```
 
----
+    // Close modals when clicking outside the content box
+    if (authModal) authModal.addEventListener('click', e => (e.target === authModal) && (authModal.style.display = 'none'));
+    if (profileModal) profileModal.addEventListener('click', e => (e.target === profileModal) && (profileModal.style.display = 'none'));
+    
+    // Close profile modal using the close button
+    if (closeProfileBtn) closeProfileBtn.addEventListener('click', () => profileModal.style.display = 'none');
 
-**12. `PDFGenerator.Web\Controllers\PdfController.cs`**
-(Modified POST action to pass `versionType` to handler)
+    // --- Sign Up Logic ---
+    if (signUpActionBtn) {
+        signUpActionBtn.addEventListener('click', () => {
+            const name = signUpNameInput.value.trim();
+            const email = signUpEmailInput.value.trim().toLowerCase();
+            const password = signUpPasswordInput.value;
+            if (!name || !email || !password) { alert('Please fill in all fields.'); return; }
+            if (!/\S+@\S+\.\S+/.test(email)) { alert('Please enter a valid email address.'); return; }
+            const db = getUsersDB();
+            if (db[email]) { alert('An account with this email already exists.'); return; }
+            
+            // Add the new user with default avatar
+            db[email] = { firstname: name, lastname: '', email: email, password: password, phone: '', location: '', cardnumber: '', avatarUrl: 'Icons/user.png' };
+            saveUsersDB(db);
+            setCurrentUserEmail(email);
+            
+            if (authModal) authModal.style.display = 'none';
+            showSuccessModal('Account Created!', 'Welcome to FashioNear. You are now signed in.');
+            // showSuccessModal now handles the reload
+        });
+    }
 
-```csharp
-// File: Controllers/PdfController.cs
-using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
-using PdfGeneratorApp.Handlers;
-using PdfGeneratorApp.Common;
-using Microsoft.AspNetCore.Authorization;
+    // --- Sign In Logic ---
+    if (signInActionBtn) {
+        signInActionBtn.addEventListener('click', () => {
+            const email = signInEmailInput.value.trim().toLowerCase();
+            const password = signInPasswordInput.value;
+            if (!email || !password) { alert('Please enter both email and password.'); return; }
+            const user = getUsersDB()[email];
+            if (!user || user.password !== password) { alert('Incorrect email or password.'); return; }
+            
+            setCurrentUserEmail(email);
+            
+            if (authModal) authModal.style.display = 'none';
+            showSuccessModal('Sign In Successful!', 'Welcome back! Redirecting you now.');
+             // showSuccessModal now handles the reload
+        });
+    }
+    
+    // --- Log Out Logic ---
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', (e) => {
+            e.preventDefault(); // Prevent default link behavior
+            logoutCurrentUser();
+            if (profileModal) profileModal.style.display = 'none';
+            showSuccessModal('Logged Out', 'You have been successfully logged out.');
+            // showSuccessModal now handles the reload
+        });
+    }
 
+    // --- Profile Form Save Logic ---
+    if (userProfileForm) {
+        userProfileForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!isLoggedIn()) return;
+            const db = getUsersDB();
+            const email = getCurrentUserEmail();
+            if (!db[email]) { console.error("Current user not found in DB during save attempt."); return; } // Safety check
 
-namespace PdfGeneratorApp.Controllers
-{
-    public class PdfController : Controller
-    {
-        private readonly IGetTemplateByNameHandler _getTemplateByNameHandler;
-        private readonly IGeneratePdfHandler _generatePdfHandler;
-
-        public PdfController(IGetTemplateByNameHandler getTemplateByNameHandler, IGeneratePdfHandler generatePdfHandler)
-        {
-            _getTemplateByNameHandler = getTemplateByNameHandler;
-            _generatePdfHandler = generatePdfHandler;
-        }
-
-        // GET: /pdf/generate/{templateName}
-        [HttpGet("pdf/generate/{templateName}")]
-        public async Task<IActionResult> Generate(string templateName)
-        {
-            var result = await _getTemplateByNameHandler.HandleAsync(templateName);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNotFound) return NotFound($"Template '{templateName}' not found.");
-
-                return StatusCode(500, result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-            }
-
-            var templateDto = result.Data;
-
-            return RedirectToAction("Design", "Template", new { templateName = templateDto.Name });
-        }
-
-        // POST: /pdf/generate/{templateName}
-        // Added [FromQuery] string? versionType parameter.
-        [HttpPost("pdf/generate/{templateName}")]
-        [Consumes("application/json")]
-        public async Task<IActionResult> Generate(
-            string templateName,
-            [FromBody] JsonElement requestBodyJson,
-            [FromQuery] string mode = "outside",
-            [FromQuery] string? versionType = null) // New optional query parameter
-        {
-            // Pass versionType to the handler's request tuple.
-            var request = (templateName, requestBodyJson, mode, versionType);
-            var result = await _generatePdfHandler.HandleAsync(request);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNotFound)
-                {
-                    return NotFound($"Template '{templateName}' not found.");
-                }
-                if (result.ErrorMessages == ErrorMessageUserConst.InvalidMode ||
-                    result.ErrorMessages == ErrorMessageUserConst.InsideModeBodyNotObject ||
-                    result.ErrorMessages == ErrorMessageUserConst.InvalidVersionReferenceType)
-                {
-                    return BadRequest(result.ErrorMessages);
-                }
-                // Handle cases where Production version is requested but not set.
-                if (result.ErrorMessages?.Contains("Production version is not set") ?? false)
-                {
-                     return BadRequest(result.ErrorMessages);
-                }
-                // Handle case where requested version content is deleted or not found.
-                 if (result.ErrorMessages?.Contains("not found or is deleted") ?? false)
-                 {
-                      return NotFound(result.ErrorMessages);
+            db[email].firstname = profileFirstNameInput ? profileFirstNameInput.value.trim() : db[email].firstname;
+            db[email].lastname = profileLastNameInput ? profileLastNameInput.value.trim() : db[email].lastname;
+            db[email].phone = profilePhoneInput ? profilePhoneInput.value.trim() : db[email].phone;
+            db[email].location = profileLocationInput ? profileLocationInput.value.trim() : db[email].location;
+            db[email].cardnumber = profileCardNumberInput ? profileCardNumberInput.value.trim() : db[email].cardnumber;
+            
+            saveUsersDB(db);
+            loadProfileData(); // Reload data to update displayed name/location/avatar in modal
+            if (profileModal) profileModal.style.display = 'none';
+            showSuccessModal('Profile Saved', 'Your information has been updated successfully.');
+             // showSuccessModal now handles the reload
+        });
+    }
+    
+    // --- Avatar Upload Logic ---
+    if (avatarUploadInput) {
+        avatarUploadInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && isLoggedIn()) {
+                 if (!file.type.startsWith('image/')) {
+                     alert('Please upload an image file.');
+                     return;
                  }
-
-                return StatusCode(500, result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+                 if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                     alert('File is too large. Max size is 5MB.');
+                     return;
+                 }
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const avatarUrl = event.target.result;
+                    const db = getUsersDB();
+                    const email = getCurrentUserEmail();
+                    if (!db[email]) { console.error("Current user not found in DB during avatar upload."); return; } // Safety check
+                    db[email].avatarUrl = avatarUrl;
+                    saveUsersDB(db);
+                    loadProfileData(); // Reload data to update avatar preview and nav icon
+                }
+                reader.onerror = function() {
+                    console.error("Error reading file:", reader.error);
+                     alert('Could not read the image file.');
+                }
+                reader.readAsDataURL(file);
+            } else if (file && !isLoggedIn()) {
+                alert('Please sign in to upload an avatar.');
             }
-
-            // Include version type in the filename for clarity.
-            string filenameVersionPart = string.IsNullOrWhiteSpace(versionType) ? "Testing" : versionType;
-            return File(result.Data, "application/pdf", $"{templateName}_{filenameVersionPart}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
-        }
+             // Reset file input so same file can be selected again
+            e.target.value = '';
+        });
     }
-}
+
+
+    // --- INITIALIZATION ---
+    updateNavIcon(); // Update the navbar profile icon on load
+    // The global updateCartIcon is called by auth.js on DOMContentLoaded (this script itself)
+    // window.updateCartIcon(); is already called above when defined
+});
 ```
 
----
+**--- START OF FILE api-integration.js ---**
 
-**13. `PDFGenerator.Web\Views\Docs\Templates.cshtml`**
-(Modified to include version selection in the "Try it out" section)
+(Modified to remove `displayProducts` and potentially update API base URL)
 
-```html
-@using System.Text.Json
-@using PDFGenerator.Web.Dtos.Template
-@using PdfGeneratorApp.Common // For VersionReferenceType constants
-@model List<TemplatesDocDto>
+```javascript
+const API_BASE_URL = 'http://localhost:5000/api'; // Adjust if your Flask app is at a different base path
 
-@{
-    ViewData["Title"] = "API Documentation";
+async function fetchProducts(category = '') {
+    // This function fetches products from your *products* endpoint, not the AI search endpoints.
+    // It's used for displaying category pages or the initial homepage grid.
+    let url = `${API_BASE_URL}/Products?numberOfProduct=100`; // Example products endpoint
+    if (category) {
+        url += `&categoryName=${category}`;
+    }
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json(); // API response structure {isCompleteSuccessfully, data, errorMessages}
+
+        if (!result.isCompleteSuccessfully) {
+             throw new Error(`API error: ${result.errorMessages ? result.errorMessages.join(', ') : 'Unknown error'}`);
+        }
+
+        // The successful data is in result.data
+        const products = Array.isArray(result.data) ? result.data : [];
+        return products; // Returns the array of products
+    } catch (error) {
+        console.error("Error fetching products:", error);
+        // Check if displayProducts exists before calling it (it lives in product-grid.js now)
+        if (typeof displayProducts === 'function') {
+             // Display an empty grid and an error message using the display function structure
+             displayProducts([], 'product-grid'); // Assuming 'product-grid' is the default container
+             const gridContainer = document.getElementById('product-grid');
+             if(gridContainer) {
+                 gridContainer.innerHTML = `<div style="text-align: center; padding: 50px;"><p>Error loading products: ${error.message}</p></div>`;
+             }
+        } else {
+            // Fallback error message if displayProducts isn't available yet
+             const fallbackContainer = document.getElementById('product-grid') || document.body;
+             fallbackContainer.innerHTML = `<div style="text-align: center; padding: 50px;"><p>Error loading products: ${error.message}</p></div>`;
+        }
+        return []; // Return an empty array in case of an error
+    }
 }
 
-<div class="container">
-    <div class="page-header">
-        <h1>@ViewData["Title"]</h1>
-        <p class="page-subtitle">
-            Test and understand the PDF generation API endpoints. Each template uses its selected version for content.
-        </p>
-    </div>
+// displayProducts function is now defined in product-grid.js
 
-    @if (Model != null && Model.Any())
-    {
-        <div class="accordion" id="templateDocsAccordion">
-            @foreach (var template in Model)
-            {
-                string collapseId = $"collapse_template_{template.Id}";
-                string headingId = $"heading_template_{template.Id}";
-                string jsonDataTextareaId = $"jsonData_payload_{template.Id}";
-                string internalDataConfigJsonTextareaId = $"internalDataConfig_{template.Id}";
-                string insideParametersJsonTextareaId = $"insideParameters_{template.Id}";
-                // Unique name for the version type radio buttons within this accordion item
-                string versionTypeRadioName = $"versionType_{template.Id}";
+```
 
+**--- START OF FILE cart.js ---**
 
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="@headingId">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="false" aria-controls="@collapseId">
-                            <span class="badge bg-success me-2 p-2">POST</span>
-                            <code class="me-2 fs-6">/pdf/generate/@template.Name</code>
-                            <span class="text-muted small">@template.Description</span>
-                             <!-- Display versions here -->
-                            <span class="ms-auto badge bg-secondary me-1">Testing: v @template.TestingVersion</span>
-                            @if (template.ProductionVersion.HasValue)
-                            {
-                                <span class="badge bg-success">Prod: v @template.ProductionVersion.Value</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-secondary">Prod: N/A</span>
-                            }
-                        </button>
-                    </h2>
-                    <div id="@collapseId" class="accordion-collapse collapse" aria-labelledby="@headingId" data-bs-parent="#templateDocsAccordion">
-                        <div class="accordion-body">
-                            <h5>Endpoint Summary</h5>
-                            <p>Generates a PDF document based on the <strong>@template.Name</strong> template. Content is retrieved from the selected template version (Testing or Production). Data is provided via the request body (Outside mode) or resolved internally using the template's configuration and optional parameters (Inside mode).</p>
+(No changes needed in this file, it uses `localStorage` and the global `updateCartIcon`).
 
-                            <hr class="my-3" />
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+    // --- STATE & CONSTANTS ---
+    const PROCESSING_FEE = 80.00;
+    // Promo thresholds are hardcoded here, could potentially come from backend
+    const PROMO_THRESHOLDS = { 1: 1000, 2: 2000, 3: 3000 }; 
+    const MAX_PROMO_VALUE = 3000;
+    let cart = JSON.parse(localStorage.getItem('shoppingCart')) || [];
 
-                            <div class="try-it-out-section" data-template-name="@template.Name">
-                                <h5><i class="fas fa-vial me-1"></i> Try it out</h5>
-                                <p class="small text-muted">Select mode and version, configure data/parameters, and click "Execute".</p>
+    // --- DOM ELEMENTS ---
+    const cartItemsContainer = document.getElementById('cartItemsContainer');
+    const subtotalValueEl = document.getElementById('subtotalValue');
+    const processingFeeEl = document.getElementById('processingFee');
+    const totalValueEl = document.getElementById('totalValue');
+    const grandTotalValueEl = document.getElementById('grandTotalValue');
+    const progressBar = document.getElementById('progressBar');
+    const promoItems = document.querySelectorAll('.promotions .promo-item'); // Get promo items
+    const checkoutBtn = document.querySelector('.checkout-btn'); // Get checkout button
 
-                                <!-- Mode Selection -->
-                                <div class="form-group mb-3">
-                                    <label class="form-label fw-semibold">Select Mode:</label>
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input mode-radio" type="radio" name="mode_@template.Id" id="mode_outside_@template.Id" value="outside" checked>
-                                        <label class="form-check-label" for="mode_outside_@template.Id">Outside</label>
-                                    </div>
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input mode-radio" type="radio" name="mode_@template.Id" id="mode_inside_@template.Id" value="inside">
-                                        <label class="form-check-label" for="mode_inside_@template.Id">Inside</label>
-                                    </div>
-                                </div>
+    // --- FUNCTIONS ---
+    const saveCart = () => {
+        localStorage.setItem('shoppingCart', JSON.stringify(cart));
+    };
+    
+    const renderCartItems = () => {
+        cartItemsContainer.innerHTML = ''; 
+        if (cart.length === 0) {
+            cartItemsContainer.innerHTML = '<p style="text-align:center; padding: 2rem; color: #8a8a8a;">Your cart is empty. <a href="All.html" style="color: coral;">Go shopping!</a></p>';
+            // Disable checkout button if cart is empty
+            if (checkoutBtn) checkoutBtn.disabled = true;
+            return;
+        }
 
-                                <!-- Version Type Selection -->
-                                 <div class="form-group mb-3">
-                                     <label class="form-label fw-semibold">Select Version:</label>
-                                     <div class="form-check form-check-inline">
-                                         <input class="form-check-input version-type-radio" type="radio" name="@versionTypeRadioName" id="version_testing_@template.Id" value="@VersionReferenceType.Testing" checked>
-                                         <label class="form-check-label" for="version_testing_@template.Id">Testing (v @template.TestingVersion)</label>
-                                     </div>
-                                     @if (template.ProductionVersion.HasValue)
-                                     {
-                                         <div class="form-check form-check-inline">
-                                             <input class="form-check-input version-type-radio" type="radio" name="@versionTypeRadioName" id="version_production_@template.Id" value="@VersionReferenceType.Production">
-                                             <label class="form-check-label" for="version_production_@template.Id">Production (v @template.ProductionVersion.Value)</label>
-                                         </div>
-                                     }
-                                 </div>
-
-                                <!-- Data Payload for OUTSIDE Mode -->
-                                <div class="form-group mb-3 data-config-section" data-mode="outside">
-                                    <label for="@jsonDataTextareaId" class="form-label fw-semibold">Request Body JSON for Outside Mode</label>
-                                    <textarea class="form-control json-payload" id="@jsonDataTextareaId" rows="10" style="font-family: monospace; font-size: 0.875em;">@FormatJsonForTextarea(template.ExampleJsonData)</textarea>
-                                    <small class="form-text text-muted">This JSON is sent in the request body as the data payload.</small>
-                                </div>
-
-                                <!-- Configuration Display for INSIDE Mode -->
-                                <div class="form-group mb-3 data-config-section" data-mode="inside" style="display:none;">
-                                    <label class="form-label fw-semibold">Internal Data Configuration (Read-only) for Inside Mode</label>
-                                    <textarea class="form-control" id="@internalDataConfigJsonTextareaId" rows="10" style="font-family: monospace; font-size: 0.875em;" readonly>@FormatJsonForTextarea(template.InternalDataConfigJson)</textarea>
-                                    <small class="form-text text-muted">This is the configuration stored for this template. Data resolution happens on the server using this config.</small>
-                                </div>
-
-                                <!-- Parameters Input for INSIDE Mode -->
-                                <div class="form-group mb-3 inside-parameters-section" style="display:none;">
-                                    <label for="@insideParametersJsonTextareaId" class="form-label fw-semibold">Inside Parameters JSON for Inside Mode</label>
-                                    <textarea class="form-control inside-parameters-json" id="@insideParametersJsonTextareaId" rows="5" style="font-family: monospace; font-size: 0.875em;">{}</textarea>
-                                    <small class="form-text text-muted">Provide JSON parameters to be used in the Internal Data Configuration (e.g., <code>{ "userNID": "12345" }</code>). This JSON will be nested under a "parameters" key in the request body.</small>
-                                </div>
+        // Enable checkout button if cart is not empty
+        if (checkoutBtn) checkoutBtn.disabled = false;
 
 
-                                <div class="mt-3">
-                                    <button type="button" class="btn btn-success execute-btn">
-                                        <i class="fas fa-play-circle"></i> Execute
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary clear-response-btn ms-2" style="display:none;">
-                                        <i class="fas fa-times"></i> Clear Response
-                                    </button>
-                                </div>
+        cart.forEach(item => {
+            const price = parseFloat(item.price) || 0;
+            const itemTotal = price * item.quantity;
+            const itemEl = document.createElement('div');
+            itemEl.className = 'cart-item';
+            
+            const displaySize = item.size || 'N/A';
+            const imageUrl = item.imgSrc || 'Images/placeholder.png';
 
-                                <div class="response-section mt-3" style="display:none;">
-                                    <h6><i class="fas fa-reply me-1"></i> Server Response</h6>
-                                    <div class="response-status mb-2 small p-2 border rounded bg-white"></div>
-                                    <div class="response-output p-2 border rounded bg-white" style="min-height: 50px;"></div>
-                                </div>
-                            </div>
+            itemEl.innerHTML = `
+                <div class="item-image">
+                    <img src="${imageUrl}" alt="${item.name}" onerror="this.src='Images/placeholder.png';">
+                </div>
+                <div class="item-info">
+                    <p>${item.name}</p>
+                    <span>Size: ${displaySize}</span>
+                </div>
+                <div class="item-quantity">
+                    <button class="qty-btn" data-id="${item.id}" data-size="${displaySize}" data-action="decrease">-</button>
+                    <span>${item.quantity}</span>
+                    <button class="qty-btn" data-id="${item.id}" data-size="${displaySize}" data-action="increase">+</button>
+                </div>
+                <strong class="item-price">${itemTotal.toFixed(2)}LE</strong>
+                <button class="remove-btn" data-id="${item.id}" data-size="${displaySize}">×</button>
+            `;
+            cartItemsContainer.appendChild(itemEl);
+        });
+    };
+    
+    const updateSummary = () => {
+        const subtotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+        
+        // --- Coupon Logic Placeholder ---
+        // const discount = applyCoupon(subtotal, couponInput ? couponInput.value : '');
+        // const subtotalAfterDiscount = subtotal - discount;
+        // subtotalValueEl.textContent = `${subtotalAfterDiscount.toFixed(2)}LE`;
+        // --- End Coupon Logic ---
+
+        const totalInPounds = subtotal + PROCESSING_FEE; // Assuming PROCESSING_FEE is always added
+        
+        // Update summary values based on calculated totals
+        if (subtotalValueEl) subtotalValueEl.textContent = `${subtotal.toFixed(2)}LE`;
+        if (processingFeeEl) processingFeeEl.textContent = `${PROCESSING_FEE.toFixed(2)}LE`;
+        if (totalValueEl) totalValueEl.textContent = `${totalInPounds.toFixed(2)}LE`; 
+        if (grandTotalValueEl) grandTotalValueEl.textContent = `${totalInPounds.toFixed(2)}LE`; 
+        
+        // updateCartIcon is now called by auth.js on DOMContentLoaded, and also called below when rendering/calculating
+
+        updateProgressBar(subtotal);
+        updatePromos(subtotal);
+        
+         // Ensure updateCartIcon is available globally before calling
+        if (window.updateCartIcon) {
+             window.updateCartIcon();
+        }
+    };
+
+     // Example applyCoupon function (placeholder)
+     /*
+     const applyCoupon = (subtotal, couponCode) => {
+         let discount = 0;
+         // Example coupon logic:
+         if (couponCode === 'SAVE10' && subtotal >= 100) { // Add minimum threshold for coupon
+             discount = subtotal * 0.10; // 10% off
+         }
+         // Add more coupon logic here
+         return discount;
+     };
+     */
+
+
+    const updateProgressBar = (subtotal) => {
+        if (!progressBar) return;
+        const progressPercentage = Math.min((subtotal / MAX_PROMO_VALUE) * 100, 100);
+        progressBar.style.width = `${progressPercentage}%`;
+    };
+
+    const updatePromos = (subtotal) => {
+        promoItems.forEach(promoEl => { // Loop through all promo items
+             const promoId = promoEl.id.split('-')[1]; // Extract ID from element ID (e.g., '1' from 'promo-1')
+             const threshold = PROMO_THRESHOLDS[promoId]; // Get the threshold for this ID
+             if (threshold !== undefined) { // Check if the threshold exists in the map
+                if (subtotal >= threshold) {
+                    promoEl.classList.add('active');
+                } else {
+                    promoEl.classList.remove('active');
+                }
+             }
+        });
+    };
+    
+    const handleCartUpdate = (e) => {
+        const target = e.target;
+        const qtyBtn = target.closest('.qty-btn');
+        const removeBtn = target.closest('.remove-btn');
+
+        if (!qtyBtn && !removeBtn) {
+            // If the click target is an image or icon inside the button, stop propagation
+            // but let the click bubble up to the button itself.
+            if (target.tagName === 'IMG' || target.tagName === 'I') {
+                 e.stopPropagation();
+            }
+            return; // Exit if the click is not on a relevant button.
+        }
+        
+        // Stop propagation on the button itself to prevent it from being handled elsewhere
+        if (qtyBtn) e.stopPropagation();
+        if (removeBtn) e.stopPropagation();
+
+
+        const itemId = (qtyBtn || removeBtn).dataset.id;
+        const itemSize = (qtyBtn || removeBtn).dataset.size;
+
+        const itemIndex = cart.findIndex(i => {
+            const cartItemSize = i.size || 'N/A';
+            const clickedItemSize = itemSize || 'N/A'; 
+            return String(i.id) === String(itemId) && cartItemSize === clickedItemSize;
+        });
+
+        if (itemIndex === -1) {
+            console.error("Item not found in cart for update/removal.");
+            return; 
+        }
+
+        if (qtyBtn) {
+            const action = qtyBtn.dataset.action;
+            if (action === 'increase') {
+                cart[itemIndex].quantity++;
+            } else if (action === 'decrease') {
+                if (cart[itemIndex].quantity > 1) {
+                    cart[itemIndex].quantity--;
+                } else {
+                    // Remove item if quantity is 1 and decrease is clicked
+                    cart.splice(itemIndex, 1); 
+                }
+            }
+        } else if (removeBtn) {
+            cart.splice(itemIndex, 1); 
+        }
+        
+        renderAndCalculate();
+    };
+    
+    const renderAndCalculate = () => {
+        saveCart(); 
+        renderCartItems();
+        updateSummary();
+        // updateCartIcon() is called within updateSummary() now
+    };
+
+    // --- EVENT LISTENERS ---
+    if (cartItemsContainer) { 
+         cartItemsContainer.addEventListener('click', handleCartUpdate);
+    }
+    
+    // Add listener for coupon input if it affects total dynamically
+    /*
+    if (couponInput) {
+        couponInput.addEventListener('input', updateSummary); 
+    }
+    */
+
+    // --- INITIALIZATION ---
+    renderAndCalculate();
+    // The global updateCartIcon is already called by auth.js on DOMContentLoaded
+});
+```
+
+**--- START OF FILE change-password.js ---**
+
+(No changes needed in this file).
+
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+
+    // --- YETI Animation Logic ---
+    const yetiAvatar = document.getElementById('yeti-avatar');
+    const formWrapper = document.querySelector('.form-wrapper');
+    const passwordFields = document.querySelectorAll('.password-field');
+    const togglePasswordIcons = document.querySelectorAll('.toggle-password');
+    
+    const yetiStates = {
+        default: 'img/yeti-default.png',
+        lookLeft: 'img/yeti-look-left.png',
+        lookRight: 'img/yeti-look-right.png',
+        lookFarRight: 'img/yeti-look-far-right.png',
+        covering: 'img/yeti-cover.png',
+        peeking: 'img/yeti-peek.png'
+    };
+    
+    // --- Eye Tracking Function ---
+    function trackMouse(e) {
+        if (!yetiAvatar || !formWrapper) return;
+        const rect = formWrapper.getBoundingClientRect();
+        const formCenterX = rect.left + rect.width / 2;
+        const mouseX = e.clientX;
+        const delta = mouseX - formCenterX;
+
+        let newState;
+        if (delta < -70) {
+            newState = yetiStates.lookLeft;
+        } else if (delta > 100) {
+            newState = yetiStates.lookFarRight;
+        } else if (delta > 50) {
+            newState = yetiStates.lookRight;
+        } else {
+            newState = yetiStates.default;
+        }
+        
+        if (yetiAvatar.src.includes(newState)) return; 
+        yetiAvatar.src = newState;
+    }
+    
+    // By default, the yeti tracks the mouse
+    document.addEventListener('mousemove', trackMouse);
+
+    // --- Password Field Interactions (Covering Eyes) ---
+    passwordFields.forEach(field => {
+        field.addEventListener('focus', () => {
+            // Stop eye-tracking and cover eyes
+            document.removeEventListener('mousemove', trackMouse);
+            yetiAvatar.src = yetiStates.covering;
+            yetiAvatar.style.transform = 'scale(0.95)';
+        });
+
+        field.addEventListener('blur', () => {
+            // Uncover eyes and resume eye-tracking
+            yetiAvatar.src = yetiStates.default;
+            yetiAvatar.style.transform = 'scale(1)';
+             // Resume tracking only if no password field is focused
+             let anyFieldFocused = false;
+             passwordFields.forEach(f => { if (document.activeElement === f) anyFieldFocused = true; });
+             if (!anyFieldFocused) {
+                 document.addEventListener('mousemove', trackMouse);
+             }
+        });
+    });
+
+    // --- Password Visibility Toggle Interactions (Peeking) ---
+    togglePasswordIcons.forEach(icon => {
+        // When mouse is HELD DOWN, yeti peeks
+        icon.addEventListener('mousedown', function (event) {
+            event.preventDefault(); 
+            if (yetiAvatar) yetiAvatar.src = yetiStates.peeking;
+
+            const input = this.previousElementSibling;
+            if (input) input.setAttribute('type', 'text');
+            this.classList.replace('fa-eye-slash', 'fa-eye');
+        });
+
+        // When mouse is RELEASED, yeti goes back to covering eyes
+        icon.addEventListener('mouseup', function () {
+            if (yetiAvatar) yetiAvatar.src = yetiStates.covering;
+            const input = this.previousElementSibling;
+            if (input) input.setAttribute('type', 'password');
+            this.classList.replace('fa-eye', 'fa-eye-slash');
+        });
+
+        // If mouse leaves while held down, also stop peeking
+         icon.addEventListener('mouseleave', function () {
+             const input = this.previousElementSibling;
+             if(input && input.getAttribute('type') === 'text') {
+                 if (yetiAvatar) yetiAvatar.src = yetiStates.covering;
+                 input.setAttribute('type', 'password');
+                 this.classList.replace('fa-eye', 'fa-eye-slash');
+             }
+        });
+    });
+
+    // --- Live Password Strength Validation ---
+    const newPasswordInput = document.getElementById('new-password');
+    const strengthMeter = document.getElementById('strength-meter');
+    // Only query for bars if the strength meter exists
+    const strengthBars = strengthMeter ? strengthMeter.querySelectorAll('span') : []; 
+
+    // Only add listener if input and meter exist
+    if (newPasswordInput && strengthMeter) {
+        newPasswordInput.addEventListener('input', function() {
+            const password = this.value;
+            const strength = calculatePasswordStrength(password);
+            updateStrengthMeter(strength);
+        });
+    } else if (newPasswordInput) {
+         // If meter is missing, just clear strength related elements
+         newPasswordInput.addEventListener('input', function() {
+             console.warn("Password strength meter elements not found on the page.");
+             // Optionally hide or clear related UI if they exist
+         });
+    }
+
+
+    function calculatePasswordStrength(password) {
+        let strength = 0;
+        if (password.length > 0) strength = 1;
+        if (password.length >= 8) strength = 2;
+        if (password.length >= 8 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password)) strength = 3;
+        // Added check for minimum length 12 for strength 4, consistent with some standards
+        if (password.length >= 12 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password)) strength = 4; 
+        return strength;
+    }
+
+    function updateStrengthMeter(strength) {
+         if (!strengthMeter || strengthBars.length === 0) return; // Exit if meter/bars missing
+        const strengthColors = [
+            'var(--bar-default-color)', // 0
+            'var(--bar-weak-color)',    // 1
+            'var(--bar-medium-color)',   // 2
+            'var(--bar-strong-color)',  // 3
+            'var(--bar-strong-color)'   // 4 (or use a fifth color if available in CSS variables)
+        ];
+        
+        strengthBars.forEach((bar, index) => {
+            // Assign color based on the index up to the strength level
+            // index 0 gets color for strength 1 if strength >= 1
+            // index 1 gets color for strength 2 if strength >= 2, etc.
+            if (index < strength) {
+                // Use the color corresponding to the *current* strength level for all filled bars
+                 bar.style.backgroundColor = strengthColors[strength]; 
+                 // Alternative: Use color corresponding to the bar's level (more common gradient effect)
+                 // bar.style.backgroundColor = strengthColors[index + 1]; // Need index+1 because colors array is 0-indexed but strength is 1-4
+            } else {
+                bar.style.backgroundColor = 'var(--bar-default-color)';
+            }
+        });
+    }
+
+    // Optional: Initial update of strength meter if password field isn't empty on load (e.g. from browser autofill)
+    if(newPasswordInput && newPasswordInput.value) {
+        const strength = calculatePasswordStrength(newPasswordInput.value);
+        updateStrengthMeter(strength);
+    }
+});
+```
+
+**--- START OF FILE checkout.js ---**
+
+(No changes needed in this file, it uses `localStorage` and the global `updateCartIcon`).
+
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+    // --- STATE & CONSTANTS ---
+    const PROCESSING_FEE = 80.00;
+    const cart = JSON.parse(localStorage.getItem('shoppingCart')) || [];
+
+    // --- DOM ELEMENTS ---
+    const subtotalEl = document.getElementById('subtotalValue');
+    const processingFeeEl = document.getElementById('processingFee');
+    const totalEl = document.getElementById('totalValue');
+    const grandTotalEl = document.getElementById('grandTotalValue');
+    const confirmPaymentAmountEl = document.getElementById('confirmPaymentAmount');
+    const confirmPaymentBtn = document.getElementById('confirmPaymentBtn'); // Get the confirm button
+
+    // Payment elements
+    const paymentOptions = document.querySelectorAll('.radio-option');
+    const creditCardForm = document.querySelector('.payment-information');
+    
+    // Form, Buttons and MODALS
+    const shippingAddressInput = document.getElementById('shippingAddress');
+    const cardNumberInput = document.getElementById('cardNumber');
+    
+    const authModal = document.getElementById('authModal');
+    const orderSuccessModal = document.getElementById('orderSuccessModal');
+    const cartEmptyModal = document.getElementById('cartEmptyModal');
+    
+    // Prompt Sign In Modal elements (used if user is not logged in)
+    const signInPromptModal = document.getElementById('signInPromptModal'); // Assuming this exists based on HTML
+    const promptSignInBtn = document.getElementById('promptSignInBtn');
+    const promptCancelBtn = document.getElementById('promptCancelBtn');
+
+
+    // Auth helpers
+    const isLoggedIn = () => !!localStorage.getItem('currentUserEmail');
+
+    // User DB helper (needed for loadUserData)
+    const getUsersDB = () => JSON.parse(localStorage.getItem('usersDB')) || {};
+
+
+    // --- FUNCTIONS ---
+    function updateCheckoutSummary() {
+        const subtotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+        const total = subtotal + PROCESSING_FEE;
+        const formatPrice = (price) => `${price.toFixed(2)} LE`;
+        
+        if (subtotalEl) subtotalEl.textContent = formatPrice(subtotal);
+        if (processingFeeEl) processingFeeEl.textContent = formatPrice(PROCESSING_FEE);
+        if (totalEl) totalEl.textContent = formatPrice(total);
+        if (grandTotalEl) grandTotalEl.textContent = formatPrice(total);
+        if (confirmPaymentAmountEl) confirmPaymentAmountEl.textContent = formatPrice(total);
+    }
+
+    function setupPaymentSelection() {
+         // Ensure the credit card form is initially hidden if not selected
+        if (creditCardForm) creditCardForm.style.display = 'none'; 
+
+        paymentOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                // Remove 'active' class from all and add 'inactive'
+                paymentOptions.forEach(opt => {
+                    opt.classList.remove('active');
+                    opt.classList.add('inactive');
+                });
+                // Add 'active' class and remove 'inactive' from the clicked one
+                option.classList.add('active');
+                option.classList.remove('inactive');
+                
+                if (creditCardForm) {
+                    const isCardSelected = option.hasAttribute('data-card-option');
+                    creditCardForm.style.display = isCardSelected ? 'block' : 'none';
+                }
+            });
+        });
+
+        // Set the first option as active by default if available
+        if (paymentOptions.length > 0) {
+             paymentOptions[0].classList.add('active');
+             paymentOptions[0].classList.remove('inactive');
+              // Ensure CC form visibility matches the default active option
+             if (creditCardForm && paymentOptions[0].hasAttribute('data-card-option')) {
+                 creditCardForm.style.display = 'block';
+             } else if (creditCardForm) {
+                 creditCardForm.style.display = 'none';
+             }
+        }
+    }
+
+    function loadUserData() {
+        if (isLoggedIn()) {
+            const users = getUsersDB(); // Use the helper function
+            const currentUserEmail = localStorage.getItem('currentUserEmail');
+            const currentUser = users[currentUserEmail];
+            if (currentUser) {
+                // Safely populate inputs
+                if (shippingAddressInput) shippingAddressInput.value = currentUser.location || '';
+                 // Card number input might be disabled or handled differently based on security
+                if (cardNumberInput) cardNumberInput.value = currentUser.cardnumber || '';
+                 // Name on card might also be pre-filled
+                const nameOnCardInput = document.getElementById('nameOnCard');
+                if (nameOnCardInput) nameOnCardInput.value = `${currentUser.firstname || ''} ${currentUser.lastname || ''}`.trim();
+            }
+        }
+    }
+
+    function processOrder() {
+        const currentUserEmail = localStorage.getItem('currentUserEmail');
+        
+        const cartItems = JSON.parse(localStorage.getItem('shoppingCart')) || [];
+        if(cartItems.length === 0) {
+             // This case should be handled by initialChecks and the cart empty modal
+            console.warn('Attempted to process empty cart.');
+            return;
+        }
+
+        const subtotal = cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+        const total = subtotal + PROCESSING_FEE;
+        
+        const newOrder = {
+            // Use a more robust ID if possible, or rely on backend
+            id: `FN${Date.now()}${Math.floor(Math.random() * 1000)}`, // Timestamp + random for uniqueness
+            date: new Date().toISOString(), 
+            status: 'Processing', 
+            total: total,
+            items: cartItems, 
+        };
+        
+        let ordersDB = JSON.parse(localStorage.getItem('ordersDB')) || {};
+        if (!ordersDB[currentUserEmail]) {
+            ordersDB[currentUserEmail] = [];
+        }
+        ordersDB[currentUserEmail].unshift(newOrder); 
+        
+        localStorage.setItem('ordersDB', JSON.stringify(ordersDB));
+
+        localStorage.removeItem('shoppingCart');
+
+        // Update cart icon in navbar using the global function
+        if(window.updateCartIcon) {
+            window.updateCartIcon();
+        }
+
+        // Show the success modal
+        if (orderSuccessModal) {
+            orderSuccessModal.style.display = 'flex';
+        }
+    }
+
+    function initialChecks() {
+        if (cart.length === 0) {
+            if (cartEmptyModal) cartEmptyModal.style.display = 'flex';
+            if (confirmPaymentBtn) {
+                confirmPaymentBtn.disabled = true;
+                confirmPaymentBtn.style.backgroundColor = '#ccc';
+                confirmPaymentBtn.style.cursor = 'not-allowed';
+            }
+        } else {
+            loadUserData(); // Load user data if cart is not empty
+        }
+    }
+
+    // --- EVENT LISTENERS ---
+    if (confirmPaymentBtn) {
+        confirmPaymentBtn.addEventListener('click', () => {
+            if (cart.length === 0) {
+                 // This click handler shouldn't be reachable if button is disabled, but safety
+                 if (cartEmptyModal) cartEmptyModal.style.display = 'flex';
+                 return;
+            }
+            
+            if (isLoggedIn()) {
+                processOrder();
+            } else {
+                 // Show the Sign In prompt modal instead of the full auth modal immediately
+                if (signInPromptModal) signInPromptModal.style.display = 'flex'; 
+            }
+        });
+    }
+
+    // Listeners for the Sign In Prompt Modal
+    if (promptSignInBtn) {
+         promptSignInBtn.addEventListener('click', () => {
+             if (signInPromptModal) signInPromptModal.style.display = 'none';
+             if (authModal) {
+                 authModal.style.display = 'flex';
+                 // Optionally set the auth modal to the sign-in view if it has states
+                 const authBox = document.getElementById('auth-box');
+                 if (authBox) authBox.classList.remove("right-panel-active"); // Assuming sign-in is default
+             }
+         });
+    }
+
+    if (promptCancelBtn) {
+         promptCancelBtn.addEventListener('click', () => {
+             if (signInPromptModal) signInPromptModal.style.display = 'none';
+         });
+    }
+
+
+    // --- INITIALIZATION ---
+    updateCheckoutSummary();
+    setupPaymentSelection();
+    initialChecks();
+});
+```
+
+**--- START OF FILE men-page-script.js ---**
+
+(Remove this file. Its "Add to Cart" and `updateCartCount` logic are duplicated by `product-grid.js` and `auth.js`).
+
+**--- START OF FILE orders.js ---**
+
+(No changes needed in this file).
+
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+    // --- DATA HELPERS ---
+    const getOrdersDB = () => JSON.parse(localStorage.getItem('ordersDB')) || {};
+    const getCurrentUserEmail = () => localStorage.getItem('currentUserEmail');
+    const saveOrdersDB = (db) => localStorage.setItem('ordersDB', JSON.stringify(db));
+
+    // --- DOM ELEMENTS ---
+    const orderListContainer = document.getElementById('order-list-container');
+    const emptyView = document.getElementById('empty-orders-view');
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const clearHistoryContainer = document.getElementById('clear-history-container');
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+
+    // Modal DOM Elements (reused from checkout.css styles)
+    const confirmClearModal = document.getElementById('confirmClearModal');
+    const confirmClearBtn = document.getElementById('confirm-clear-btn');
+    const cancelClearBtn = document.getElementById('cancel-clear-btn');
+    const historyClearedModal = document.getElementById('historyClearedModal');
+    const closeHistoryClearedModalBtn = document.getElementById('closeHistoryClearedModalBtn');
+
+    // --- RENDER FUNCTIONS ---
+    const renderOrderItems = (items) => {
+        // Using encodeURIComponent for safety when passing data in URL
+        return items.map(item => `
+            <a href="sproduct.html?id=${encodeURIComponent(item.id || '')}&name=${encodeURIComponent(item.name || '')}&price=${encodeURIComponent(item.price || '0')}&desc=${encodeURIComponent(item.description || '')}&img=${encodeURIComponent(item.imgSrc || 'Images/placeholder.png')}" class="order-item">
+                <img src="${item.imgSrc || 'Images/placeholder.png'}" alt="${item.name || 'Product image'}" onerror="this.src='Images/placeholder.png'">
+                <div class="order-item-details">
+                    <h4>${item.name || 'Unknown Product'}</h4>
+                    <p>Qty: ${item.quantity || 1} &nbsp;&nbsp; Price: ${((item.price || 0) * (item.quantity || 1)).toFixed(2)} LE</p>
+                </div>
+            </a>
+        `).join('');
+    };
+
+    const renderOrders = (ordersToDisplay) => { // Removed isFilterAction param, logic simplified
+        const currentUser = getCurrentUserEmail();
+        const allUserOrders = (getOrdersDB()[currentUser] || []);
+
+        // Determine if the *overall* history is empty
+        const isHistoryEmpty = allUserOrders.length === 0;
+
+        // Determine if the *filtered* list is empty
+        const isFilteredListEmpty = ordersToDisplay.length === 0;
+
+        // Toggle main empty view based on overall history
+        if (isHistoryEmpty) {
+            orderListContainer.innerHTML = '';
+            if (emptyView) emptyView.style.display = 'block';
+            if (clearHistoryContainer) clearHistoryContainer.style.display = 'none';
+            const filtersEl = document.querySelector('.order-filters');
+            if (filtersEl) filtersEl.style.display = 'none';
+            return; // Exit if no history at all
+        }
+
+        // If there is some history, hide the main empty view and show controls
+        if (emptyView) emptyView.style.display = 'none';
+        if (clearHistoryContainer) clearHistoryContainer.style.display = 'block';
+        const filtersEl = document.querySelector('.order-filters');
+        if (filtersEl) filtersEl.style.display = 'flex';
+
+        // Display filtered orders or a message if filtered list is empty
+        if (isFilteredListEmpty) {
+            // Display message for empty filtered result
+            orderListContainer.innerHTML = `<p style="text-align:center; padding: 2rem; color: var(--secondary-text);">You have no orders with this status.</p>`;
+        } else {
+            // Render the orders
+            orderListContainer.innerHTML = ordersToDisplay.map(order => `
+                <div class="order-card" data-order-status="${order.status || 'Unknown'}">
+                    <div class="order-card-header">
+                        <div class="order-info">
+                            <strong>Order ID:</strong> <span class="order-id">#${order.id || 'N/A'}</span><br>
+                            <strong>Date:</strong> ${order.date ? new Date(order.date).toLocaleDateString() : 'N/A'}
+                        </div>
+                        <span class="order-status status-${order.status || 'Unknown'}">${order.status || 'Unknown Status'}</span>
+                    </div>
+                    <div class="order-items-list">
+                        ${renderOrderItems(order.items || [])}
+                    </div>
+                    <div class="order-card-footer">
+                        <button class="details-btn" disabled>Track Order</button> <!-- Track Order button likely not functional yet -->
+                        <div class="total-amount">
+                            <span>Total:</span> ${(order.total || 0).toFixed(2)} LE
                         </div>
                     </div>
                 </div>
-            }
-        </div>
-    }
-    else
-    {
-        <div class="empty-state">
-            <i class="fas fa-book-open"></i>
-            <h3>No API Endpoints Documented</h3>
-            <p>Create some templates first to see their API documentation here.</p>
-        </div>
-    }
-</div>
-
-@functions {
-    public string FormatJsonForTextarea(string? jsonString)
-    {
-        if (string.IsNullOrWhiteSpace(jsonString)) return "{\n  \n}";
-        try
-        {
-            using var doc = JsonDocument.Parse(jsonString);
-            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+            `).join('');
         }
-        catch (JsonException) { return System.Net.WebUtility.HtmlEncode(jsonString); }
-    }
-}
+    };
+    
+    // --- MAIN LOGIC & EVENT LISTENERS ---
+    const initializeOrdersPage = () => {
+        const currentUser = getCurrentUserEmail();
+        if (!currentUser) {
+            if (orderListContainer) orderListContainer.innerHTML = `<h3 class="text-center p-5" style="color: var(--primary-text);">Please log in to view your orders.</h3>`;
+            if (emptyView) emptyView.style.display = 'none'; // Hide empty view, show login prompt
+            if (clearHistoryContainer) clearHistoryContainer.style.display = 'none';
+            const filtersEl = document.querySelector('.order-filters');
+            if (filtersEl) filtersEl.style.display = 'none';
+            return;
+        }
 
-@section Scripts {
-    <script>
-        $(document).ready(function() {
+        const allUserOrders = getOrdersDB()[currentUser] || [];
+        
+        renderOrders(allUserOrders); // Initial render with all orders
 
-            // --- Mode Selection Toggle ---
-            $('.mode-radio').on('change', function() {
-                var $tryItOutSection = $(this).closest('.try-it-out-section');
-                var selectedMode = $(this).val();
-
-                $tryItOutSection.find('.data-config-section').hide();
-                $tryItOutSection.find('.inside-parameters-section').hide();
-
-                if (selectedMode === 'outside') {
-                     $tryItOutSection.find(`.data-config-section[data-mode="outside"]`).show();
-                } else if (selectedMode === 'inside') {
-                     $tryItOutSection.find(`.data-config-section[data-mode="inside"]`).show();
-                     $tryItOutSection.find('.inside-parameters-section').show();
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                
+                const status = button.getAttribute('data-status');
+                
+                let filteredOrders;
+                if (status === 'all') {
+                    filteredOrders = allUserOrders;
+                } else {
+                    filteredOrders = allUserOrders.filter(order => order.status === status);
                 }
-
-                 $tryItOutSection.find('.clear-response-btn').click();
+                
+                renderOrders(filteredOrders); // Render filtered orders
             });
-
-             // --- Version Type Selection Toggle ---
-             // This handles the change event for the version radio buttons.
-             // It's good practice to trigger a change if needed for initial state setup.
-             // No specific UI changes are made here based on version selection, but it's read by the execute button.
-             $('.version-type-radio').on('change', function() {
-                 // Optionally, if you wanted to update descriptions or example JSON based on version,
-                 // you would add that logic here. For now, it just captures the selection.
-             });
-
-
-            // --- Execute Button Logic ---
-            $('.execute-btn').on('click', function() {
-                var $button = $(this);
-                var $tryItOutSection = $button.closest('.try-it-out-section');
-                var templateName = $tryItOutSection.data('template-name');
-                var selectedMode = $tryItOutSection.find('.mode-radio:checked').val();
-                // Read the selected version type from the radio buttons
-                var selectedVersionType = $tryItOutSection.find('.version-type-radio:checked').val();
-
-
-                var $responseSection = $tryItOutSection.find('.response-section');
-                var $responseStatusDiv = $tryItOutSection.find('.response-status');
-                var $responseOutputDiv = $tryItOutSection.find('.response-output');
-                var $clearButton = $tryItOutSection.find('.clear-response-btn');
-
-                var requestBodyPayload = null;
-
-                $responseSection.hide();
-                $responseStatusDiv.empty().removeClass('text-danger text-success text-warning alert alert-danger alert-success alert-warning');
-                $responseOutputDiv.empty().removeClass('text-danger text-success text-warning').text('');
-                $clearButton.hide();
-
-                if (selectedMode === 'outside') {
-                     var $jsonPayloadTextarea = $tryItOutSection.find('.json-payload');
-                     var jsonDataString = $jsonPayloadTextarea.val();
-                     try {
-                          requestBodyPayload = jsonDataString.trim() === "" ? {} : JSON.parse(jsonDataString);
-                     } catch (e) {
-                         $responseStatusDiv.html('<strong>Error:</strong> Invalid JSON in Outside mode payload.').addClass('alert alert-danger');
-                         $responseOutputDiv.text(e.message).addClass('text-danger');
-                         $responseSection.show();
-                         $clearButton.show();
-                         return;
-                     }
-                } else if (selectedMode === 'inside') {
-                    var $insideParametersTextarea = $tryItOutSection.find('.inside-parameters-json');
-                    var insideParametersJsonString = $insideParametersTextarea.val();
-                    var parameters = null;
-
-                    try {
-                         parameters = insideParametersJsonString.trim() === "" ? {} : JSON.parse(insideParametersJsonString);
-                    } catch (e) {
-                        $responseStatusDiv.html('<strong>Error:</strong> Invalid JSON in Inside Parameters.').addClass('alert alert-danger');
-                        $responseOutputDiv.text(e.message).addClass('text-danger');
-                        $responseSection.show();
-                        $clearButton.show();
-                        return;
-                    }
-
-                     requestBodyPayload = { "parameters": parameters };
-                }
-
-                if (requestBodyPayload === null) {
-                     $responseStatusDiv.html('<strong>Error:</strong> Failed to prepare request payload.').addClass('alert alert-danger');
-                     $responseSection.show();
-                     $clearButton.show();
-                     return;
-                }
-
-
-                $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Executing...');
-
-                const endpoint = `/pdf/generate/${templateName}`;
-                const url = new URL(endpoint, window.location.origin);
-                url.searchParams.append('mode', selectedMode);
-                // Append the selected versionType to the URL query string
-                if (selectedVersionType) {
-                     url.searchParams.append('versionType', selectedVersionType);
-                }
-
-
-                fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                        // Authorization header is added by JwtCookieMiddleware
-                    },
-                    body: JSON.stringify(requestBodyPayload)
-                })
-                .then(response => {
-                    const contentType = response.headers.get('content-type');
-                    if (!response.ok) {
-                         if (response.status === 401 || response.status === 403) {
-                              alert('Unauthorized. Please log in.');
-                              window.location.href = '/Account/Login'; // Redirect to login
-                              return Promise.reject('Unauthorized'); // Stop promise chain
-                         }
-                         return response.text().then(text => {
-                             throw new Error(`HTTP error! status: ${response.status} - ${text}`);
-                         });
-                    }
-
-                    if (contentType && contentType.includes('application/pdf')) {
-                        return response.blob().then(blob => ({
-                            blob: blob, isPdf: true, status: response.status, statusText: response.statusText, headers: response.headers, ok: response.ok
-                        }));
-                    } else {
-                         return response.text().then(text => ({
-                            text: text, isPdf: false, status: response.status, statusText: response.statusText, headers: response.headers, ok: response.ok
-                        }));
-                    }
-                })
-                .then(result => {
-                    $responseStatusDiv.html(`<strong>Status:</strong> ${result.status} ${result.statusText}`);
-                    if (result.isPdf) {
-                        const url = window.URL.createObjectURL(result.blob);
-                        const a = document.createElement('a');
-                        const filenameVersionPart = selectedVersionType || 'Testing'; // Use selected type for filename
-                        const suggestedFilename = `${templateName}_${filenameVersionPart}_${selectedMode}_API_Test_${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}.pdf`;
-                        a.href = url;
-                        a.download = suggestedFilename;
-                        a.innerHTML = `<i class="fas fa-download me-1"></i> Download ${suggestedFilename}`;
-                        a.className = 'btn btn-sm btn-success d-block mt-2';
-                        $responseOutputDiv.append($('<div>').html('PDF generated successfully.'));
-                        $responseOutputDiv.append(a);
-                        $responseStatusDiv.addClass('alert alert-success');
-                    } else {
-                        $responseOutputDiv.text(result.text);
-                        if(result.ok){
-                            $responseStatusDiv.addClass('alert alert-warning');
-                        } else {
-                             $responseStatusDiv.addClass('alert alert-danger');
-                        }
-                    }
-                })
-                .catch(error => {
-                     if (error !== 'Unauthorized') {
-                        console.error('Fetch Error:', error);
-                        $responseStatusDiv.html('<strong>Error:</strong> An API error occurred').addClass('alert alert-danger');
-                        $responseOutputDiv.text(error.message).addClass('text-danger');
-                     }
-                })
-                .finally(() => {
-                    $button.prop('disabled', false).html('<i class="fas fa-play-circle"></i> Execute');
-                    $responseSection.show();
-                    $clearButton.show();
-                });
+        });
+        
+        // --- Modal-based clear history logic ---
+        if(clearHistoryBtn) {
+            clearHistoryBtn.addEventListener('click', () => {
+                 // Hide other modals if they are open
+                 if (historyClearedModal) historyClearedModal.style.display = 'none';
+                if (confirmClearModal) confirmClearModal.style.display = 'flex';
             });
-
-            // --- Clear Response Button ---
-            $('.clear-response-btn').on('click', function() {
-                var $tryItOutSection = $(this).closest('.try-it-out-section');
-                $tryItOutSection.find('.response-section').hide();
-                $tryItOutSection.find('.response-status').empty().removeClass('text-danger text-success text-warning alert alert-danger alert-success alert-warning');
-                $tryItOutSection.find('.response-output').empty().removeClass('text-danger text-success text-warning');
-                $(this).hide();
+        }
+        
+        if(cancelClearBtn) {
+            cancelClearBtn.addEventListener('click', () => {
+                if (confirmClearModal) confirmClearModal.style.display = 'none';
             });
-
-             // Helper function for JSON formatting
-             function formatJsonTextarea(textarea) {
-                 try {
-                     var rawJson = textarea.val();
-                      if (rawJson && rawJson.trim() !== "{}" && rawJson.trim() !== "") {
-                         var parsedJson = JSON.parse(rawJson);
-                         textarea.val(JSON.stringify(parsedJson, null, 2));
-                     } else {
-                         textarea.val('{}');
-                     }
-                 } catch (e) {
-                     console.warn("Existing content is not valid JSON:", textarea.attr('id'), e);
+        }
+        
+        if(confirmClearBtn) {
+            confirmClearBtn.addEventListener('click', () => {
+                let ordersDB = getOrdersDB();
+                const currentUser = getCurrentUserEmail(); // Re-get current user for safety
+                 if (ordersDB[currentUser]) {
+                     ordersDB[currentUser] = []; // Clear the user's orders array
+                     saveOrdersDB(ordersDB);
+                 } else {
+                     console.warn("Attempted to clear history for user with no entry.");
                  }
-            }
+
+                renderOrders([]); // Re-render with empty array
+                
+                if (confirmClearModal) confirmClearModal.style.display = 'none';
+                if (historyClearedModal) historyClearedModal.style.display = 'flex';
+            });
+        }
+        
+        // Click listener for the success modal close button
+        if(closeHistoryClearedModalBtn) {
+            closeHistoryClearedModalBtn.addEventListener('click', () => {
+                if (historyClearedModal) historyClearedModal.style.display = 'none';
+            });
+        }
+         // Allow clicking outside the history cleared modal to close it
+        if (historyClearedModal) {
+            historyClearedModal.addEventListener('click', (e) => {
+                 if (e.target === historyClearedModal) {
+                     historyClearedModal.style.display = 'none';
+                 }
+            });
+        }
+         // Allow clicking outside the confirm clear modal to close it
+        if (confirmClearModal) {
+             confirmClearModal.addEventListener('click', (e) => {
+                 if (e.target === confirmClearModal) {
+                     confirmClearModal.style.display = 'none';
+                 }
+             });
+        }
+    };
+
+    // --- INITIALIZE ---
+    initializeOrdersPage();
+});
+```
+
+**--- START OF FILE popup.js ---**
+
+(Modified to integrate API calls for similar items and price prediction, and update response handling)
+
+```javascript
+// --- START: Visual Search Modal Logic ---
+
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Visual Search Modal elements
+    const visualSearchModal = document.getElementById("visualSearchModal");
+    const openModalButtons = document.querySelectorAll("#visualSearchBtn, #navVisualSearchBtn");
+    // Query for all close buttons with this class, as there might be multiple modals using it
+    const closeVisualSearchBtn = document.querySelector(".visual-search-modal-content .visual-search-close-btn"); // Get the close btn specific to this modal
+
+    // --- File handling elements
+    const dropZone = document.querySelector(".visual-search-drop-zone");
+    const fileInput = document.getElementById("visualSearchFileInput");
+    const uploadBtn = document.querySelector(".visual-search-upload-btn");
+    const errorMsg = document.getElementById("visualSearchError");
+    const previewArea = document.getElementById("visualSearchPreview");
+  
+    // --- Action elements
+    const actionsContainer = document.getElementById("visualSearchActions");
+    const findSimilarBtn = document.getElementById("findSimilarBtn");
+    const predictPriceBtn = document.getElementById("predictPriceBtn");
+
+    // --- Price Prediction Modal elements
+    const pricePredictionModal = document.getElementById("pricePredictionModal");
+    // Get the close btn specific to this modal
+    const closePricePredictionBtn = pricePredictionModal ? pricePredictionModal.querySelector(".visual-search-close-btn") : null; 
+    const predictedPriceText = document.getElementById("predicted-price-text");
+
+    // A variable to hold the image data (base64)
+    let uploadedImageData = null;
+
+    // Backend API base URL - adjust if your Flask app is different
+    // Assumes AI endpoints are under /api/ai
+    const API_BASE_URL = 'http://localhost:5000/api/ai'; 
+
+    // Basic check if essential elements are present before adding listeners
+    if (!visualSearchModal || !dropZone || !fileInput || !uploadBtn || !errorMsg || !previewArea || !actionsContainer || !findSimilarBtn || !predictPriceBtn || !pricePredictionModal || !predictedPriceText) {
+      console.warn("Essential visual search modal elements missing from the page. Aborting full setup.");
+      return;
+    }
+     // Check if the close button for the price modal was found
+    if (!closePricePredictionBtn) {
+         console.warn("Price prediction modal close button missing. Price modal cannot be closed via its button.");
+    }
 
 
-            $('.json-payload').each(function() { formatJsonTextarea($(this)); });
-             $('.data-config-section[data-mode="inside"] textarea').each(function() { formatJsonTextarea($(this)); });
-             $('.inside-parameters-json').each(function() { formatJsonTextarea($(this)); });
-
-             // Initialize UI visibility and defaults
-             $('.try-it-out-section').each(function() {
-                 var $tryItOutSection = $(this);
-                 // Set default mode and version selection and trigger change event
-                 $tryItOutSection.find('.mode-radio[value="outside"]').prop('checked', true).trigger('change');
-                 // Ensure the correct version radio is checked and trigger change if necessary for UI logic
-                 var defaultVersion = '@VersionReferenceType.Testing'; // Default to Testing
-                 $tryItOutSection.find(`.version-type-radio[value="${defaultVersion}"]`).prop('checked', true);
+    function openVisualSearchModal() {
+        visualSearchModal.style.display = "flex";
+        // Use requestAnimationFrame for better transition timing
+        requestAnimationFrame(() => {
+             requestAnimationFrame(() => {
+                 visualSearchModal.classList.add('show'); // Assuming CSS transition class exists
              });
         });
-    </script>
-}
-```
-
----
-
-**Update `TemplateProcessingService.cs` and `GeneratePdfHandler.cs`:**
-
-The `ProcessTemplate` method itself does NOT need to know about `FabricJson`. Its job is to take HTML content and JSON data. The *generation* of the final HTML that includes the Fabric.js elements will happen *before* this method is called.
-
-The core logic to integrate Fabric.js will be within the **`GeneratePdfHandler.cs`** and potentially the **`TemplateController.cs`** (for the "Download Test PDF" button on the Design page), and the **`TemplateProcessingService.cs`** itself will need a new method to parse `FabricJson` and produce the HTML structure.
-
-Let's focus on the `GeneratePdfHandler` and `TemplateProcessingService` first.
-
----
-
-**14. `PDFGenerator.Infrastructure\Services\TemplateProcessingService.cs`**
-(Adding a method to process Fabric.js JSON into HTML)
-
-```csharp
-// ... (existing usings and class declaration) ...
-
-        // Regex to extract placeholder names from Fabric.js JSON text objects.
-        // Fabric.js uses properties like `text` and we'll assume it's structured to indicate a placeholder.
-        // A common convention might be to prefix text elements that are placeholders.
-        // For simplicity, let's assume a property like 'isPlaceholder' or a specific naming convention.
-        // If Fabric.js text elements contain the placeholder syntax directly, we can adapt.
-        // Example: If text is "Hello <<Name>>", we need to extract "<<Name>>".
-        // For now, let's assume a simple structure where text *is* the placeholder or contains it.
-        // If Fabric.js stores placeholder info separately, that's better.
-        // Let's consider a scenario where a text object has a 'placeholderName' property.
-
-        // A better approach might be to look for placeholders within the *text* property of Fabric.js objects
-        // OR to have a dedicated property like 'placeholderName' on the Fabric.js object itself.
-        // Let's assume for now, a text object's `text` property might contain the placeholder,
-        // or we might need to query for a custom `placeholderName` property if Fabric.js schema supports it.
-
-        // Regex to extract <<FieldName>> from string.
-        // This is used in ProcessTemplate and GenerateExampleJson, need to ensure consistency.
-        private static readonly Regex StandardPlaceholderRegex = new Regex(@"<<(\w+)>>", RegexOptions.Compiled);
-        // And its HTML entity version used by Summernote/Fabric.js output.
-        private static readonly Regex SummernotePlaceholderRegex = new Regex(@"&lt;&lt;(\w+)&gt;&gt;", RegexOptions.Compiled);
-
-
-        // ... (Existing ProcessTemplate, ResolveParameters, GenerateExampleJson, IsValidJson methods) ...
-
-        // NEW METHOD: Process Fabric.js JSON to generate HTML for images and overlaid text placeholders.
-        // This method will be called by GeneratePdfHandler.
-        public string ProcessFabricJson(string? fabricJson, JsonElement jsonData, string templateHtmlFallback)
-        {
-            // If Fabric.js JSON is null or empty, fall back to standard HTML processing.
-            if (string.IsNullOrWhiteSpace(fabricJson))
-            {
-                // We still need to process the standard HTML with provided jsonData.
-                // This falls back to the standard ProcessTemplate if no FabricJson is present.
-                // However, if FabricJson *is* present but empty/invalid, what should happen?
-                // For now, if fabricJson is null/empty, we assume the template might only use its basic HtmlContent.
-                // The overall flow should handle this: if FabricJson exists, use it; otherwise, use HtmlContent.
-                // Let's assume this method is called ONLY IF fabricJson is present.
-                // If called directly with null, it means fabricJson is not part of the template definition.
-                // The handler will need to decide the primary HTML source.
-
-                // For now, assume this method is called when fabricJson is available.
-                // If fabricJson is null/empty, it means no visual layout defined by Fabric.js, so just return fallback or empty.
-                // A better place to handle this logic might be in the Handler itself.
-                // This method assumes fabricJson *is* present and valid for a template using this feature.
-                return ""; // Or throw an error, or return the templateHtmlFallback.
-            }
-
-            string finalHtml = ""; // To build the output HTML.
-
-            try
-            {
-                using JsonDocument fabricDoc = JsonDocument.Parse(fabricJson);
-                JsonElement fabricRoot = fabricDoc.RootElement;
-
-                if (fabricRoot.ValueKind != JsonValueKind.Object)
-                {
-                    Console.WriteLine("Warning: Fabric.js JSON is not a valid object.");
-                    return templateHtmlFallback; // Fallback if Fabric JSON is malformed.
-                }
-
-                // Start building the HTML output. We'll create a container for the Fabric.js layout.
-                // The structure will typically involve:
-                // <div class="fabric-container" style="position: relative; width: ...; height: ...;">
-                //   <img src="..." style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"/>
-                //   <div class="placeholder-text-element" style="position: absolute; left: ...; top: ...; font-size: ...; color: ...; transform: rotate(...deg);">
-                //     Processed<<FieldName>>Value
-                //   </div>
-                //   ... more divs for text placeholders ...
-                // </div>
-
-                // Assuming Fabric.js JSON structure: { "version": "5.0.0", "objects": [ { "type": "image", "url": "data:...", "left": ..., "top": ...}, { "type": "textbox", "text": "<<FieldName>>", "left": ..., "top": ..., "fontFamily": "...", "fontSize": ..., "fill": "...", "angle": ... } ] }
-
-                string? imageUrl = null;
-                List<FabricTextObject> textPlaceholders = new List<FabricTextObject>();
-
-                // Iterate through Fabric.js objects to find images and text placeholders.
-                if (fabricRoot.TryGetProperty("objects", out JsonElement objectsElement) && objectsElement.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (JsonElement obj in objectsElement.EnumerateArray())
-                    {
-                        if (obj.TryGetProperty("type", out JsonElement typeElement))
-                        {
-                            string objType = typeElement.GetString() ?? "";
-
-                            if (objType == "image")
-                            {
-                                // We'll only use the first image as the base background for simplicity.
-                                // More complex layouts could handle multiple images or layering.
-                                if (imageUrl == null && obj.TryGetProperty("url", out JsonElement urlElement))
-                                {
-                                    imageUrl = urlElement.GetString();
-                                }
-                            }
-                            else if (objType == "textbox" || objType == "text") // Handle common text object types
-                            {
-                                if (obj.TryGetProperty("text", out JsonElement textElement) && !string.IsNullOrEmpty(textElement.GetString()))
-                                {
-                                    string textValue = textElement.GetString()!;
-                                    string placeholderName = "";
-                                    string plainText = textValue; // Text to display if it's not a placeholder
-
-                                    // Try to extract placeholder name from the text.
-                                    // Use the standard placeholder regex here.
-                                    var match = StandardPlaceholderRegex.Match(textValue);
-                                    if (match.Success && match.Groups.Count > 1)
-                                    {
-                                        placeholderName = match.Groups[1].Value;
-                                        // The text to be displayed will be determined by processing this placeholder later.
-                                        // For now, we store the placeholder name and the styling properties.
-                                        plainText = ""; // Reset plain text if it's a placeholder.
-                                    }
-
-                                    // Extract styling properties. Need to ensure these exist and are in expected formats.
-                                    // Default values are important if properties are missing.
-                                    double left = obj.TryGetProperty("left", out JsonElement leftElem) ? leftElem.GetDouble() : 0;
-                                    double top = obj.TryGetProperty("top", out JsonElement topElem) ? topElem.GetDouble() : 0;
-                                    string fontFamily = obj.TryGetProperty("fontFamily", out JsonElement fontFamilyElem) ? fontFamilyElem.GetString() ?? "Arial" : "Arial";
-                                    double fontSize = obj.TryGetProperty("fontSize", out JsonElement fontSizeElem) ? fontSizeElem.GetDouble() : 16;
-                                    string fill = obj.TryGetProperty("fill", out JsonElement fillElem) ? fillElem.GetString() ?? "#000000" : "#000000"; // Color as hex string.
-                                    double angle = obj.TryGetProperty("angle", out JsonElement angleElem) ? angleElem.GetDouble() : 0;
-
-                                    textPlaceholders.Add(new FabricTextObject
-                                    {
-                                        PlaceholderName = placeholderName, // Will be empty if not a placeholder.
-                                        OriginalText = textValue, // Store the original text for non-placeholders.
-                                        Left = left,
-                                        Top = top,
-                                        FontFamily = fontFamily,
-                                        FontSize = fontSize,
-                                        Fill = fill,
-                                        Angle = angle
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Start building the final HTML structure.
-                // The main container will hold the image and absolutely positioned text elements.
-                finalHtml += "<div class='fabric-layout-container' style='position: relative;'>";
-
-                // Embed the base image.
-                if (!string.IsNullOrEmpty(imageUrl))
-                {
-                    // The imageUrl is expected to be a data URL.
-                    // Apply styles to make it cover the container.
-                    finalHtml += $"<img src='{imageUrl}' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;' />";
-                }
-                else
-                {
-                    // If no image, maybe render the fallback HTML directly or log a warning.
-                    Console.WriteLine("Warning: No base image found in Fabric.js JSON for template.");
-                    // If we want to render standard HTML without images, that needs separate logic.
-                    // For now, let's assume if fabricJson is used, an image is expected.
-                    // If templateHtmlFallback is meant to be the base if no image, it should be placed here.
-                    // For this method's purpose, we'll assume image is primary and text overlays it.
-                }
-
-                // Add divs for text placeholders, processed with actual data.
-                // This part needs access to the actual data (jsonData) to replace placeholders.
-                // This suggests ProcessTemplate might need to be called *within* ProcessFabricJson,
-                // or ProcessFabricJson should receive the processed HTML or be integrated.
-
-                // Let's adjust: ProcessFabricJson will generate the structure, and actual replacement happens in ProcessTemplate.
-                // So, here we generate placeholders and their styles.
-                // The actual replacement logic will be in ProcessTemplate by searching for specific patterns within the generated text elements.
-
-                // Structure for each text element:
-                // <div class='fabric-text-overlay' style='position: absolute; left: ...px; top: ...px; transform: rotate(...deg); width: fit-content; white-space: nowrap; /* prevent wrapping */'>
-                //   <span style='font-family: ...; font-size: ...px; color: ...;'>
-                //     {{ProcessedPlaceholderValue}} <-- THIS IS WHERE REPLACEMENT HAPPENS
-                //   </span>
-                // </div>
-
-                // We can't do the actual <<FieldName>> replacement here without the jsonData.
-                // The ProcessTemplate method will need to be enhanced to look for these specific DIVs
-                // and perform the placeholder replacement within them.
-
-                // For now, let's generate the structure with placeholders and their styling.
-                // We'll need to ensure these generated DIVs are injected into the HTML structure processed by ProcessTemplate.
-
-                // A more robust approach: Generate the Fabric.js JSON *into* the HTML as part of the template processing.
-                // Or, use a template engine that can handle this structure.
-                // For now, let's generate HTML fragments.
-
-                // The issue: ProcessTemplate typically processes static HTML provided.
-                // Fabric.js JSON is NOT static HTML.
-                // The strategy is to *transform* Fabric.js JSON into static HTML.
-
-                // Let's refine: ProcessTemplate should generate the base HTML and THEN inject the processed Fabric.js elements.
-                // The Fabric.js JSON processing should yield a LIST of HTML fragments (divs) for each text element.
-                // The ProcessTemplate method will then need to parse these fragments and perform placeholder replacements.
-
-                // This is getting complex. Let's re-evaluate the hybrid approach:
-                // 1. Store Fabric.js JSON in Template/TemplateVersion.
-                // 2. ProcessTemplate receives HtmlContent AND FabricJson.
-                // 3. It parses FabricJson.
-                // 4. It constructs a primary HTML structure that includes:
-                //    a. The base image(s) from FabricJson.
-                //    b. For each text object in FabricJson that IS a placeholder:
-                //       - It generates a placeholder *marker* in the HTML, e.g., `<span data-fabric-placeholder="FieldName" data-fabric-style="..."></span>`
-                // 5. AFTER the standard placeholder replacement (<<FieldName>> -> DataValue), ProcessTemplate would then iterate through the generated HTML,
-                //    find these `data-fabric-placeholder` spans, and replace them with the styled divs containing the actual data.
-
-                // Let's try a simpler version first: generate the HTML directly.
-                // This method's responsibility is to RETURN the HTML fragment that PROCESS_TEMPLATE will work with.
-                // ProcessTemplate will be responsible for BOTH standard HTML processing AND placeholder replacement within the Fabric.js generated text.
-
-                // Re-think: ProcessTemplate takes `htmlContent` and `jsonData`.
-                // If `FabricJson` is present, it should be the primary source of HTML.
-                // `htmlContent` might be a fallback if FabricJson is missing or invalid.
-
-                // Let's assume ProcessTemplate gets `templateDataAccessDto.FabricJson` and `templateDataAccessDto.HtmlContent`
-                // as inputs.
-
-                // New signature for ProcessTemplate (if we embed this logic there):
-                // public string ProcessTemplate(string? fabricJson, string fallbackHtmlContent, JsonElement jsonData)
-
-                // For now, let's assume this `ProcessFabricJson` returns HTML *fragments* for the fabric elements,
-                // and the main `ProcessTemplate` will orchestrate their placement.
-
-                // Simplified strategy for THIS method:
-                // Generate HTML for the image and placeholder divs.
-                // The *replacement* of <<FieldName>> will happen in ProcessTemplate.
-                // So, we'll create static HTML with placeholder *markers* for the text.
-
-                foreach (var textObj in textPlaceholders)
-                {
-                    // Construct style string from Fabric.js properties.
-                    // Important: Fabric.js values like fontSize might need units (px). Colors are often hex.
-                    // Angles need rotation transform.
-                    string style = $"position: absolute; left: {textObj.Left}px; top: {textObj.Top}px; ";
-                    if (textObj.Angle != 0) {
-                        // Fabric.js rotation is usually around the center. For simple overlays,
-                        // rotating around the top-left might be acceptable, or we need to calculate offsets.
-                        // For simplicity, let's assume simple rotation.
-                        style += $"transform: rotate({textObj.Angle}deg); transform-origin: 0 0; ";
-                    }
-                    style += $"font-family: '{textObj.FontFamily}', sans-serif; "; // Fallback font.
-                    style += $"font-size: {textObj.FontSize}px; ";
-                    style += $"color: {textObj.Fill}; ";
-                    style += "white-space: nowrap; /* Prevent text from wrapping */ ";
-                    style += "pointer-events: none; /* Allow clicks to pass through if needed, or set to auto */ ";
-                    style += "overflow: hidden; /* Clip text if it exceeds bounds */ ";
-
-
-                    // If it's a placeholder, wrap it in a placeholder marker for ProcessTemplate.
-                    // The marker needs to contain the original placeholder name and the styling.
-                    // ProcessTemplate will then find this marker, look up data for placeholderName,
-                    // and replace the marker's content with the styled data.
-                    // Let's use a custom attribute for the placeholder name and embed styles.
-                    if (!string.IsNullOrEmpty(textObj.PlaceholderName))
-                    {
-                        // The actual replacement <<FieldName>> -> Data will happen inside ProcessTemplate later.
-                        // So, for now, we render the placeholder name itself, wrapped in a span that ProcessTemplate can target.
-                        // Example: <span class='fabric-placeholder-text' data-placeholder-name='Name' style='...' ><<Name>></span>
-                        finalHtml += $"<div class='fabric-text-overlay' style='{style}'><span><<{textObj.PlaceholderName}>></span></div>";
-                    }
-                    else
-                    {
-                        // If it's not a placeholder, display the original text (could also be processed).
-                        // For simplicity, we'll just display the original text directly for now.
-                        finalHtml += $"<div class='fabric-text-static' style='{style}'>{System.Net.WebUtility.HtmlEncode(textObj.OriginalText)}</div>";
-                    }
-                }
-
-                finalHtml += "</div>"; // Close fabric-layout-container.
-
-                // This generated HTML fragment will be *inserted* into the main HTML processed by ProcessTemplate.
-                // The ProcessTemplate method will need to be updated to use this fragment appropriately.
-                // It might replace the fallback HTML entirely or merge it.
-                // For now, this method returns the Fabric-generated part.
-
-                return finalHtml; // Return the generated HTML for fabric elements.
-            }
-            catch (JsonException jEx)
-            {
-                Console.WriteLine($"Error parsing Fabric.js JSON: {jEx.Message}");
-                return templateHtmlFallback; // Fallback if Fabric JSON is invalid.
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"An unexpected error occurred processing Fabric.js JSON: {ex.Message}");
-                return templateHtmlFallback; // Fallback for other errors.
-            }
-        }
-
-        // Helper class to hold parsed text object properties from Fabric.js JSON.
-        private class FabricTextObject
-        {
-            public string PlaceholderName { get; set; } = ""; // The <<FieldName>> if it's a placeholder.
-            public string OriginalText { get; set; } = ""; // The original text value.
-            public double Left { get; set; }
-            public double Top { get; set; }
-            public string FontFamily { get; set; } = "Arial";
-            public double FontSize { get; set; } = 16;
-            public string Fill { get; set; } = "#000000"; // Hex color string.
-            public double Angle { get; set; } = 0; // Rotation in degrees.
-        }
-
-        // --- Modified ProcessTemplate to handle Fabric.js HTML ---
-        // This is the crucial part. ProcessTemplate needs to be aware of the Fabric JSON.
-        // It should ideally combine the static HTML content with the Fabric-generated HTML.
-        // Let's assume ProcessTemplate receives FabricJson separately or it's part of the template DTO.
-
-        // New signature proposal for ProcessTemplate that integrates Fabric.js handling.
-        // It would take template's base HTML, the Fabric JSON, and the actual data.
-        public string ProcessTemplateWithFabric(string? baseHtmlContent, string? fabricJson, JsonElement jsonData)
-        {
-            // If Fabric JSON is present, it takes precedence for structure.
-            if (!string.IsNullOrWhiteSpace(fabricJson))
-            {
-                try
-                {
-                    // Generate the core HTML structure from Fabric JSON (images and styled placeholder spans).
-                    string fabricGeneratedHtml = ProcessFabricJson(fabricJson, baseHtmlContent ?? "", jsonData); // Pass baseHtmlContent as fallback if no image.
-
-                    // Now, we have fabricGeneratedHtml containing static image(s) and placeholder spans like:
-                    // <div class='fabric-text-overlay' style='...'><span><<FieldName>></span></div>
-                    // We need to process these placeholder spans for their actual data.
-
-                    // This is the complex part: we need to perform data replacement *within* these generated spans.
-                    // The standard ProcessTemplate method needs to be aware of these special span elements.
-                    // One way: Let ProcessTemplate parse the fabricGeneratedHtml, find these spans,
-                    // extract placeholder name, get data, and replace the span's content.
-
-                    // For this example, let's integrate the logic here:
-                    // 1. Replace <<FieldName>> within fabricGeneratedHtml.
-                    // 2. Merge this with any other parts of baseHtmlContent if needed.
-                    //    However, the hybrid model suggests fabricJson *defines* the layout, and baseHtmlContent is a fallback.
-                    //    So, let's assume fabricJson defines the layout and potentially uses baseHtmlContent for non-Fabric elements if any.
-
-                    // For now, assume fabricGeneratedHtml REPLACES baseHtmlContent entirely for the core layout.
-
-                    // Perform the actual data replacement for <<FieldName>> placeholders within the generated fabric elements.
-                    // This requires a function that takes HTML string, data, and knows how to find and replace within specific elements.
-                    // This is getting deep into DOM manipulation or complex regex.
-
-                    // --- Simplified approach for this example ---
-                    // Let's assume ProcessTemplate is called AFTER ProcessFabricJson has been used to *prepare* the HTML.
-                    // Or, ProcessTemplate itself handles both.
-
-                    // Let's modify ProcessTemplate to handle this:
-                    // It will receive the templateData (which includes HtmlContent AND FabricJson)
-                    // The logic will be: if FabricJson is present, parse it, generate HTML structure, then do placeholder replacement on generated HTML.
-
-                    // Re-architecting ProcessTemplate to be aware of FabricJson.
-                    // The handler (GeneratePdfHandler) will fetch templateDto.FabricJson.
-                    // The ProcessTemplate method itself needs to receive it or access it.
-
-                    // Let's assume ProcessTemplate signature is updated to:
-                    // public string ProcessTemplate(string? htmlContent, string? fabricJson, JsonElement jsonData)
-
-                    // --- Inside the (new) ProcessTemplateWithFabric ---
-
-                    string processedHtmlWithFabric = ""; // This would be the final result.
-
-                    // 1. Get base image(s) and text element definitions from fabricJson.
-                    // 2. Construct HTML for these, potentially replacing <<FieldName>> placeholders within the text elements with actual data values.
-                    // 3. Combine this with any other parts of the template.
-
-                    // This requires a more sophisticated HTML builder that can parse the FabricJson structure.
-                    // The current placeholder replacement logic is string-based.
-                    // To overlay text correctly, the `ProcessTemplate` would need to:
-                    //    - Embed the base image (likely as `<img>` with `position: relative;` or `background-image`).
-                    //    - For each text element with a placeholder:
-                    //        - Look up the placeholder name in `jsonData`.
-                    //        - Get the data value.
-                    //        - Generate a `<span>` or `<div>` for this data value.
-                    //        - Apply inline styles to this span/div based on Fabric.js properties (position, font, color, rotation).
-                    //        - `position: absolute;` will be key for overlaying.
-
-                    // Let's revise the strategy: ProcessTemplate receives `HtmlContent`, `FabricJson`, and `jsonData`.
-                    // If FabricJson exists, it's prioritized. It defines the layout.
-                    // It will extract image(s) and text objects.
-                    // For each text object:
-                    //   If it's a placeholder, get the value from `jsonData` for that placeholder.
-                    //   If not a placeholder, use the literal text from Fabric.js.
-                    //   Construct a styled `<span>` or `<div>` for this text/data.
-                    //   Return the complete HTML string with image and styled text elements.
-
-                    // This implies a significant rewrite of ProcessTemplate.
-                    // For now, this method might just return the FabricJson itself or a basic representation.
-                    // Or, it might return a specific HTML structure that ProcessTemplate is aware of.
-
-                    // Let's go with the approach where ProcessTemplate will take FabricJson as an input.
-                    // The GeneratePdfHandler will call ProcessTemplate, passing the fetched FabricJson.
-
-                    // This `ProcessFabricJson` method's role is to convert FabricJson into HTML fragments.
-                    // It needs to know how to iterate Fabric.js objects and generate HTML.
-                    // This would typically require a JSON parsing and string building logic.
-                    // The actual replacement of <<FieldName>> needs to happen on the text content of these generated elements.
-
-                    // Let's assume `ProcessTemplate` is modified to handle a structure generated by Fabric.js.
-                    // This method might be removed if `ProcessTemplate` becomes responsible for parsing `FabricJson`.
-
-                    // For now, returning the fallback content to indicate this method isn't fully integrated yet.
-                    return templateHtmlFallback;
-                }
-            }
-            catch (JsonException jEx)
-            {
-                Console.WriteLine($"Error parsing Fabric.js JSON: {jEx.Message}");
-                return templateHtmlFallback;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"An unexpected error occurred processing Fabric.js JSON: {ex.Message}");
-                return templateHtmlFallback;
-            }
-        }
-        // End of ProcessFabricJson
-
-        // --- MODIFIED ProcessTemplate Method ---
-        // This is the central change. ProcessTemplate will now handle Fabric.js JSON.
-        // It needs access to the FabricJson string. The handler will pass it.
-        // public string ProcessTemplate(string? htmlContent, string? fabricJson, JsonElement jsonData)
-        // The current signature is: public string ProcessTemplate(string htmlContent, JsonElement jsonData)
-        // We need to update the signature of ProcessTemplate in TemplateProcessingService.
-
-        // The GeneratePdfHandler needs to pass templateDataAccessDto.FabricJson to the processing service.
-
-        // Assuming ProcessTemplate signature change is done elsewhere.
-        // For THIS file, let's just ensure all necessary methods are available.
-        // The logic for handling FabricJson will reside WITHIN ProcessTemplate itself.
-
-        // The rest of the methods are fine for now, but the *calling* code needs to be aware of FabricJson.
-        // ... (rest of the methods) ...
+      clearVisualSearchState();
     }
-}
-```
+  
+    function closeVisualSearchModal() {
+        visualSearchModal.classList.remove('show'); // Assuming CSS transition class exists
+        // Hide after transition
+         setTimeout(() => {
+             visualSearchModal.style.display = "none";
+         }, 300); // Match CSS transition duration
 
----
-
-**15. `PDFGenerator.Web\Services\GeneratePdfHandler.cs`**
-(Modified to pass FabricJson to `ProcessTemplate` and integrate its logic)
-
-This is where the major change happens. The `GeneratePdfHandler` needs to be updated to:
-1.  Fetch `FabricJson` from the `TemplateDataAccessDto`.
-2.  Pass `FabricJson` to `TemplateProcessingService.ProcessTemplate`.
-3.  The `TemplateProcessingService.ProcessTemplate` method itself needs to be modified to understand and process the `FabricJson`.
-
-Let's assume `TemplateProcessingService.ProcessTemplate` is modified to accept `string? fabricJson` and use it as the primary source of HTML structure.
-
-**Assumption: `TemplateProcessingService.ProcessTemplate` Signature Change**
-
-Let's assume the `TemplateProcessingService.ProcessTemplate` signature is changed to:
-`public string ProcessTemplate(string? htmlContent, string? fabricJson, JsonElement jsonData)`
-
-If this is the case, the `GeneratePdfHandler` will look like this:
-
-```csharp
-// File: Handlers/GeneratePdfHandler.cs
-using PdfGeneratorApp.Common;
-using PdfGeneratorApp.Services; // For TemplateProcessingService
-using System.Text.Json;
-using WkHtmlToPdfDotNet;
-using WkHtmlToPdfDotNet.Contracts;
-using PdfGeneratorApp.Infrastructure.Data.UnitOfWork;
-using System.Threading.Tasks;
-
-namespace PdfGeneratorApp.Handlers
-{
-    // Interface updated to include versionReferenceType in the request tuple.
-    public interface IGeneratePdfHandler : IHandler<(string templateName, JsonElement requestBodyJson, string mode, string? versionReferenceType), byte[]>
-    {
+      clearVisualSearchState();
     }
 
-    public class GeneratePdfHandler : IGeneratePdfHandler
-    {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IConverter _converter;
-        private readonly TemplateProcessingService _templateProcessingService;
-
-        public GeneratePdfHandler(IUnitOfWork unitOfWork, IConverter converter, TemplateProcessingService templateProcessingService)
-        {
-            _unitOfWork = unitOfWork;
-            _converter = converter;
-            _templateProcessingService = templateProcessingService;
-        }
-
-        public async Task<Result<byte[]>> HandleAsync((string templateName, JsonElement requestBodyJson, string mode, string? versionReferenceType) request)
-        {
-            try
-            {
-                string effectiveVersionType = VersionReferenceType.Testing;
-                if (!string.IsNullOrWhiteSpace(request.versionReferenceType) && VersionReferenceType.IsValid(request.versionReferenceType))
-                {
-                    effectiveVersionType = request.versionReferenceType;
-                }
-                else if (!string.IsNullOrWhiteSpace(request.versionReferenceType))
-                {
-                    Console.WriteLine($"Warning: Invalid versionReferenceType '{request.versionReferenceType}' provided. Defaulting to Testing.");
-                }
-
-                // Fetch template data, now including FabricJson.
-                var repoResult = await _unitOfWork.Templates.GetTemplateContentByVersionReferenceAsync(request.templateName, effectiveVersionType);
-
-                if (!repoResult.IsCompleteSuccessfully || repoResult.Data == null)
-                {
-                    return Result<byte[]>.Failure(repoResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-                }
-
-                var templateDataAccessDto = repoResult.Data; // This DTO now contains HtmlContent, FabricJson, etc.
-
-                JsonElement finalDataForHtmlProcessing;
-                JsonElement insideParameters = default;
-
-                // Determine data source based on 'mode'.
-                switch (request.mode.ToLowerInvariant())
-                {
-                    case "outside":
-                        finalDataForHtmlProcessing = request.requestBodyJson;
-                        break;
-
-                    case "inside":
-                        if (request.requestBodyJson.ValueKind != JsonValueKind.Object)
-                        {
-                            return Result<byte[]>.Failure(ErrorMessageUserConst.InsideModeBodyNotObject);
-                        }
-                        if (request.requestBodyJson.TryGetProperty("parameters", out JsonElement parametersElement))
-                        {
-                            insideParameters = parametersElement;
-                        }
-                        // Resolve internal data using fetched config (from target version) and parameters.
-                        finalDataForHtmlProcessing = _templateProcessingService.ResolveInternalData(templateDataAccessDto.InternalDataConfigJson, insideParameters);
-                        break;
-
-                    default:
-                        return Result<byte[]>.Failure(ErrorMessageUserConst.InvalidMode);
-                }
-
-                // --- MAJOR CHANGE HERE ---
-                // Call ProcessTemplate, passing BOTH HtmlContent and FabricJson.
-                // ProcessTemplate is now responsible for deciding whether to use FabricJson or fallback HtmlContent,
-                // and importantly, processing placeholders within the Fabric-generated HTML.
-                string finalHtmlContent = _templateProcessingService.ProcessTemplate(
-                    templateDataAccessDto.HtmlContent,     // Fallback HTML
-                    templateDataAccessDto.FabricJson,      // Fabric.js JSON definition
-                    finalDataForHtmlProcessing             // Data for placeholders
-                );
-                // --- END MAJOR CHANGE ---
-
-                // Configure WkHtmlToPdf document settings with the final HTML content.
-                var doc = new HtmlToPdfDocument()
-                {
-                    GlobalSettings = {
-                        ColorMode = ColorMode.Color,
-                        Orientation = Orientation.Portrait,
-                        PaperSize = PaperKind.A4,
-                        Margins = new MarginSettings() { Top = 10, Bottom = 10, Left = 10, Right = 10 },
-                        DPI = 300
-                    },
-                    Objects = {
-                        new ObjectSettings() {
-                            HtmlContent = finalHtmlContent, // Use the HTML generated by ProcessTemplateWithFabric
-                            WebSettings = { DefaultEncoding = "utf-8" }
-                        }
-                    }
-                };
-
-                byte[] pdf = _converter.Convert(doc);
-
-                if (pdf == null || pdf.Length == 0)
-                {
-                    return Result<byte[]>.Failure(ErrorMessageUserConst.PdfGenerationFailed + " Ensure wkhtmltopdf is correctly installed and accessible.");
-                }
-
-                return Result<byte[]>.Success(pdf);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in GeneratePdfHandler: {ex.Message}");
-                return Result<byte[]>.Failure(ErrorMessageUserConst.ServerErrorNoMsg);
-            }
-        }
+    function openPricePredictionModal(message = "Loading...") {
+         predictedPriceText.textContent = message;
+         pricePredictionModal.style.display = 'flex';
+          // Use requestAnimationFrame for better transition timing
+         requestAnimationFrame(() => {
+             requestAnimationFrame(() => {
+                 pricePredictionModal.classList.add('show'); // Assuming CSS transition class exists
+             });
+        });
     }
-}
-```
 
----
-
-**16. `PDFGenerator.Infrastructure\Services\TemplateProcessingService.cs`**
-(This file requires the most significant changes to implement the hybrid approach)
-
-**Key Modifications to `TemplateProcessingService.cs`:**
-
-*   **Modify `ProcessTemplate` Signature:** Change `public string ProcessTemplate(string htmlContent, JsonElement jsonData)` to `public string ProcessTemplate(string? fallbackHtmlContent, string? fabricJson, JsonElement jsonData)`.
-*   **Implement Fabric JSON Parsing in `ProcessTemplate`:** The `ProcessTemplate` method will now first check `fabricJson`.
-    *   If `fabricJson` is present, parse it and generate HTML for images and styled text elements (including placeholder markers).
-    *   If `fabricJson` is null or invalid, fall back to processing the `fallbackHtmlContent`.
-    *   Crucially, the *placeholder replacement* logic needs to be integrated to work on the HTML generated from `fabricJson` as well.
-
-Let's provide the modified `TemplateProcessingService.cs` file.
-
-```csharp
-using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
-using PdfGeneratorApp.Common;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System; // For Exception, DateTime, RegexOptions, Regex
-using System.Collections.Generic; // For List, Dictionary
-using System.Net; // For WebUtility
-
-namespace PdfGeneratorApp.Services
-{
-    public class TemplateProcessingService
-    {
-        private readonly IConfiguration _configuration;
-
-        // Regex for finding standard <<FieldName>> placeholders.
-        private static readonly Regex StandardPlaceholderRegex = new Regex(@"<<(\w+)>>", RegexOptions.Compiled);
-        // Regex for HTML entities of placeholders as output by Summernote/Fabric.js
-        private static readonly Regex SummernotePlaceholderRegex = new Regex(@"&lt;&lt;(\w+)&gt;&gt;", RegexOptions.Compiled);
-
-        // Regex for conditional expressions ${{condition ? true_part : false_part}}
-        private static readonly Regex ConditionalRegex = new Regex(@"\$\{\{\s*(.+?)\s*\?\s*(.+?)\s*:\s*(.+?)\s*\}\}", RegexOptions.Compiled | RegexOptions.Singleline);
-
-        // Regex for finding "inside parameter" placeholders <<param:parameterName>>
-        private static readonly Regex ParameterPlaceholderRegex = new Regex(@"<<param:(\w+)>>", RegexOptions.Compiled);
-
-        public TemplateProcessingService(IConfiguration configuration)
-        {
-            _configuration = configuration;
-        }
-
-        // --- MODIFIED METHOD ---
-        // ProcessTemplate now handles both standard HTMLContent and Fabric.js JSON.
-        // It prioritizes FabricJson for layout and generates HTML structure accordingly.
-        // Placeholders within Fabric.js text elements are also processed.
-        public string ProcessTemplate(string? fallbackHtmlContent, string? fabricJson, JsonElement jsonData)
-        {
-            // If FabricJson is provided and valid, it defines the primary layout.
-            if (!string.IsNullOrWhiteSpace(fabricJson))
-            {
-                try
-                {
-                    // Parse the Fabric.js JSON.
-                    using JsonDocument fabricDoc = JsonDocument.Parse(fabricJson);
-                    JsonElement fabricRoot = fabricDoc.RootElement;
-
-                    if (fabricRoot.ValueKind != JsonValueKind.Object)
-                    {
-                        Console.WriteLine("Warning: Fabric.js JSON is not a valid object. Falling back to fallbackHtmlContent.");
-                        return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData); // Fallback
-                    }
-
-                    string generatedFabricHtml = BuildHtmlFromFabricJson(fabricRoot, jsonData);
-
-                    // If FabricJson was successfully processed, use it as the final HTML.
-                    if (!string.IsNullOrEmpty(generatedFabricHtml))
-                    {
-                        return generatedFabricHtml;
-                    }
-                    else
-                    {
-                        // If FabricJson was valid but generated no content, fallback.
-                        Console.WriteLine("Warning: Fabric.js JSON processed but resulted in empty HTML. Falling back to fallbackHtmlContent.");
-                        return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData);
-                    }
-                }
-                catch (JsonException jEx)
-                {
-                    Console.WriteLine($"Error parsing Fabric.js JSON: {jEx.Message}. Falling back to fallbackHtmlContent.");
-                    return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData); // Fallback on JSON error
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"An unexpected error occurred processing Fabric.js JSON: {ex.Message}. Falling back to fallbackHtmlContent.");
-                    return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData); // Fallback for other errors
-                }
-            }
-            else
-            {
-                // If FabricJson is null or empty, just process the standard fallback HTML.
-                return ProcessStandardHtml(fallbackHtmlContent ?? "", jsonData);
-            }
-        }
-
-        // Helper to process standard HTML content (placeholders and conditionals).
-        private string ProcessStandardHtml(string htmlContent, JsonElement jsonData)
-        {
-            // This method contains the original placeholder and conditional processing logic.
-            string processedHtml = htmlContent;
-
-            // 1. Process Conditional Expressions (${{...}}) FIRST
-            processedHtml = ConditionalRegex.Replace(processedHtml, match =>
-            {
-                if (match.Groups.Count != 4) return match.Value;
-                string conditionPart = match.Groups[1].Value.Trim();
-                string truePart = match.Groups[2].Value;
-                string falsePart = match.Groups[3].Value;
-
-                bool conditionResult = false;
-                bool conditionEvaluated = false;
-
-                if (bool.TryParse(conditionPart, out bool literalBool))
-                {
-                    conditionResult = literalBool;
-                    conditionEvaluated = true;
-                }
-                else
-                {
-                    var conditionPlaceholderMatch = SummernotePlaceholderRegex.Match(conditionPart); // Use Summernote regex for condition part
-                    if (conditionPlaceholderMatch.Success && conditionPlaceholderMatch.Groups.Count > 1)
-                    {
-                        string fieldName = conditionPlaceholderMatch.Groups[1].Value;
-                        if (jsonData.ValueKind == JsonValueKind.Object && jsonData.TryGetProperty(fieldName, out JsonElement conditionValueElement))
-                        {
-                            if (conditionValueElement.ValueKind == JsonValueKind.True) { conditionResult = true; conditionEvaluated = true; }
-                            else if (conditionValueElement.ValueKind == JsonValueKind.False) { conditionResult = false; conditionEvaluated = true; }
-                            else if (conditionValueElement.ValueKind == JsonValueKind.String)
-                            {
-                                if (bool.TryParse(conditionValueElement.GetString(), out bool parsedStringBool))
-                                {
-                                    conditionResult = parsedStringBool;
-                                    conditionEvaluated = true;
-                                }
-                            }
-                            if (!conditionEvaluated) { conditionResult = false; conditionEvaluated = true; }
-                        }
-                        else { conditionResult = false; conditionEvaluated = true; }
-                    }
-                    if (!conditionEvaluated) { conditionResult = false; /* Evaluated as false if unrecognized */ }
-                }
-                return conditionResult ? truePart : falsePart;
-            });
-
-            // 2. Process Simple Placeholders (<<FieldName>>) AFTER conditionals.
-            // Replace placeholders in the processed HTML string.
-            // This regex needs to find the placeholder markers we'll inject from Fabric.js JSON.
-            // We will use the SummernotePlaceholderRegex to find <<FieldName>> within the generated HTML structure.
-            processedHtml = SummernotePlaceholderRegex.Replace(processedHtml, match =>
-            {
-                if (match.Groups.Count > 1 && match.Groups[1].Success)
-                {
-                    string fieldName = match.Groups[1].Value;
-                    string replacementValue = "";
-
-                    if (jsonData.ValueKind == JsonValueKind.Object && jsonData.TryGetProperty(fieldName, out JsonElement valueElement))
-                    {
-                        replacementValue = valueElement.ValueKind switch
-                        {
-                            JsonValueKind.String => valueElement.GetString() ?? "",
-                            JsonValueKind.Number => valueElement.GetRawText(),
-                            JsonValueKind.True => "true",
-                            JsonValueKind.False => "false",
-                            JsonValueKind.Null => "",
-                            JsonValueKind.Object or JsonValueKind.Array => valueElement.GetRawText(),
-                            _ => ""
-                        };
-                        replacementValue = WebUtility.HtmlEncode(replacementValue);
-                    }
-                    return replacementValue;
-                }
-                return match.Value; // Return original match if something goes wrong.
-            });
-
-            // Remove any residual placeholder syntax that wasn't replaced.
-            // This regex must match both standard <<FieldName>> and HTML entity versions.
-            // Simpler to use the more specific summernote regex if that's what we inject.
-            processedHtml = Regex.Replace(processedHtml, @"<<.*?>>", "", RegexOptions.Singleline); // Clean up leftover <<...>>
-
-            return processedHtml;
-        }
-
-        // Helper to build HTML structure from Fabric.js JSON.
-        // This method will generate the base HTML with images and styled divs for text placeholders.
-        private string BuildHtmlFromFabricJson(JsonElement fabricRoot, JsonElement jsonData)
-        {
-            string htmlOutput = "";
-            string? imageUrl = null;
-            List<FabricTextObject> textElements = new List<FabricTextObject>();
-
-            // Parse Fabric.js objects
-            if (fabricRoot.TryGetProperty("objects", out JsonElement objectsElement) && objectsElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (JsonElement obj in objectsElement.EnumerateArray())
-                {
-                    if (obj.TryGetProperty("type", out JsonElement typeElement))
-                    {
-                        string objType = typeElement.GetString() ?? "";
-
-                        if (objType == "image")
-                        {
-                            if (imageUrl == null && obj.TryGetProperty("url", out JsonElement urlElement))
-                            {
-                                imageUrl = urlElement.GetString(); // Take the first image as background
-                            }
-                        }
-                        else if (objType == "textbox" || objType == "text")
-                        {
-                            if (obj.TryGetProperty("text", out JsonElement textElement) && !string.IsNullOrEmpty(textElement.GetString()))
-                            {
-                                string textValue = textElement.GetString()!;
-                                string placeholderName = "";
-                                string plainText = textValue; // Default to literal text
-
-                                // Check if this text object is a placeholder.
-                                // Assumes placeholders are in the format "<<FieldName>>" within the text property itself,
-                                // or that Fabric.js stores this info in a custom property (e.g., 'placeholderName').
-                                // For this implementation, we'll check if the text *is* or *contains* a placeholder.
-                                // A more robust solution would use a dedicated 'placeholderName' property from Fabric.js.
-
-                                // For simplicity, let's assume if text starts with << and ends with >>, it's a placeholder.
-                                // Or better, check for <<FieldName>> anywhere in the text.
-                                var match = StandardPlaceholderRegex.Match(textValue);
-                                if (match.Success && match.Groups.Count > 1)
-                                {
-                                    placeholderName = match.Groups[1].Value;
-                                    plainText = ""; // Indicate this is a placeholder, data will be injected later.
-                                }
-
-                                double left = obj.TryGetProperty("left", out JsonElement leftElem) ? leftElem.GetDouble() : 0;
-                                double top = obj.TryGetProperty("top", out JsonElement topElem) ? topElem.GetDouble() : 0;
-                                string fontFamily = obj.TryGetProperty("fontFamily", out JsonElement fontFamilyElem) ? fontFamilyElem.GetString() ?? "Arial" : "Arial";
-                                double fontSize = obj.TryGetProperty("fontSize", out JsonElement fontSizeElem) ? fontSizeElem.GetDouble() : 16;
-                                string fill = obj.TryGetProperty("fill", out JsonElement fillElem) ? fillElem.GetString() ?? "#000000" : "#000000";
-                                double angle = obj.TryGetProperty("angle", out JsonElement angleElem) ? angleElem.GetDouble() : 0;
-
-                                textElements.Add(new FabricTextObject
-                                {
-                                    PlaceholderName = placeholderName,
-                                    OriginalText = textValue, // Store original for non-placeholders or if fallback needed
-                                    Left = left,
-                                    Top = top,
-                                    FontFamily = fontFamily,
-                                    FontSize = fontSize,
-                                    Fill = fill,
-                                    Angle = angle
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Start building the final HTML structure for the Fabric.js layout.
-            // The container will manage the overall layout.
-            // We'll use inline styles for positioning and formatting.
-            htmlOutput += "<div class='fabric-layout-container' style='position: relative; width: 100%; height: auto; overflow: hidden;'>"; // Ensure container has relative positioning.
-
-            // Embed the base image as an <img> tag.
-            if (!string.IsNullOrEmpty(imageUrl))
-            {
-                // Apply styles to make the image cover the container.
-                // If the image is a data URL, it's directly embeddable.
-                // The `object-fit: cover;` property helps maintain aspect ratio.
-                htmlOutput += $"<img src='{imageUrl}' alt='Template Background Image' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;' />";
-            }
-            else
-            {
-                // If no image is defined in Fabric.js JSON, we might fall back to using
-                // the provided fallbackHtmlContent as the base structure, or just render text overlays.
-                // For now, we'll log a warning. The `ProcessTemplate` method will combine these parts.
-                Console.WriteLine("Warning: No base image found in Fabric.js JSON. Rendering text elements without background image.");
-                // Consider injecting fallbackHtmlContent here if it's meant to be a base layer when no image.
-                // For now, it's handled by the calling method (ProcessTemplate) deciding which HTML source to use primarily.
-            }
-
-            // For each text element (placeholder or static text):
-            foreach (var textObj in textElements)
-            {
-                // Construct the inline style string.
-                string style = $"position: absolute; left: {textObj.Left}px; top: {textObj.Top}px; ";
-                if (textObj.Angle != 0)
-                {
-                    // Apply rotation transform. Fabric.js typically rotates around the center.
-                    // CSS transform-origin defaults to 50% 50%. For simple text overlays, this might be okay.
-                    // If precise rotation around a specific point is needed, calculate transform-origin.
-                    style += $"transform: rotate({textObj.Angle}deg); ";
-                    // style += $"transform-origin: 0 0; "; // Example if rotating from top-left needed.
-                }
-                // Font family with fallback. Ensure `fontFamily` is a safe CSS value.
-                style += $"font-family: '{WebUtility.HtmlEncode(textObj.FontFamily)}', sans-serif; ";
-                // Font size with units. Ensure it's a valid CSS unit.
-                style += $"font-size: {textObj.FontSize}px; ";
-                // Color needs to be a valid CSS color string (hex, rgb, named color).
-                // Fabric.js 'fill' property is usually a hex string.
-                style += $"color: {WebUtility.HtmlEncode(textObj.Fill)}; ";
-                // Prevent text wrapping by default.
-                style += "white-space: nowrap; ";
-                // Handle potential text overflow or ensure it doesn't break layout.
-                style += "overflow: hidden; ";
-                // Ensure text doesn't interfere with pointer events on underlying elements if they were interactive.
-                style += "pointer-events: none; ";
-
-
-                // If it's a placeholder, we wrap it in a span with a special marker and attribute for ProcessTemplate.
-                if (!string.IsNullOrEmpty(textObj.PlaceholderName))
-                {
-                    // The content of the span will be the placeholder syntax itself, e.g., "<<FieldName>>".
-                    // ProcessTemplate will then find these spans using their class and data-placeholder-name attribute
-                    // and replace their inner content with the actual data, formatted according to the styles.
-                    htmlOutput += $"<div class='fabric-text-overlay' style='{style}'><span><<{textObj.PlaceholderName}>></span></div>";
-                }
-                else
-                {
-                    // If it's static text, display it directly. Escape it for safety.
-                    htmlOutput += $"<div class='fabric-text-static' style='{style}'>{WebUtility.HtmlEncode(textObj.OriginalText)}</div>";
-                }
-            }
-
-            htmlOutput += "</div>"; // Close fabric-layout-container.
-
-            return htmlOutput; // Return the generated HTML fragment.
-        }
-
-        // Helper class for Fabric.js text object properties.
-        private class FabricTextObject
-        {
-            public string PlaceholderName { get; set; } = "";
-            public string OriginalText { get; set; } = "";
-            public double Left { get; set; }
-            public double Top { get; set; }
-            public string FontFamily { get; set; } = "Arial";
-            public double FontSize { get; set; } = 16;
-            public string Fill { get; set; } = "#000000";
-            public double Angle { get; set; } = 0;
-        }
-
-
-        // This method is kept for standard HTML processing (when no FabricJson is used).
-        // It needs to be called by the main ProcessTemplate if FabricJson is null or invalid.
-        private string ProcessStandardHtml(string htmlContent, JsonElement jsonData)
-        {
-            string processedHtml = htmlContent;
-
-            // 1. Process Conditional Expressions (${{...}}) FIRST
-            processedHtml = ConditionalRegex.Replace(processedHtml, match =>
-            {
-                if (match.Groups.Count != 4) return match.Value;
-                string conditionPart = match.Groups[1].Value.Trim();
-                string truePart = match.Groups[2].Value;
-                string falsePart = match.Groups[3].Value;
-
-                bool conditionResult = false;
-                bool conditionEvaluated = false;
-
-                if (bool.TryParse(conditionPart, out bool literalBool))
-                {
-                    conditionResult = literalBool;
-                    conditionEvaluated = true;
-                }
-                else
-                {
-                    var conditionPlaceholderMatch = SummernotePlaceholderRegex.Match(conditionPart);
-                    if (conditionPlaceholderMatch.Success && conditionPlaceholderMatch.Groups.Count > 1)
-                    {
-                        string fieldName = conditionPlaceholderMatch.Groups[1].Value;
-                        if (jsonData.ValueKind == JsonValueKind.Object && jsonData.TryGetProperty(fieldName, out JsonElement conditionValueElement))
-                        {
-                            if (conditionValueElement.ValueKind == JsonValueKind.True) { conditionResult = true; conditionEvaluated = true; }
-                            else if (conditionValueElement.ValueKind == JsonValueKind.False) { conditionResult = false; conditionEvaluated = true; }
-                            else if (conditionValueElement.ValueKind == JsonValueKind.String)
-                            {
-                                if (bool.TryParse(conditionValueElement.GetString(), out bool parsedStringBool))
-                                {
-                                    conditionResult = parsedStringBool;
-                                    conditionEvaluated = true;
-                                }
-                            }
-                            if (!conditionEvaluated) { conditionResult = false; conditionEvaluated = true; }
-                        }
-                        else { conditionResult = false; conditionEvaluated = true; }
-                    }
-                    if (!conditionEvaluated) { conditionResult = false; }
-                }
-                return conditionResult ? truePart : falsePart;
-            });
-
-            // 2. Process Simple Placeholders (<<FieldName>>) AFTER conditionals.
-            // This needs to handle both regular <<FieldName>> and the ones generated by Fabric.js: <span class='fabric-text-overlay'><span><<FieldName>></span></span>
-            // The original ProcessTemplate method needs to be aware of the new span structure.
-            // We'll need a new regex or update the existing one for ProcessTemplate if it directly finds placeholders.
-            // The current ProcessTemplate uses SummernotePlaceholderRegex to find <<FieldName>> in plain HTML.
-            // For the Fabric.js generated HTML, we have `<span><<FieldName>></span>` inside a div.
-            // The simple `<<FieldName>>` replacement within the span is handled by the current regex correctly.
-            // If FabricJson styling is applied to the span, it needs to be preserved.
-
-            // Process any remaining standard placeholders in the HTML content.
-            // The challenge is to replace <<FieldName>> *only* within static HTML if FabricJson defines the layout.
-            // Or, ensure the generated Fabric HTML has placeholders that ProcessTemplate can target.
-
-            // Let's assume the FabricJson processing injects `<span><<FieldName>></span>` tags with appropriate styling.
-            // Then, ProcessTemplate's existing logic should replace those tags correctly.
-
-            processedHtml = SummernotePlaceholderRegex.Replace(processedHtml, match =>
-            {
-                if (match.Groups.Count > 1 && match.Groups[1].Success)
-                {
-                    string fieldName = match.Groups[1].Value;
-                    string replacementValue = "";
-
-                    if (jsonData.ValueKind == JsonValueKind.Object && jsonData.TryGetProperty(fieldName, out JsonElement valueElement))
-                    {
-                        replacementValue = valueElement.ValueKind switch
-                        {
-                            JsonValueKind.String => valueElement.GetString() ?? "",
-                            JsonValueKind.Number => valueElement.GetRawText(),
-                            JsonValueKind.True => "true",
-                            JsonValueKind.False => "false",
-                            JsonValueKind.Null => "",
-                            JsonValueKind.Object or JsonValueKind.Array => valueElement.GetRawText(),
-                            _ => ""
-                        };
-                        replacementValue = WebUtility.HtmlEncode(replacementValue);
-                    }
-                    return replacementValue;
-                }
-                return match.Value;
-            });
-
-            // Clean up any leftover placeholder syntax that wasn't replaced.
-            // This must also match the format that could appear after Fabric processing.
-            processedHtml = Regex.Replace(processedHtml, @"<<.*?>>", "", RegexOptions.Singleline);
-
-            return processedHtml;
-        }
-
-
-        // Main method to process template with data.
-        // This method will now be responsible for selecting the primary HTML source (Fabric or fallback)
-        // and then processing placeholders within it.
-        public string ProcessTemplate(string? fallbackHtmlContent, string? fabricJson, JsonElement jsonData)
-        {
-            string baseHtmlForProcessing = fallbackHtmlContent ?? ""; // Default to fallback HTML.
-
-            // If Fabric JSON is provided and valid, use it to generate the primary HTML structure.
-            if (!string.IsNullOrWhiteSpace(fabricJson))
-            {
-                try
-                {
-                    using JsonDocument fabricDoc = JsonDocument.Parse(fabricJson);
-                    JsonElement fabricRoot = fabricDoc.RootElement;
-
-                    if (fabricRoot.ValueKind == JsonValueKind.Object)
-                    {
-                        // Generate HTML structure from Fabric.js JSON.
-                        // This generated HTML will include images and styled spans for text placeholders.
-                        // The text in these spans will be like `<span><<FieldName>></span>`.
-                        string generatedFabricHtml = BuildHtmlFromFabricJson(fabricRoot, jsonData);
-                        if (!string.IsNullOrEmpty(generatedFabricHtml))
-                        {
-                            baseHtmlForProcessing = generatedFabricHtml; // Use Fabric-generated HTML as base.
-                        }
-                        else
-                        {
-                            // Fabric JSON was valid but produced empty HTML. Fallback.
-                            Console.WriteLine("Warning: Fabric.js JSON processed but resulted in empty HTML. Falling back to fallbackHtmlContent.");
-                        }
-                    }
-                    else
-                    {
-                        // Fabric JSON was not a valid object. Fallback.
-                        Console.WriteLine("Warning: Fabric.js JSON is not a valid object. Falling back to fallbackHtmlContent.");
-                    }
-                }
-                catch (JsonException jEx)
-                {
-                    Console.WriteLine($"Error parsing Fabric.js JSON: {jEx.Message}. Falling back to fallbackHtmlContent.");
-                    // Fallback if Fabric JSON parsing fails.
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"An unexpected error occurred processing Fabric.js JSON: {ex.Message}. Falling back to fallbackHtmlContent.");
-                    // Fallback for other processing errors.
-                }
-            }
-
-            // Now, process the determined base HTML content (either from FabricJson or fallbackHtmlContent)
-            // for standard placeholders (<<FieldName>>) and conditionals (${{...}}).
-            // The placeholders generated by BuildHtmlFromFabricJson (like `<span><<FieldName>></span>`)
-            // will be processed by this standard logic.
-            return ProcessStandardHtml(baseHtmlForProcessing, jsonData);
-        }
-
-
-        // The following methods (ResolveParameters, GenerateExampleJson, IsValidJson, ExecuteScalarSql)
-        // are helper methods and remain as they were.
-        // ResolveParameters is used for <<param:parameterName>> within SQL strings.
-        // GenerateExampleJson needs to potentially use FabricJson to create a better example.
-
-        // Helper to resolve <<param:parameterName>> placeholders within a string.
-        private string ResolveParameters(string inputString, JsonElement insideParameters)
-        {
-            string processedString = inputString;
-            if (insideParameters.ValueKind != JsonValueKind.Object)
-            {
-                Console.WriteLine("Warning: Provided inside parameters are not a JSON object. Parameter placeholders will not be resolved.");
-                processedString = ParameterPlaceholderRegex.Replace(processedString, "''");
-                return processedString;
-            }
-            var parameterMatches = ParameterPlaceholderRegex.Matches(inputString);
-            foreach (Match match in parameterMatches)
-            {
-                if (match.Groups.Count > 1 && match.Groups[1].Success)
-                {
-                    string placeholder = match.Value;
-                    string parameterName = match.Groups[1].Value;
-                    string replacementValue = "''";
-                    bool parameterFound = false;
-                    if (insideParameters.TryGetProperty(parameterName, out JsonElement paramValueElement))
-                    {
-                        parameterFound = true;
-                        replacementValue = paramValueElement.ValueKind switch
-                        {
-                            JsonValueKind.String => $"'{paramValueElement.GetString()?.Replace("'", "''")}'",
-                            JsonValueKind.Number => paramValueElement.GetRawText(),
-                            JsonValueKind.True => "1",
-                            JsonValueKind.False => "0",
-                            JsonValueKind.Null => "NULL",
-                            JsonValueKind.Object or JsonValueKind.Array => "''",
-                            _ => "''"
-                        };
-                        if (paramValueElement.ValueKind == JsonValueKind.String && paramValueElement.GetString() == null)
-                        {
-                            replacementValue = "NULL";
-                        }
-                    }
-                    if (!parameterFound)
-                    {
-                        Console.WriteLine($"Warning: Inside parameter '<<param:{parameterName}>>' not found in provided parameters. Replacing with empty string literal.");
-                    }
-                    processedString = processedString.Replace(placeholder, replacementValue);
-                }
-                else
-                {
-                    Console.WriteLine($"Warning: Malformed parameter placeholder match: '{match.Value}'. Skipping resolution.");
-                }
-            }
-            return processedString;
-        }
-
-        // Generates an example JSON string from <<FieldName>> placeholders.
-        // For Fabric.js, this should ideally parse FabricJson and extract placeholders from text elements.
-        public string GenerateExampleJson(string htmlContent)
-        {
-            var exampleData = new Dictionary<string, string>();
-            var placeholderMatches = SummernotePlaceholderRegex.Matches(htmlContent); // Use Summernote regex
-
-            foreach (Match match in placeholderMatches)
-            {
-                if (match.Groups.Count > 1 && match.Groups[1].Success)
-                {
-                    string fieldName = match.Groups[1].Value;
-                    if (!exampleData.ContainsKey(fieldName))
-                    {
-                        exampleData.Add(fieldName, "");
-                    }
-                }
-            }
-
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            return JsonSerializer.Serialize(exampleData, options);
-        }
-
-        public bool IsValidJson(string? json)
-        {
-            if (string.IsNullOrWhiteSpace(json)) return false;
-            try
-            {
-                using JsonDocument doc = JsonDocument.Parse(json);
-                if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
-            }
-            catch (JsonException)
-            {
-                return false;
-            }
-            return true;
-        }
-
-        // This method needs to be called with actual JSON data to produce sample output.
-        // The current implementation assumes it's called with HTML content to extract placeholders.
-        // For Fabric.js JSON, a separate parsing method would extract text elements and their placeholders.
-        // This method might need an overload or adjustment if it's also meant to generate example JSON from FabricJson.
-        // For now, it only processes standard HTML.
-
-        // If GenerateExampleJson is called with FabricJson, it won't work as expected.
-        // The logic to generate example JSON from FabricJson would need to be added here or called separately.
-        // Let's assume GenerateExampleJson is called ONLY with htmlContent for now.
-
-        public JsonElement ResolveInternalData(string? internalDataConfigJson, JsonElement insideParameters)
-        {
-            var resolvedData = new Dictionary<string, object?>();
-            if (string.IsNullOrWhiteSpace(internalDataConfigJson))
-            {
-                using var doc = JsonDocument.Parse("{}");
-                return doc.RootElement.Clone();
-            }
-            try
-            {
-                using JsonDocument doc = JsonDocument.Parse(internalDataConfigJson);
-                if (doc.RootElement.ValueKind != JsonValueKind.Object)
-                {
-                    Console.WriteLine("InternalDataConfigJson is not a valid JSON object.");
-                    using var emptyDoc = JsonDocument.Parse("{}");
-                    return emptyDoc.RootElement.Clone();
-                }
-                foreach (JsonProperty property in doc.RootElement.EnumerateObject())
-                {
-                    string fieldName = property.Name;
-                    string configValue = property.Value.GetString() ?? "";
-                    object? resolvedValue = "--";
-                    var sqlMatch = Regex.Match(configValue.Trim(), @"^sql\s*\(\s*'(.*)'\s*,\s*'(.*)'\s*\)$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                    if (sqlMatch.Success)
-                    {
-                        string sqlQuery = sqlMatch.Groups[1].Value.Replace("''", "'");
-                        string parameterizedSqlQuery = ResolveParameters(sqlQuery, insideParameters);
-                        string dbAlias = sqlMatch.Groups[2].Value;
-                        try
-                        {
-                            resolvedValue = ExecuteScalarSql(dbAlias, parameterizedSqlQuery);
-                            if (resolvedValue == DBNull.Value || resolvedValue == null)
-                            {
-                                resolvedValue = "--";
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error executing SQL query '{parameterizedSqlQuery}' for field '{fieldName}' from db '{dbAlias}': {ex.Message}");
-                            resolvedValue = "--";
-                        }
-                    }
-                    else
-                    {
-                        resolvedValue = ResolveParameters(configValue, insideParameters);
-                    }
-                    resolvedData[fieldName] = resolvedValue;
-                }
-                var options = new JsonSerializerOptions { WriteIndented = false };
-                string resolvedJsonString = JsonSerializer.Serialize(resolvedData, options);
-                using var resolvedJsonDoc = JsonDocument.Parse(resolvedJsonString);
-                return resolvedJsonDoc.RootElement.Clone();
-            }
-            catch (JsonException jEx)
-            {
-                Console.WriteLine($"Error parsing InternalDataConfigJson: {jEx.Message}");
-                using var emptyDoc = JsonDocument.Parse("{}");
-                return emptyDoc.RootElement.Clone();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"An unexpected error occurred resolving internal data: {ex.Message}");
-                using var emptyDoc = JsonDocument.Parse("{}");
-                return emptyDoc.RootElement.Clone();
-            }
-        }
-
-        private object? ExecuteScalarSql(string dbAlias, string sqlQuery)
-        {
-            var connectionStringsSection = _configuration.GetSection("InternalDataConnections");
-            string? connectionString = connectionStringsSection[dbAlias];
-
-            if (string.IsNullOrWhiteSpace(connectionString))
-            {
-                Console.WriteLine($"Connection string for alias '{dbAlias}' not found in InternalDataConnections.");
-                return null;
-            }
-
-            using (var connection = new SqlConnection(connectionString))
-            {
-                using (var command = new SqlCommand(sqlQuery, connection))
-                {
-                    connection.Open();
-                    object? result = command.ExecuteScalar();
-                    return result;
-                }
-            }
-        }
+    function closePricePredictionModal() {
+         pricePredictionModal.classList.remove('show'); // Assuming CSS transition class exists
+         // Hide after transition
+         setTimeout(() => {
+            pricePredictionModal.style.display = "none";
+            predictedPriceText.textContent = "The estimated price range for this item is..."; // Reset text
+         }, 300); // Match CSS transition duration
     }
-}
-```
+  
+    // Resets the visual search modal to its initial state
+    function clearVisualSearchState() {
+      errorMsg.textContent = "";
+      previewArea.innerHTML = "";
+      actionsContainer.style.display = "none";
+      dropZone.style.display = "block";
+      dropZone.classList.remove("drag-over");
+      fileInput.value = null;
+      uploadedImageData = null;
+       // Reset action buttons state if needed
+      findSimilarBtn.disabled = false;
+      predictPriceBtn.disabled = false;
+    }
+  
+    function handleFile(file) {
+      clearVisualSearchState();
+  
+      if (!file) {
+        errorMsg.textContent = "No file selected or dropped.";
+        return;
+      }
+  
+      const acceptedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!acceptedTypes.includes(file.type)) {
+        errorMsg.textContent = `Unsupported file type. Please upload JPEG, PNG, GIF, or WebP.`; // Added GIF
+        return;
+      }
+  
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        errorMsg.textContent = `File is too large. Max size is 5MB.`;
+        return;
+      }
+      
+       // --- Show Preview ---
+       const reader = new FileReader();
+       reader.onload = function (e) {
+           uploadedImageData = e.target.result;
+           const img = document.createElement('img');
+           img.src = uploadedImageData;
+           img.alt = "Image preview";
+           previewArea.appendChild(img);
+           dropZone.style.display = "none"; // Hide drop zone
 
----
+           // Show actions after successful preview
+           actionsContainer.style.display = "flex"; 
+       };
+       reader.onerror = function () {
+         errorMsg.textContent = "Could not read the selected file.";
+         uploadedImageData = null; // Ensure data is null on error
+       };
+       reader.readAsDataURL(file);
+    }
 
-**17. `PDFGenerator.Web\Controllers\TemplateController.cs`**
-(Added logic for "Download Test PDF" to use versionType from query string, and modified revert logic to handle versionReferenceType)
+    // Function to call the price prediction API
+    async function predictPriceFromAPI(imageData) {
+        // Show loading state in the price modal
+        openPricePredictionModal("Analyzing image...");
 
-```csharp
-// File: Controllers/TemplateController.cs
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using PDFGenerator.Web.Dtos.Template;
-using PDFGenerator.Web.Dtos.TemplateVersion;
-using PdfGeneratorApp.Common;
-using PdfGeneratorApp.Data;
-using PdfGeneratorApp.Handlers;
-using PDFGenerator.Web.Handlers; // For new handlers
-using System.Collections.Generic; // For List<T>
-using System.Linq; // For .Select()
+        try {
+            // API expects POST with JSON body containing 'image'
+            const response = await fetch(`${API_BASE_URL}/predict-price`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Add any other required headers (e.g., API key)
+                },
+                body: JSON.stringify({
+                    image: imageData // Sending Base64 data
+                })
+            });
 
-namespace PdfGeneratorApp.Controllers
-{
-    [Authorize]
-    public class TemplateController : Controller
-    {
-        private readonly ApplicationDbContext _context;
-        private readonly IConfiguration _configuration;
-
-        private readonly IGetTemplateDesignHandler _getTemplateDesignHandler;
-        private readonly IUpdateTemplateHandler _updateTemplateHandler;
-        private readonly ICreateTemplateHandler _createTemplateHandler;
-        private readonly IGetTemplateHistoryHandler _getTemplateHistoryHandler;
-        private readonly IRevertTemplateHandler _revertTemplateHandler;
-        private readonly IPublishTemplateHandler _publishTemplateHandler;
-        private readonly ISoftDeleteTemplateVersionHandler _softDeleteTemplateVersionHandler;
-
-
-        public TemplateController(ApplicationDbContext context, IConfiguration configuration,
-                                  IGetTemplateDesignHandler getTemplateDesignHandler,
-                                  IUpdateTemplateHandler updateTemplateHandler,
-                                  ICreateTemplateHandler createTemplateHandler,
-                                  IGetTemplateHistoryHandler getTemplateHistoryHandler,
-                                  IRevertTemplateHandler revertTemplateHandler,
-                                  IPublishTemplateHandler publishTemplateHandler,
-                                  ISoftDeleteTemplateVersionHandler softDeleteTemplateVersionHandler)
-        {
-            _context = context;
-            _configuration = configuration;
-            _getTemplateDesignHandler = getTemplateDesignHandler;
-            _updateTemplateHandler = updateTemplateHandler;
-            _createTemplateHandler = createTemplateHandler;
-            _getTemplateHistoryHandler = getTemplateHistoryHandler;
-            _revertTemplateHandler = revertTemplateHandler;
-            _publishTemplateHandler = publishTemplateHandler;
-            _softDeleteTemplateVersionHandler = softDeleteTemplateVersionHandler;
-        }
-
-        private List<string> GetDatabaseAliases()
-        {
-            return _configuration.GetSection("InternalDataConnections").GetChildren().Select(c => c.Key).ToList();
-        }
-
-        // GET: /templates/design/{templateName}
-        [HttpGet("templates/design/{templateName}")]
-        public async Task<IActionResult> Design(string templateName)
-        {
-            Result<TemplateDetailDto> result = await _getTemplateDesignHandler.HandleAsync(templateName);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNotFound)
-                {
-                    return NotFound($"Template '{templateName}' not found.");
-                }
-                return StatusCode(500, result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+            // Handle non-OK HTTP responses
+            if (!response.ok) {
+                 const errorBody = await response.text(); // Get response body for more details
+                throw new Error(`HTTP error! status: ${response.status} - ${errorBody}`);
             }
 
-            ViewBag.DatabaseAliases = GetDatabaseAliases();
-            return View(result.Data);
-        }
-
-        // POST: /templates/design/{templateName}
-        [HttpPost("templates/design/{templateName}")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Design(string templateName, [Bind("Id,Description,HtmlContent,ExampleJsonData,InternalDataConfigJson,FabricJson")] TemplateUpdateDto templateDto) // Added FabricJson to Bind
-        {
-             Result<TemplateDetailDto> detailDtoOnError = await _getTemplateDesignHandler.HandleAsync(templateName);
-             if (detailDtoOnError.IsCompleteSuccessfully && detailDtoOnError.Data != null)
-             {
-                 detailDtoOnError.Data.Description = templateDto.Description;
-                 detailDtoFormatting.Data.HtmlContent = templateDto.HtmlContent;
-                 detailDtoOnError.Data.ExampleJsonData = templateDto.ExampleJsonData;
-                 detailDtoOnError.Data.InternalDataConfigJson = templateDto.InternalDataConfigJson;
-                 detailDtoOnError.Data.FabricJson = templateDto.FabricJson; // Also update FabricJson in view data for error display
-             }
-             ViewBag.DatabaseAliases = GetDatabaseAliases();
-
-            if (!ModelState.IsValid) return View(detailDtoOnError.Data);
+            const result = await response.json(); // Parse the JSON response
             
-            var result = await _updateTemplateHandler.HandleAsync(templateDto);
+            // Handle API-level errors (if isCompleteSuccessfully is false or has errorMessages)
+            if (result.isCompleteSuccessfully === false) {
+                 throw new Error(`API error: ${result.errorMessages ? result.errorMessages.join(', ') : 'Unknown API error'}`);
+            }
+            // Check specific structure for price prediction result
+             if (result.predicted_price_egp === undefined || result.predicted_price_egp === null) {
+                 throw new Error("API did not return a predicted price.");
+             }
 
-            if (!result.IsCompleteSuccessfully)
-            {
-                ModelState.AddModelError("", result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-                return View(detailDtoOnError.Data);
+
+            // Display the predicted price
+            predictedPriceText.textContent = `Estimated Price: ${result.predicted_price_egp.toFixed(2)} EGP`; // Format price
+
+
+        } catch (error) {
+            console.error('Price prediction error:', error);
+            predictedPriceText.textContent = `Error predicting price: ${error.message}`;
+            // Keep the price modal open to show the error
+        }
+    }
+
+    // Function to call the visual search API
+    async function searchSimilarFromAPI(imageData) {
+         // Show loading message in the visual search modal itself before redirect
+         errorMsg.textContent = "Searching for similar items..."; // Replaces any file error
+         // Optionally disable buttons during search
+         findSimilarBtn.disabled = true;
+         predictPriceBtn.disabled = true;
+
+
+        try {
+            // Store the image for the results page
+            // We store the raw image data so resultpage can display the query image
+            sessionStorage.setItem('visualSearchQueryImage', imageData);
+            
+            // API expects POST with JSON body containing 'image'
+            const response = await fetch(`${API_BASE_URL}/search-by-image`, { // Or maybe /find_similar if that's the POST endpoint
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Add any other required headers
+                },
+                body: JSON.stringify({
+                    image: imageData // Sending Base64 data
+                })
+            });
+
+             // Handle non-OK HTTP responses
+            if (!response.ok) {
+                 const errorBody = await response.text();
+                throw new Error(`HTTP error! status: ${response.status} - ${errorBody}`);
             }
 
-            TempData["Message"] = $"Template '{templateName}' updated. New Testing Version is {result.Data}.";
-            return RedirectToAction(nameof(Design), new { templateName = templateName });
-        }
-
-        // GET: /templates/create
-        public IActionResult Create()
-        {
-            ViewBag.DatabaseAliases = GetDatabaseAliases();
-            // Initialize FabricJson as empty JSON object for a new template
-            return View(new TemplateCreateDto { HtmlContent = "", FabricJson = "{}" });
-        }
-
-        // POST: /templates/create
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Name,HtmlContent,Description,ExampleJsonData,InternalDataConfigJson,FabricJson")] TemplateCreateDto templateDto) // Added FabricJson to Bind
-        {
-            if (!ModelState.IsValid)
-            {
-                ViewBag.DatabaseAliases = GetDatabaseAliases();
-                return View(templateDto);
+            const result = await response.json();
+            
+            // Handle API-level errors
+            if (result.isCompleteSuccessfully === false) {
+                 throw new Error(`API error: ${result.errorMessages ? result.errorMessages.join(', ') : 'Unknown API error'}`);
             }
+             // Check specific structure for similar items result
+             if (!Array.isArray(result.data)) {
+                 throw new Error("API did not return a list of products.");
+             }
 
-            var result = await _createTemplateHandler.HandleAsync(templateDto);
 
-            if (!result.IsCompleteSuccessfully)
-            {
-                ModelState.AddModelError("", result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
+            // Store the search results for the results page
+            // Store result.data as this is the array of products
+            sessionStorage.setItem('visualSearchResults', JSON.stringify(result.data)); 
+            
+            // Navigate to results page after successful API call and data saving
+            window.location.href = 'resultpage.html'; 
+            
+        } catch (error) {
+            console.error('Visual search error:', error);
+             // Display error in the visual search modal
+            errorMsg.textContent = `Error searching: ${error.message}`; 
+            // Re-enable buttons and show drop zone
+            findSimilarBtn.disabled = false;
+            predictPriceBtn.disabled = false;
+            dropZone.style.display = "block"; 
+            actionsContainer.style.display = "none"; // Hide actions
+            previewArea.innerHTML = ""; // Clear preview
+            uploadedImageData = null; // Clear data
+            fileInput.value = null; // Reset file input
 
-                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNameExists)
-                {
-                    ModelState.AddModelError("Name", result.ErrorMessages);
+        }
+    }
+  
+    // --- EVENT LISTENERS ---
+  
+    // Open visual search modal from various buttons
+    openModalButtons.forEach(btn => btn.addEventListener("click", (e) => { 
+        e.preventDefault(); 
+        e.stopPropagation(); 
+        // Close other modals before opening visual search
+        if (pricePredictionModal && pricePredictionModal.style.display !== 'none') closePricePredictionModal();
+        // Ensure auth modal is closed if open (auth.js also handles this)
+        const authModal = document.getElementById('authModal');
+        if (authModal && authModal.style.display !== 'none') authModal.style.display = 'none';
+
+        openVisualSearchModal(); 
+    }));
+  
+    // --- Listeners for closing modals
+    // Close visual search modal using its specific close button
+    if (closeVisualSearchBtn) { // Check if element exists
+        closeVisualSearchBtn.addEventListener("click", closeVisualSearchModal);
+    }
+    // Close visual search modal by clicking outside content
+    visualSearchModal.addEventListener("click", (e) => e.target === visualSearchModal && closeVisualSearchModal());
+
+    // Close price prediction modal using its specific close button
+    if (closePricePredictionBtn) { // Check if element exists
+        closePricePredictionBtn.addEventListener("click", closePricePredictionModal);
+    }
+    // Close price prediction modal by clicking outside content
+    pricePredictionModal.addEventListener("click", (e) => e.target === pricePredictionModal && closePricePredictionModal());
+
+
+    // --- Listeners for file handling
+    uploadBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+        handleFile(e.target.files[0]);
+        e.target.value = null; // Clear file input after handling
+    });
+    // Drag and Drop listeners
+    if(dropZone) {
+        dropZone.addEventListener("dragenter", (e) => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+        dropZone.addEventListener("dragover",  (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+        dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+        dropZone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropZone.classList.remove("drag-over");
+            handleFile(e.dataTransfer.files[0]);
+            e.dataTransfer.clearData(); // Clear drag data
+        });
+    }
+
+    // --- Listeners for the Visual Search action buttons
+    findSimilarBtn.addEventListener('click', () => {
+        if (uploadedImageData) {
+            searchSimilarFromAPI(uploadedImageData);
+        } else {
+            errorMsg.textContent = "An error occurred. Please upload the image again.";
+            actionsContainer.style.display = "none";
+            dropZone.style.display = "block";
+        }
+    });
+
+    predictPriceBtn.addEventListener('click', () => {
+        if (uploadedImageData) {
+            // Close the visual search modal before opening the price prediction modal
+            closeVisualSearchModal(); 
+            predictPriceFromAPI(uploadedImageData);
+        } else {
+            errorMsg.textContent = "An error occurred. Please upload the image again.";
+            actionsContainer.style.display = "none";
+            dropZone.style.display = "block";
+        }
+    });
+});
+
+```
+
+**--- START OF FILE predict-price.js ---**
+
+(Remove this file. Its functionality is covered by `product-grid.js` and price prediction API calls are in `popup.js`).
+
+**--- START OF FILE product-grid.js ---**
+
+(Add the `displayProducts` function definition here and keep the click handling for product cards).
+
+```javascript
+// Define displayProducts globally or ensure it's accessible where needed
+// Attaching to window makes it globally available across scripts
+window.displayProducts = function(products, containerId) {
+    const productGrid = document.getElementById(containerId);
+    if (!productGrid) {
+        console.error(`Product grid container with ID ${containerId} not found.`);
+        return;
+    }
+    productGrid.innerHTML = ''; // Clear existing products
+
+    // Remove loading spinner if it exists within this container
+     const loadingSpinner = productGrid.querySelector('.loading-spinner');
+     if(loadingSpinner) loadingSpinner.remove();
+
+
+    if (!Array.isArray(products) || products.length === 0) {
+        productGrid.innerHTML = '<div style="text-align: center; padding: 50px;"><p>No products available at the moment.</p></div>';
+        return;
+    }
+
+    products.forEach(product => {
+        const productElement = document.createElement('div');
+        productElement.classList.add('pro');
+        // Use nullish coalescing operator (??) for better handling of null/undefined
+        productElement.setAttribute('data-id', product.productId ?? product.id ?? ''); // Check for productId first, then id
+        productElement.setAttribute('data-name', product.name ?? 'Unknown Product');
+        productElement.setAttribute('data-price', product.price ?? '0');
+        productElement.setAttribute('data-desc', product.description ?? product.name ?? ''); // Use description or name
+        // Add category info as data attributes as well, useful for filtering/related products
+        productElement.setAttribute('data-category-id', product.categoryId ?? '');
+        productElement.setAttribute('data-category-name', product.categoryName ?? '');
+
+
+        const productId = productElement.dataset.id; // Use ID from data attribute after setting
+        const productName = productElement.dataset.name;
+        const productPrice = productElement.dataset.price;
+        const productBrand = product.brand || productElement.dataset.categoryName || 'FashioNear'; // Prefer brand if available, else category name
+        const productImage = product.image ?? product.imageUrl ?? product.imgSrc ?? 'Images/placeholder.png'; // Check multiple possible image keys
+
+
+        productElement.innerHTML = `
+            <div class="pro-img-container">
+                <img src="${productImage}" alt="${productName}" onerror="this.src='Images/placeholder.png'">
+            </div>
+            <div class="des">
+                <span>${productBrand}</span>
+                <h5>${productName}</h5>
+                <div class="star">
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                    <i class="fas fa-star"></i>
+                </div>
+                <h4>${productPrice}LE</h4>
+            </div>
+            <button class="add-to-cart-btn"><i class="fas fa-shopping-cart cartt"></i></button>
+        `;
+        productGrid.appendChild(productElement);
+    });
+};
+
+
+document.addEventListener('DOMContentLoaded', () => {
+
+    // updateCartIcon definition is now the first thing in this file
+    // and it is called here to ensure it runs on DOMContentLoaded
+
+    // Select ALL possible product grid containers on any page
+    const productGrids = document.querySelectorAll('#product-grid, #related-product-grid');
+
+    if (productGrids.length > 0) {
+        productGrids.forEach(grid => {
+            // Use one listener on the grid for better performance (event delegation)
+            grid.addEventListener('click', (e) => {
+                const productCard = e.target.closest('.pro');
+                if (!productCard) return; // Exit if the click was not inside a product card
+
+                const addToCartBtn = e.target.closest('.add-to-cart-btn');
+
+                if (addToCartBtn) {
+                    // --- A) HANDLE "ADD TO CART" CLICK ---
+                    e.preventDefault(); // Stop any other actions
+                    e.stopPropagation(); // Prevent the click from bubbling up and triggering card navigation
+
+
+                    const product = {
+                         // Ensure IDs and prices are read from data attributes as strings and converted
+                        id: productCard.dataset.id, 
+                        name: productCard.dataset.name,
+                        price: parseFloat(productCard.dataset.price),
+                        imgSrc: productCard.querySelector('.pro-img-container img')?.src, // Get from image container
+                        // Size needs to be selected on the s product page.
+                        // When adding from grid, a default is often used or size selection is not possible.
+                        // Assuming default 'M' or requiring s product page for size selection.
+                        // Keeping 'M' for now based on previous men-page-script.js logic
+                        size: 'M', 
+                        quantity: 1
+                    };
+
+                    // Basic validation
+                    if (!product.id || !product.name || isNaN(product.price)) {
+                         console.error("Product data missing or invalid for Add to Cart:", productCard.dataset);
+                         // Optionally show a user-friendly message
+                         alert("Error adding product to cart. Missing data.");
+                         return;
+                    }
+                    
+                    let cart = JSON.parse(localStorage.getItem('shoppingCart')) || [];
+                    // Find existing item by ID *and* size
+                    let existingItem = cart.find(item => item.id === product.id && item.size === product.size);
+                    
+                    if (existingItem) {
+                        existingItem.quantity++;
+                    } else {
+                        cart.push(product);
+                    }
+                    
+                    localStorage.setItem('shoppingCart', JSON.stringify(cart));
+                    window.updateCartIcon(); // Update the navbar icon
+
+                    // Provide visual feedback
+                    const originalIconHTML = addToCartBtn.innerHTML; // Store original icon HTML
+                    addToCartBtn.innerHTML = `<i class="fas fa-check"></i>`; // Change icon to checkmark
+                    addToCartBtn.disabled = true; // Disable button temporarily
+
+                    setTimeout(() => { // Set a timer to revert the button state
+                        addToCartBtn.innerHTML = originalIconHTML; // Restore original icon
+                        addToCartBtn.disabled = false; // Re-enable button
+                    }, 1500); // Timer duration: 1500 milliseconds (1.5 seconds)
+
+                } else {
+                    // --- B) HANDLE CLICKING THE CARD TO VIEW DETAILS --- (if not the cart button)
+                    // Get product data from data attributes
+                    const id = productCard.dataset.id;
+                    const name = productCard.dataset.name;
+                    const price = productCard.dataset.price;
+                    const desc = productCard.dataset.desc;
+                     // Get image source from the img tag inside the image container div
+                    const imgSrc = productCard.querySelector('.pro-img-container img')?.src; 
+                    
+                    // Essential check to ensure the card has data to send
+                    if (!id || !name || !price || !imgSrc) {
+                         console.error("Cannot navigate, essential product data is missing from the card:", productCard.dataset);
+                         alert("Error loading product details. Missing data.");
+                         return;
+                    }
+
+                    // Build a URL with the product data as search parameters.
+                    // encodeURIComponent is crucial to handle spaces and special characters.
+                    const url = `sproduct.html?id=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}&price=${encodeURIComponent(price)}&desc=${encodeURIComponent(desc)}&img=${encodeURIComponent(imgSrc)}`;
+                    
+                    // Redirect the user to the single product page
+                    window.location.href = url;
                 }
-                else if (result.ErrorMessages == ErrorMessageUserConst.InternalDataConfigInvalidJson || result.ErrorMessages == ErrorMessageUserConst.InternalDataConfigNotObject)
-                {
-                    ModelState.AddModelError(nameof(TemplateCreateDto.InternalDataConfigJson), result.ErrorMessages);
-                }
+            });
+        });
+    }
+});
+```
 
-                ViewBag.DatabaseAliases = GetDatabaseAliases();
-                return View(templateDto);
-            }
+**--- START OF FILE resultpage.js ---**
 
-            TempData["Message"] = $"Template '{result.Data}' created successfully!";
-            return RedirectToAction(nameof(Design), new { templateName = result.Data });
+(Modified to use the shared `displayProducts` function and handle API response structure)
+
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+    // DOM elements from resultpage.html
+    const queryImageContainer = document.getElementById('query-image-container');
+    const queryImageElement = document.getElementById('query-img');
+    const productGrid = document.getElementById('product-grid'); // The main grid for results
+
+    // Check if the shared displayProducts function is available
+    if (typeof displayProducts !== 'function') {
+        console.error("The required 'displayProducts' function is not available. Ensure product-grid.js is loaded.");
+        // Display a fallback message
+        if (productGrid) {
+             productGrid.innerHTML = '<div style="text-align: center; padding: 50px;"><p>Error loading display functions.</p></div>';
+        } else {
+             console.error("Product grid container not found.");
         }
+        return; // Stop execution if displayProducts is missing
+    }
 
-        // GET: /templates/{templateName}/history
-        [HttpGet("templates/{templateName}/history")]
-        public async Task<IActionResult> History(string templateName)
-        {
-            Result<TemplateDetailDto> templateDetailResult = await _getTemplateDesignHandler.HandleAsync(templateName);
-            if (!templateDetailResult.IsCompleteSuccessfully || templateDetailResult.Data == null)
-            {
-                 TempData["ErrorMessage"] = templateDetailResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-                 return RedirectToAction(nameof(Index), "Home");
+
+    // Check if all necessary elements are on the page for displaying the query image
+    if (!queryImageContainer || !queryImageElement || !productGrid) {
+        console.warn("Essential elements for result page display (query image or product grid) not fully found.");
+        // Continue if productGrid is found, as we might still display results even without the query image preview
+         if (!productGrid) return; // If product grid is also missing, nothing to do
+    }
+
+
+    // 1. Retrieve the image data URL from session storage
+    const uploadedImageData = sessionStorage.getItem('visualSearchQueryImage');
+    const searchResults = sessionStorage.getItem('visualSearchResults'); // This should be the API's 'data' array (JSON string)
+
+    // 2. If image data exists, display the image and make the container visible
+    if (uploadedImageData && queryImageElement && queryImageContainer) { // Check if elements exist before using them
+        queryImageElement.src = uploadedImageData;
+        queryImageContainer.style.display = 'block'; 
+        // Optionally remove after display, but keeping it allows user to see what they searched
+        // sessionStorage.removeItem('visualSearchQueryImage'); 
+    } else {
+        console.log("No visual search query image found in session storage or query image elements missing.");
+         // Optionally hide the query image section header if the image isn't shown
+         const queryHeader = document.querySelector('.result-page-header .container h4');
+         if (queryHeader) queryHeader.style.display = 'none';
+    }
+
+    // 3. Display search results if available
+    if (searchResults) {
+        try {
+            const products = JSON.parse(searchResults); // This should be the array of product objects
+            
+            // Check if the parsed data is an array
+             if (!Array.isArray(products)) {
+                 console.error('Search results from sessionStorage are not an array.');
+                 if (productGrid) {
+                     productGrid.innerHTML = '<div style="text-align: center; padding: 50px;"><p>Invalid search results data.</p></div>';
+                 }
+                 return;
+             }
+
+            // Use the shared displayProducts function
+            displayProducts(products, 'product-grid');
+            
+             // Optionally remove results from sessionStorage after display
+            // sessionStorage.removeItem('visualSearchResults'); 
+
+        } catch (error) {
+            console.error('Error parsing search results:', error);
+             if (productGrid) {
+                productGrid.innerHTML = `<div style="text-align: center; padding: 50px;"><p>Error displaying search results: ${error.message}</p></div>`;
             }
-
-            // Fetch version history (handler now returns only non-deleted versions)
-            var versionsResult = await _getTemplateHistoryHandler.HandleAsync(templateDetailResult.Data.Id);
-
-            if (!versionsResult.IsCompleteSuccessfully)
-            {
-                TempData["ErrorMessage"] = versionsResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-                ViewBag.TemplateVersions = new List<TemplateVersionDto>();
-            }
-            else
-            {
-                ViewBag.TemplateVersions = versionsResult.Data;
-            }
-
-            return View(templateDetailResult.Data);
         }
-
-        // POST: /templates/{TemplateName}/revert/{VersionNumber}
-        [HttpPost("templates/{TemplateName}/revert/{VersionNumber}")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Revert([FromRoute] TemplateRevertRequestDto routeRequest, [FromForm] string versionReferenceType)
-        {
-            var request = new TemplateRevertRequestDto
-            {
-                TemplateName = routeRequest.TemplateName,
-                VersionNumber = routeRequest.VersionNumber,
-                VersionReferenceType = versionReferenceType
-            };
-
-            var result = await _revertTemplateHandler.HandleAsync(request);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-                return RedirectToAction(nameof(History), new { templateName = request.TemplateName });
-            }
-
-            TempData["Message"] = $"Template '{request.TemplateName}' {request.VersionReferenceType} version successfully reverted to {result.Data}.";
-            return RedirectToAction(nameof(History), new { templateName = request.TemplateName });
-        }
-
-        // POST: /templates/{TemplateName}/publish
-        [HttpPost("templates/{TemplateName}/publish")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Publish([FromRoute] string templateName)
-        {
-            var result = await _publishTemplateHandler.HandleAsync(templateName);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-                return RedirectToAction(nameof(Design), new { templateName = templateName });
-            }
-
-            TempData["Message"] = $"Template '{templateName}' successfully published to Production Version {result.Data}.";
-            return RedirectToAction(nameof(Design), new { templateName = templateName });
-        }
-
-         // POST: /templates/versions/{versionId}/delete
-        [HttpPost("templates/versions/{VersionId}/delete")]
-        [ValidateAntiForgeryToken]
-         public async Task<IActionResult> SoftDeleteVersion([FromRoute] int versionId)
-         {
-             // Fetch the version to get template name for redirect, and check if it's currently referenced.
-             var versionEntity = await _context.TemplateVersions
-                                        .Include(tv => tv.Template)
-                                        .FirstOrDefaultAsync(tv => tv.Id == versionId);
-
-             if (versionEntity == null)
-             {
-                 TempData["ErrorMessage"] = $"Template version with ID {versionId} not found.";
-                 return RedirectToAction(nameof(Index), "Home"); // Or a more appropriate redirect.
-             }
-
-             string templateName = versionEntity.Template?.Name ?? ""; // Get template name for redirect.
-
-             // Call the soft delete handler.
-             var result = await _softDeleteTemplateVersionHandler.HandleAsync(versionId);
-
-             if (!result.IsCompleteSuccessfully)
-             {
-                 TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-             }
-             else
-             {
-                 TempData["Message"] = $"Template version {versionEntity.VersionNumber} for '{templateName}' soft-deleted successfully.";
-             }
-
-             // Redirect back to the History page of the template.
-             if (!string.IsNullOrEmpty(templateName))
-             {
-                return RedirectToAction(nameof(History), new { templateName = templateName });
-             }
-             else
-             {
-                 return RedirectToAction(nameof(Index), "Home"); // Fallback redirect.
-             }
+    } else {
+         console.log("No visual search results found in session storage.");
+         // Display an empty state message if no results were found
+         if (productGrid) {
+             productGrid.innerHTML = '<div style="text-align: center; padding: 50px;"><p>No similar items found.</p></div>';
          }
     }
-}
+
+    // The click handling for products (to add to cart or navigate to s product page)
+    // is handled by the product-grid.js script which should be included.
+
+});
 ```
 
----
+**--- START OF FILE search.js ---**
 
-**18. `PDFGenerator.Web\Views\Template\Design.cshtml`**
-(Modified to include Fabric.js JSON editor and potentially upload)
+(Remove this file. Its mobile search toggle is likely covered by `search-integration.js` and Navbar CSS. Its visual search file handling and preview logic that simply redirects without API calls is superseded by `popup.js`).
+
+**--- START OF FILE search-integration.js ---**
+
+(Modified to integrate the text search API call and use the shared `displayProducts` function)
+
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.querySelector('.search-input');
+    // Removed searchToggleBtn as it might conflict with mobile toggle logic elsewhere
+    // The mobile toggle animation itself is usually handled by CSS and a simple JS toggle class
+    // The actual search action should trigger on Enter keypress or a dedicated search button icon click
+
+    // Backend API base URL for AI endpoints
+    const API_BASE_URL = 'http://localhost:5000/api/ai'; // Adjust if your Flask app is different
+
+    // Check if the shared displayProducts function is available
+    if (typeof displayProducts !== 'function') {
+        console.error("The required 'displayProducts' function is not available. Ensure product-grid.js is loaded.");
+         // Find a grid container to display an error message if possible
+         const fallbackContainer = document.getElementById('product-grid') || document.querySelector('#related-product-grid');
+         if (fallbackContainer) {
+             fallbackContainer.innerHTML = '<div style="text-align: center; padding: 50px;"><p>Error loading display functions.</p></div>';
+         }
+        return; // Stop execution if displayProducts is missing
+    }
+
+
+    if (!searchInput) {
+        console.warn("Search input not found on this page. Text search functionality may be limited.");
+        // Continue as other parts of the script might still be relevant (like mobile toggle if kept)
+    }
+
+    // Function to perform text search using the API
+    async function performTextSearch(query) {
+        // Find the element where products are typically displayed on this page
+        // It might be #product-grid on category/all pages or #related-product-grid on s product page, etc.
+        // Let's target #product-grid as it's common on index/category pages.
+        const productGrid = document.getElementById('product-grid'); 
+
+        try {
+            if (!query.trim()) {
+                if (productGrid) {
+                     productGrid.innerHTML = '<div style="text-align: center; padding: 50px;"><p>Please enter a search query.</p></div>';
+                }
+                return;
+            }
+
+            // Show loading state in the relevant product grid
+            if (productGrid) {
+                productGrid.innerHTML = '<div class="loading-spinner" style="text-align: center; padding: 50px;"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Searching...</p></div>';
+                 // Update page title placeholder if it exists
+                 const pageTitle = document.querySelector('h3, h2');
+                 if (pageTitle) {
+                     // Optionally store original title to restore later if clearing search
+                     // pageTitle.dataset.originalText = pageTitle.textContent;
+                     pageTitle.textContent = `Searching for "${query}"...`;
+                 }
+            }
+
+
+            // API expects POST with JSON body containing 'query'
+            const response = await fetch(`${API_BASE_URL}/search`, { // Or maybe /search-by-text if that's the POST endpoint
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                     // Add any other required headers
+                },
+                body: JSON.stringify({
+                    query: query
+                })
+            });
+
+             // Handle non-OK HTTP responses
+            if (!response.ok) {
+                 const errorBody = await response.text(); // Get response body for more details
+                throw new Error(`HTTP error! status: ${response.status} - ${errorBody}`);
+            }
+
+            const result = await response.json(); // Parse the JSON response
+            
+            // Handle API-level errors (if isCompleteSuccessfully is false or has errorMessages)
+            if (result.isCompleteSuccessfully === false) {
+                 throw new Error(`API error: ${result.errorMessages ? result.errorMessages.join(', ') : 'Unknown API error'}`);
+            }
+             // Check specific structure for success data
+             if (!Array.isArray(result.data)) {
+                 throw new Error("API did not return a list of products in 'data'.");
+             }
+
+
+            // Update page title with actual results count or query
+            const pageTitle = document.querySelector('h3, h2');
+             if (pageTitle) {
+                 pageTitle.textContent = `Search Results for "${query}" (${result.data.length} found)`;
+             } else {
+                 // If no title element, just log to console
+                 console.log(`Search Results for "${query}" (${result.data.length} found)`);
+             }
+
+
+            // Display results using the shared function
+            displayProducts(result.data, 'product-grid'); // Assuming products go into #product-grid
+
+            // Optional: Redirect to a search results page if not already there
+            // if (window.location.pathname !== '/resultpage.html') {
+            //     // Store results in sessionStorage and redirect
+            //     sessionStorage.setItem('textSearchQuery', query); // Optional: save query
+            //     sessionStorage.setItem('textSearchResults', JSON.stringify(result.data));
+            //     window.location.href = 'resultpage.html';
+            //     return; // Stop here if redirecting
+            // }
+            
+        } catch (error) {
+            console.error('Text search error:', error);
+            // Display error message in the product grid area
+            if (productGrid) {
+                productGrid.innerHTML = `<div style="text-align: center; padding: 50px;"><p>Error searching: ${error.message}</p></div>`;
+                 // Reset title or show error in title
+                 const pageTitle = document.querySelector('h3, h2');
+                 if (pageTitle) pageTitle.textContent = `Search Error`; // Or include error message
+            } else {
+                 alert(`Error searching: ${error.message}`); // Fallback alert if no grid area
+            }
+            
+            // Optional: Redirect to an error/results page with error info
+            // if (window.location.pathname !== '/resultpage.html') {
+            //     sessionStorage.setItem('textSearchQuery', query);
+            //     sessionStorage.setItem('textSearchError', error.message);
+            //     window.location.href = 'resultpage.html';
+            // }
+        }
+    }
+
+    // Event listeners for search input (Enter key)
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            // Check if the key pressed was 'Enter' (key code 13 or key 'Enter')
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault(); // Prevent default form submission (if input is in a form)
+                const query = searchInput.value.trim();
+                // Only perform search if query is not empty after trimming
+                if (query) {
+                    performTextSearch(query);
+                }
+            }
+        });
+    }
+
+    // --- Mobile Search Bar Toggle (if not handled by search.js or Navbar CSS alone) ---
+    // Check if the toggle button and container exist before adding logic
+    const searchContainer = document.getElementById('search-container');
+    const searchToggleBtn = document.getElementById('search-toggle-btn');
+
+     if (searchToggleBtn && searchContainer) {
+         // Add click listener to the mobile search icon
+         searchToggleBtn.addEventListener('click', (event) => {
+             event.stopPropagation(); // Prevent click from bubbling up
+             searchContainer.classList.toggle('active'); // Toggle CSS class for animation
+         });
+
+         // Add a global click listener to close if clicking outside
+         document.addEventListener('click', (event) => {
+             if (searchContainer.classList.contains('active')) {
+                 if (!searchContainer.contains(event.target)) {
+                     searchContainer.classList.remove('active');
+                 }
+             }
+         });
+          // Prevent clicks inside the container from closing it
+         searchContainer.addEventListener('click', (event) => {
+             event.stopPropagation();
+         });
+     }
+    // --- End Mobile Toggle ---
+
+
+    // --- Initial Text Search from URL (if applicable) ---
+    // If this page is intended to display results based on a query passed via URL
+    // e.g., ?search=blue+shirt
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialSearchQuery = urlParams.get('search');
+    if (initialSearchQuery) {
+        if (searchInput) {
+             searchInput.value = initialSearchQuery; // Populate search input
+        }
+        performTextSearch(initialSearchQuery); // Perform the search
+    }
+
+});
+```
+
+**--- START OF FILE sproduct.js ---**
+
+(Modified to use the global `updateCartIcon` and clarify data source)
+
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+
+    // --- DOM ELEMENTS ---
+    const addToCartBtn = document.getElementById('addToCartBtn');
+    const productDetailsContainer = document.getElementById('productDetails'); // Container with data-id
+    const productNameEl = document.getElementById('product-name'); // Element displaying name
+    const productPriceEl = document.getElementById('product-price'); // Element displaying price
+    const productSizeEl = document.getElementById('productSize'); // Select element for size
+    const productQuantityEl = document.getElementById('productQuantity'); // Input for quantity
+    const mainImgEl = document.getElementById('MainImg'); // The main product image element
+    const cartCountEl = document.getElementById('cart-count'); // The cart count element (can be removed if using global function exclusively)
+
+    // --- FUNCTIONS ---
+    // Removed the duplicate local updateCartCount function.
+    // This script will now rely on the global window.updateCartIcon defined in auth.js or product-grid.js.
+
+
+    const handleAddToCart = () => {
+        // --- Get Product Info from the DOM ---
+        // This assumes products.js has run and populated these elements and the data-id attribute.
+        const productId = productDetailsContainer ? productDetailsContainer.dataset.id : null;
+        const productName = productNameEl ? productNameEl.textContent.trim() : 'Unknown Product';
+        const priceText = productPriceEl ? productPriceEl.textContent : '0'; 
+        // Attempt to extract number, remove " LE" and parse
+        const productPrice = parseFloat(priceText.replace(' LE', '')); 
+        const productSize = productSizeEl ? productSizeEl.value : null;
+        const productQuantity = productQuantityEl ? parseInt(productQuantityEl.value, 10) : 1;
+        const productImgSrc = mainImgEl ? mainImgEl.getAttribute('src') : 'Images/placeholder.png';
+
+        // --- Validation ---
+        if (!productId) {
+              console.error("Cannot add to cart: Product ID is missing.");
+              alert('Error adding product to cart. Missing product data.');
+              return;
+         }
+         if (productSize === 'Select Size' || productSize === null) { // Also check for null size
+            alert('Please select a size before adding to cart.');
+            return;
+        }
+        if (isNaN(productQuantity) || productQuantity < 1) {
+            alert('Please enter a valid quantity (1 or more).'); // More specific error message
+            return;
+        }
+         if (isNaN(productPrice) || productPrice < 0) { // Validate price data too
+             console.error("Invalid product price:", priceText);
+             alert('Error adding product to cart. Invalid price data.');
+             return;
+         }
+        
+        // --- Update Cart ---
+        let cart = JSON.parse(localStorage.getItem('shoppingCart')) || [];
+        // Check if an item with the same ID and size already exists
+        let existingItem = cart.find(item => String(item.id) === String(productId) && item.size === productSize); // Compare IDs as strings
+
+        if (existingItem) {
+            existingItem.quantity += productQuantity;
+        } else {
+            cart.push({
+                id: productId,
+                name: productName,
+                price: productPrice,
+                quantity: productQuantity,
+                imgSrc: productImgSrc,
+                size: productSize
+            });
+        }
+
+        // --- Save to localStorage and Update UI ---
+        localStorage.setItem('shoppingCart', JSON.stringify(cart));
+        
+        // Use the global updateCartIcon function
+        if (window.updateCartIcon) {
+             window.updateCartIcon();
+        } else if (cartCountEl) {
+             // Fallback to manually updating the count element if global function isn't found (less ideal)
+             const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+             cartCountEl.textContent = totalItems;
+        }
+
+
+        // --- Provide User Feedback on the Button ---
+        const originalText = addToCartBtn.innerHTML; // Store original button HTML
+        const feedbackText = `Added ${productQuantity} <i class="fas fa-check"></i>`; // Include quantity in feedback
+        addToCartBtn.innerHTML = feedbackText; 
+        addToCartBtn.disabled = true;
+        
+        setTimeout(() => {
+            addToCartBtn.innerHTML = originalText; 
+            addToCartBtn.disabled = false;
+        }, 2000);
+    };
+
+    // --- EVENT LISTENERS ---
+    if (addToCartBtn) {
+        addToCartBtn.addEventListener('click', handleAddToCart);
+    }
+
+    // --- INITIALIZATION ---
+    // The global updateCartIcon is likely called by auth.js or product-grid.js on DOMContentLoaded.
+    // No need to call updateCartCount here, just ensure the event listener is set up.
+    // updateCartCount(); 
+});
+```
+
+**Revised HTML Script Includes:**
+
+On pages that display product grids (`All.html`, `Men.html`, `Women.html`, `homepage.html`, `resultpage.html`), ensure these scripts are included (order matters):
 
 ```html
-@using PDFGenerator.Web.Dtos.Template
-@model TemplateDetailDto
-@{
-    ViewData["Title"] = $"Design Template: {Model.Name}";
-    var dbAliases = ViewBag.DatabaseAliases as List<string> ?? new List<string>();
-}
+<!-- Assuming Bootstrap JS is loaded before custom scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-<div class="container">
-    <div class="page-header">
-        <h1>@ViewData["Title"]</h1>
-        <p class="page-subtitle">Edit the HTML content and data configurations for the <strong>@Model.Name</strong> template.</p>
-    </div>
+<!-- Core Scripts -->
+<script src="auth.js"></script> <!-- Defines window.updateCartIcon -->
+<script src="product-grid.js"></script> <!-- Defines window.displayProducts and handles product card clicks -->
+<script src="api-integration.js"></script> <!-- Defines fetchProducts -->
+<script src="popup.js"></script> <!-- Handles Visual Search Modal and API calls -->
+<script src="search-integration.js"></script> <!-- Handles Text Search and API calls -->
+<script src="transitions.js"></script> <!-- If used for page transitions -->
 
-    <div class="row">
-        <div class="col-md-12">
-            <form asp-action="Design" asp-route-templateName="@Model.Name" method="post">
-                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                <input type="hidden" asp-for="Id" />
-
-                <div class="form-group mb-3">
-                    <label class="control-label">Template Name:</label>
-                    <input value="@Model.Name" class="form-control" readonly />
-                </div>
-
-                <!-- Display Testing and Production versions -->
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                         <label class="control-label">Testing Version:</label>
-                         <input value="@Model.TestingVersion" class="form-control" readonly />
-                    </div>
-                    <div class="col-md-6">
-                         <label class="control-label">Production Version:</label>
-                         <input value="@(Model.ProductionVersion?.ToString() ?? "N/A")" class="form-control" readonly />
-                    </div>
-                </div>
-
-                <div class="form-group mb-3">
-                    <label class="control-label">Last Modified:</label>
-                    <input value="@Model.LastModified.ToString("g")" class="form-control" readonly />
-                </div>
-
-                <div class="form-group mb-3">
-                    <label asp-for="Description" class="control-label"></label>
-                    <input asp-for="Description" class="form-control" />
-                    <span asp-validation-for="Description" class="text-danger"></span>
-                </div>
-
-                <!-- HTML Content section -->
-                <div class="mb-3">
-                    <h5>HTML Content Source:</h5>
-                    <div class="form-group mb-3">
-                        <label for="htmlEditor" class="control-label">Edit HTML Content:</label>
-                        <textarea asp-for="HtmlContent" class="form-control" rows="15" id="htmlEditor"></textarea>
-                        <span asp-validation-for="HtmlContent" class="text-danger"></span>
-                        <small class="form-text text-muted">Use <code>&lt;&lt;FieldName&gt;&gt;</code> for dynamic data placeholders and <code>${{condition ? true_part : false_part}}</code> for conditionals.</small>
-                    </div>
-                    <p class="text-center my-3">OR Upload an HTML file to populate the editor:</p>
-                    <div class="form-group mb-3">
-                        <label for="htmlFile" class="form-label">Upload HTML File (.html):</label>
-                        <input type="file" id="htmlFile" name="htmlFile" class="form-control" accept=".html,.htm" />
-                    </div>
-                    <div id="uploadStatus" class="mt-2"></div>
-                </div>
-
-                <hr class="my-4">
-
-                <h5>Visual Layout (Fabric.js JSON):</h5>
-                <p class="text-muted">Define the visual layout, including images and text placeholders, using Fabric.js. This will be overlaid on your HTML content.</p>
-
-                 <!-- Fabric.js JSON input group -->
-                 <div class="form-group mb-3">
-                    <label asp-for="FabricJson" class="control-label">Fabric.js JSON:</label>
-                    <textarea asp-for="FabricJson" class="form-control" rows="10" id="fabricJsonEditor"></textarea>
-                    <span asp-validation-for="FabricJson" class="text-danger"></span>
-                    <small class="form-text text-muted">Paste your Fabric.js canvas JSON here. Ensure text elements intended as placeholders are marked or named appropriately.</small>
-                 </div>
-                 <!-- Optional: Add a button to open a Fabric.js editor or a sample JSON -->
-                 <div class="mb-3">
-                     <button type="button" class="btn btn-secondary btn-sm" id="loadFabricSampleBtn">Load Sample Fabric JSON</button>
-                     <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFabricJsonBtn">Clear Fabric JSON</button>
-                 </div>
-
-                <!-- Data Configuration section -->
-                <h5>Data Configuration:</h5>
-                <p class="text-muted">Define how placeholders in the HTML content will be populated for "Outside" (API provided) and "Inside" (system sourced) data modes.</p>
-
-                 <!-- Placeholder list -->
-                 <div class="card card-body mb-3">
-                     <h6>Detected Placeholders:</h6>
-                     <ul id="placeholderList" class="list-inline mb-0 small text-muted">
-                         <li class="list-inline-item"><em>(Edit HTML or Load Fabric JSON to detect placeholders)</em></li>
-                     </ul>
-                 </div>
-
-                <div class="form-group mb-3">
-                    <label asp-for="ExampleJsonData" class="control-label">Example JSON Data (for "Outside" mode & docs):</label>
-                    <textarea asp-for="ExampleJsonData" class="form-control" rows="10" id="exampleJsonData"></textarea>
-                    <span asp-validation-for="ExampleJsonData" class="text-danger"></span>
-                    <small class="form-text text-muted">Provide a sample JSON payload for this template's API documentation and testing in "Outside" mode.</small>
-                </div>
-
-                 <div class="form-group mb-3">
-                    <label asp-for="InternalDataConfigJson" class="control-label">Internal Data Configuration (for "Inside" mode):</label>
-                    <textarea asp-for="InternalDataConfigJson" class="form-control" rows="10" id="internalDataConfigJson"></textarea>
-                    <span asp-validation-for="InternalDataConfigJson" class="text-danger"></span>
-                    <small class="form-text text-muted">
-                         Configure data sources for "Inside" mode. Use JSON format like <code>{ "FieldName": "StaticValue", "AnotherField": "sql('SELECT Value FROM Table WHERE ID = &lt;&lt;param:RecordId&gt;&gt;', 'databaseAlias')" }</code>.
-                         Use <code>&lt;&lt;param:parameterName&gt;&gt;</code> to include values passed to the API when using "Inside" mode.
-                         Available database aliases: @string.Join(", ", dbAliases).
-                    </small>
-                </div>
-
-                <div class="form-group mt-4">
-                    <input type="submit" value="Save Changes" class="btn btn-primary" />
-                    <a asp-action="Index" asp-controller="Home" class="btn btn-secondary">Back to Templates</a>
-                    <a asp-controller="Template" asp-action="History" asp-route-templateName="@Model.Name" class="btn btn-info">View History</a>
-                    <!-- Download Test PDF button - this should ideally test the *Testing* version -->
-                    <button type="button" id="downloadPdfBtn" class="btn btn-success">Download Test PDF (Testing Version)</button>
-                </div>
-                 @Html.AntiForgeryToken()
-            </form>
-        </div>
-    </div>
-</div>
-
-@section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-
-    <!-- Summernote CSS/JS -->
-    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
-    <!-- Lodash JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
-
-    <!-- Fabric.js Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
-
-    <script>
-        $(document).ready(function() {
-            var htmlEditor = $('#htmlEditor');
-            var fabricJsonEditor = $('#fabricJsonEditor');
-            var exampleJsonDataTextarea = $('#exampleJsonData');
-            var internalDataConfigJsonTextarea = $('#internalDataConfigJson');
-            var placeholderListElement = $('#placeholderList');
-
-            // Initialize Summernote editor
-            htmlEditor.summernote({
-                height: 600,
-                toolbar: [
-                    ['style', ['bold', 'italic', 'underline', 'clear']],
-                    ['font', ['strikethrough', 'superscript', 'subscript']],
-                    ['fontsize', ['fontsize']],
-                    ['color', ['color']],
-                    ['para', ['ul', 'ol', 'paragraph']],
-                    ['table', ['table']],
-                    ['insert', ['link', 'picture', 'video']],
-                    ['view', ['fullscreen', 'code', 'help']]
-                ],
-                 callbacks: {
-                    onChange: _.debounce(function(contents, $editable) {
-                         updatePlaceholdersList(contents); // Update placeholders from HTML editor
-                         // When HTML content changes, we don't auto-update Fabric JSON.
-                         // The user would need to explicitly save/load JSON or trigger placeholder detection on Fabric.
-                    }, 500)
-                 }
-            });
-
-            // Helper to update the detected placeholders list (reads from HTML editor and potentially Fabric JSON)
-            function updatePlaceholdersList(html) {
-                 const placeholderRegex = /&lt;&lt;(\w+)&gt;&gt;/g; // Matches HTML entities for <<...>>
-                 let match;
-                 const placeholders = new Set();
-
-                 // Add placeholders found in standard HTML content
-                 while ((match = placeholderRegex.exec(html)) !== null) {
-                      placeholders.add(match[1]);
-                 }
-
-                 // Add placeholders found in Fabric.js JSON (if available and parsed)
-                 if (fabricJsonEditor.val()) {
-                     try {
-                         const fabricJson = JSON.parse(fabricJsonEditor.val());
-                         if (fabricJson && fabricJson.objects && Array.isArray(fabricJson.objects)) {
-                             fabricJson.objects.forEach(obj => {
-                                 if (obj.type === 'textbox' || obj.type === 'text') {
-                                     const textValue = obj.text || '';
-                                     const phMatch = placeholderRegex.exec(textValue); // Match placeholder in Fabric text
-                                     if (phMatch && phMatch.Groups.Count > 1) {
-                                         placeholders.add(phMatch.Groups[1].Value);
-                                     }
-                                 }
-                             });
-                         }
-                     } catch (e) {
-                         console.warn("Could not parse Fabric JSON for placeholder detection:", e);
-                     }
-                 }
-
-
-                 // Update the list display
-                 placeholderListElement.empty();
-                 if (placeholders.size === 0) {
-                      placeholderListElement.html('<li class="list-inline-item"><em>(No data placeholders detected)</em></li>');
-                 } else {
-                      placeholders.forEach(placeholder => {
-                           placeholderListElement.append(`<li class="list-inline-item"><code><<${placeholder}>></code></li>`);
-                      });
-                 }
-            }
-
-            // Helper function to format JSON textareas
-            function formatJsonTextarea(textarea) {
-                 try {
-                     var rawJson = textarea.val();
-                      if (rawJson && rawJson.trim() !== "{}" && rawJson.trim() !== "") {
-                         var parsedJson = JSON.parse(rawJson);
-                         textarea.val(JSON.stringify(parsedJson, null, 2));
-                     } else {
-                         textarea.val('{}');
-                     }
-                 } catch (e) {
-                     console.error("Failed to parse existing JSON:", textarea.attr('id'), e);
-                 }
-            }
-
-            // Format JSON textareas on load
-            formatJsonTextarea(exampleJsonDataTextarea);
-            formatJsonTextarea(internalDataConfigJsonTextarea);
-            formatJsonTextarea(fabricJsonEditor); // Also format Fabric JSON editor
-
-            // --- Handle Fabric JSON loading/clearing ---
-            $('#loadFabricSampleBtn').on('click', function() {
-                // Example Fabric.js JSON structure. You would replace this with actual sample data.
-                // This sample assumes a background image and two text placeholders.
-                const sampleFabricJson = JSON.stringify({
-                    "version": "5.0.0",
-                    "objects": [
-                        {
-                            "type": "image",
-                            "url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE2cHgiIGZpbGw9IiMzMzMiIHRleHQtYW5jaG9yPSJtaWRkbGUiPjwvZGVmcz48c3R5bGU+PC9zdHlsZT48L3N2Zz4=", // Placeholder SVG as base64 data URL
-                            "left": 0,
-                            "top": 0,
-                            "width": 400, // Assuming canvas width is 400px
-                            "height": 400, // Assuming canvas height is 400px
-                            "scaleX": 1, "scaleY": 1
-                        },
-                        {
-                            "type": "textbox",
-                            "text": "<<CustomerName>>", // Placeholder text
-                            "left": 50,
-                            "top": 80,
-                            "width": 300,
-                            "height": 40,
-                            "fontFamily": "Cairo",
-                            "fontSize": 24,
-                            "fill": "#333333",
-                            "angle": 0,
-                            "originX": "left", "originY": "top"
-                        },
-                        {
-                            "type": "textbox",
-                            "text": "Order Date: <<OrderDate>>", // Another placeholder
-                            "left": 50,
-                            "top": 120,
-                            "width": 300,
-                            "height": 30,
-                            "fontFamily": "Cairo",
-                            "fontSize": 18,
-                            "fill": "#555555",
-                            "angle": 5, // Rotated slightly
-                            "originX": "left", "originY": "top"
-                        },
-                         {
-                            "type": "textbox",
-                            "text": "This is static text", // Non-placeholder static text
-                            "left": 50,
-                            "top": 160,
-                            "width": 300,
-                            "height": 30,
-                            "fontFamily": "Arial",
-                            "fontSize": 16,
-                            "fill": "#777777",
-                            "angle": 0,
-                            "originX": "left", "originY": "top"
-                        }
-                    ],
-                    "background": "transparent" // Example background property
-                }, JSON.stringify(null, 2)); // Pretty print with 2 spaces.
-
-                fabricJsonEditor.val(sampleFabricJson); // Set the editor's value.
-                showStatus('Loaded sample Fabric.js JSON.', 'info');
-                updatePlaceholdersList(htmlEditor.val()); // Update placeholders based on current HTML + loaded JSON.
-            });
-
-            $('#clearFabricJsonBtn').on('click', function() {
-                fabricJsonEditor.val('{}'); // Set to empty JSON object.
-                showStatus('Cleared Fabric.js JSON.', 'info');
-                updatePlaceholdersList(htmlEditor.val()); // Update placeholders after clearing.
-            });
-
-            // --- HTML File Upload ---
-            $('#htmlFile').on('change', function() {
-                var file = this.files[0];
-                if (file) {
-                    showStatus('Reading HTML file...');
-                    var reader = new FileReader();
-                    reader.onload = function(e) {
-                        htmlEditor.summernote('code', e.target.result);
-                        showStatus('HTML file loaded into editor.', 'success');
-                        // When HTML is loaded, it might contain <<placeholders>> that need to be detected.
-                        updatePlaceholdersList(e.target.result);
-                        // We DO NOT auto-update Fabric JSON here. User should manage it separately.
-                    };
-                    reader.onerror = function() {
-                        showStatus('Error reading HTML file.', 'danger');
-                    };
-                    reader.readAsText(file);
-                } else {
-                    uploadStatus.html('');
-                }
-            });
-
-            // Function to show status messages.
-            function showStatus(message, type = 'info') {
-                uploadStatus.html(`<div class="alert alert-${type}">${message}</div>`);
-            }
-
-            // Initial placeholder detection on page load.
-            // This should scan both the HTML editor AND the Fabric JSON editor for placeholders.
-            updatePlaceholdersList(htmlEditor.val()); // Initial scan of HTML editor.
-
-        }); // End of jQuery document ready.
-    </script>
-}
+<!-- Page-Specific Scripts -->
+<!-- If on All.html, Men.html, Women.html, homepage.html, resultpage.html -->
+<script>
+  // Page-specific logic to fetch and display initial products using the shared functions
+  // Example for All.html:
+   document.addEventListener('DOMContentLoaded', async function() {
+     const products = await fetchProducts(); // fetchProducts is in api-integration.js
+     displayProducts(products, 'product-grid'); // displayProducts is in product-grid.js
+   });
+  // Example for Men.html/Women.html/Kids.html:
+  // document.addEventListener('DOMContentLoaded', async function() {
+  //   const products = await fetchProducts('Men'); // or 'Women', 'Kids'
+  //   displayProducts(products, 'product-grid');
+  // });
+  // Example for homepage.html (featured products):
+  // document.addEventListener('DOMContentLoaded', async function() {
+  //   const products = await fetchProducts('', 4); // Get 4 featured products
+  //   displayProducts(products, 'product-grid');
+  // });
+  // resultpage.js relies on sessionStorage populated by popup.js, loads later automatically
+</script>
 ```
 
----
+On `sproduct.html`, ensure these scripts are included:
 
-**19. `PDFGenerator.Web\Controllers\TemplateController.cs`**
-(Updated Design POST action to bind `FabricJson` and added a button for it)
+```html
+<!-- Assuming Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-```csharp
-// File: Controllers/TemplateController.cs
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using PDFGenerator.Web.Dtos.Template;
-using PDFGenerator.Web.Dtos.TemplateVersion;
-using PdfGeneratorApp.Common;
-using PdfGeneratorApp.Data;
-using PdfGeneratorApp.Handlers;
-using PDFGenerator.Web.Handlers;
-using System.Collections.Generic;
-using System.Linq;
+<!-- Core Scripts -->
+<script src="auth.js"></script> <!-- Defines window.updateCartIcon -->
+<script src="product-grid.js"></script> <!-- Defines window.displayProducts and handles related product clicks -->
+<script src="api-integration.js"></script> <!-- Defines fetchProducts (for related products) -->
+<script src="popup.js"></script> <!-- Includes Visual Search Modal (if needed on s product page) -->
+<script src="search-integration.js"></script> <!-- Includes Text Search (if search bar is present) -->
+<script src="transitions.js"></script> <!-- If used -->
 
+<!-- Page-Specific Scripts -->
+<script src="products.js"></script> <!-- Loads main product data from URL -->
+<script src="sproduct.js"></script> <!-- Handles Add to Cart button for the main product -->
 
-namespace PdfGeneratorApp.Controllers
-{
-    [Authorize]
-    public class TemplateController : Controller
-    {
-        private readonly ApplicationDbContext _context;
-        private readonly IConfiguration _configuration;
-
-        private readonly IGetTemplateDesignHandler _getTemplateDesignHandler;
-        private readonly IUpdateTemplateHandler _updateTemplateHandler;
-        private readonly ICreateTemplateHandler _createTemplateHandler;
-        private readonly IGetTemplateHistoryHandler _getTemplateHistoryHandler;
-        private readonly IRevertTemplateHandler _revertTemplateHandler;
-        private readonly IPublishTemplateHandler _publishTemplateHandler;
-        private readonly ISoftDeleteTemplateVersionHandler _softDeleteTemplateVersionHandler;
-
-
-        public TemplateController(ApplicationDbContext context, IConfiguration configuration,
-                                  IGetTemplateDesignHandler getTemplateDesignHandler,
-                                  IUpdateTemplateHandler updateTemplateHandler,
-                                  ICreateTemplateHandler createTemplateHandler,
-                                  IGetTemplateHistoryHandler getTemplateHistoryHandler,
-                                  IRevertTemplateHandler revertTemplateHandler,
-                                  IPublishTemplateHandler publishTemplateHandler,
-                                  ISoftDeleteTemplateVersionHandler softDeleteTemplateVersionHandler)
-        {
-            _context = context;
-            _configuration = configuration;
-            _getTemplateDesignHandler = getTemplateDesignHandler;
-            _updateTemplateHandler = updateTemplateHandler;
-            _createTemplateHandler = createTemplateHandler;
-            _getTemplateHistoryHandler = getTemplateHistoryHandler;
-            _revertTemplateHandler = revertTemplateHandler;
-            _publishTemplateHandler = publishTemplateHandler;
-            _softDeleteTemplateVersionHandler = softDeleteTemplateVersionHandler;
-        }
-
-        private List<string> GetDatabaseAliases()
-        {
-            return _configuration.GetSection("InternalDataConnections").GetChildren().Select(c => c.Key).ToList();
-        }
-
-        // GET: /templates/design/{templateName}
-        [HttpGet("templates/design/{templateName}")]
-        public async Task<IActionResult> Design(string templateName)
-        {
-            Result<TemplateDetailDto> result = await _getTemplateDesignHandler.HandleAsync(templateName);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNotFound)
-                {
-                    return NotFound($"Template '{templateName}' not found.");
-                }
-                return StatusCode(500, result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-            }
-
-            ViewBag.DatabaseAliases = GetDatabaseAliases();
-            // Ensure FabricJson is initialized in the DTO if it's null for display/editing purposes
-            if (result.Data != null && string.IsNullOrEmpty(result.Data.FabricJson))
-            {
-                result.Data.FabricJson = "{}"; // Initialize with empty JSON object
-            }
-            return View(result.Data);
-        }
-
-        // POST: /templates/design/{templateName}
-        [HttpPost("templates/design/{templateName}")]
-        [ValidateAntiForgeryToken]
-        // Added FabricJson to the Bind attribute.
-        public async Task<IActionResult> Design(string templateName, [Bind("Id,Description,HtmlContent,ExampleJsonData,InternalDataConfigJson,FabricJson")] TemplateUpdateDto templateDto)
-        {
-             Result<TemplateDetailDto> detailDtoOnError = await _getTemplateDesignHandler.HandleAsync(templateName);
-             if (detailDtoOnError.IsCompleteSuccessfully && detailDtoOnError.Data != null)
-             {
-                 // Update the DTO for the view with submitted values, including FabricJson
-                 detailDtoOnError.Data.Description = templateDto.Description;
-                 detailDtoOnError.Data.HtmlContent = templateDto.HtmlContent;
-                 detailDtoOnError.Data.ExampleJsonData = templateDto.ExampleJsonData;
-                 detailDtoOnError.Data.InternalDataConfigJson = templateDto.InternalDataConfigJson;
-                 detailDtoOnError.Data.FabricJson = templateDto.FabricJson; // Assign FabricJson for error display
-             }
-             ViewBag.DatabaseAliases = GetDatabaseAliases();
-
-            if (!ModelState.IsValid) return View(detailDtoOnError.Data);
-            
-            var result = await _updateTemplateHandler.HandleAsync(templateDto);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                ModelState.AddModelError("", result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-                return View(detailDtoOnError.Data);
-            }
-
-            TempData["Message"] = $"Template '{templateName}' updated. New Testing Version is {result.Data}.";
-            return RedirectToAction(nameof(Design), new { templateName = templateName });
-        }
-
-        // GET: /templates/create
-        public IActionResult Create()
-        {
-            ViewBag.DatabaseAliases = GetDatabaseAliases();
-            // Initialize FabricJson as empty JSON object for a new template
-            return View(new TemplateCreateDto { HtmlContent = "", FabricJson = "{}" });
-        }
-
-        // POST: /templates/create
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Name,HtmlContent,Description,ExampleJsonData,InternalDataConfigJson,FabricJson")] TemplateCreateDto templateDto) // Added FabricJson to Bind
-        {
-            if (!ModelState.IsValid)
-            {
-                ViewBag.DatabaseAliases = GetDatabaseAliases();
-                return View(templateDto);
-            }
-
-            var result = await _createTemplateHandler.HandleAsync(templateDto);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                ModelState.AddModelError("", result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg);
-
-                if (result.ErrorMessages == ErrorMessageUserConst.TemplateNameExists)
-                {
-                    ModelState.AddModelError("Name", result.ErrorMessages);
-                }
-                else if (result.ErrorMessages == ErrorMessageUserConst.InternalDataConfigInvalidJson || result.ErrorMessages == ErrorMessageUserConst.InternalDataConfigNotObject)
-                {
-                    ModelState.AddModelError(nameof(TemplateCreateDto.InternalDataConfigJson), result.ErrorMessages);
-                }
-
-                ViewBag.DatabaseAliases = GetDatabaseAliases();
-                return View(templateDto);
-            }
-
-            TempData["Message"] = $"Template '{result.Data}' created successfully!";
-            return RedirectToAction(nameof(Design), new { templateName = result.Data });
-        }
-
-        // GET: /templates/{templateName}/history
-        [HttpGet("templates/{templateName}/history")]
-        public async Task<IActionResult> History(string templateName)
-        {
-            Result<TemplateDetailDto> templateDetailResult = await _getTemplateDesignHandler.HandleAsync(templateName);
-            if (!templateDetailResult.IsCompleteSuccessfully || templateDetailResult.Data == null)
-            {
-                 TempData["ErrorMessage"] = templateDetailResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-                 return RedirectToAction(nameof(Index), "Home");
-            }
-
-            var versionsResult = await _getTemplateHistoryHandler.HandleAsync(templateDetailResult.Data.Id);
-
-            if (!versionsResult.IsCompleteSuccessfully)
-            {
-                TempData["ErrorMessage"] = versionsResult.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-                ViewBag.TemplateVersions = new List<TemplateVersionDto>();
-            }
-            else
-            {
-                ViewBag.TemplateVersions = versionsResult.Data;
-            }
-
-            return View(templateDetailResult.Data);
-        }
-
-        // POST: /templates/{TemplateName}/revert/{VersionNumber}
-        [HttpPost("templates/{TemplateName}/revert/{VersionNumber}")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Revert([FromRoute] TemplateRevertRequestDto routeRequest, [FromForm] string versionReferenceType)
-        {
-            var request = new TemplateRevertRequestDto
-            {
-                TemplateName = routeRequest.TemplateName,
-                VersionNumber = routeRequest.VersionNumber,
-                VersionReferenceType = versionReferenceType
-            };
-
-            var result = await _revertTemplateHandler.HandleAsync(request);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-                return RedirectToAction(nameof(History), new { templateName = request.TemplateName });
-            }
-
-            TempData["Message"] = $"Template '{request.TemplateName}' {request.VersionReferenceType} version successfully reverted to {result.Data}.";
-            return RedirectToAction(nameof(History), new { templateName = request.TemplateName });
-        }
-
-        // POST: /templates/{TemplateName}/publish
-        [HttpPost("templates/{TemplateName}/publish")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Publish([FromRoute] string templateName)
-        {
-            var result = await _publishTemplateHandler.HandleAsync(templateName);
-
-            if (!result.IsCompleteSuccessfully)
-            {
-                TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-                return RedirectToAction(nameof(Design), new { templateName = templateName });
-            }
-
-            TempData["Message"] = $"Template '{templateName}' successfully published to Production Version {result.Data}.";
-            return RedirectToAction(nameof(Design), new { templateName = templateName });
-        }
-
-         // POST: /templates/versions/{versionId}/delete
-        [HttpPost("templates/versions/{VersionId}/delete")]
-        [ValidateAntiForgeryToken]
-         public async Task<IActionResult> SoftDeleteVersion([FromRoute] int versionId)
-         {
-             var versionEntity = await _context.TemplateVersions
-                                        .Include(tv => tv.Template)
-                                        .FirstOrDefaultAsync(tv => tv.Id == versionId);
-
-             if (versionEntity == null)
-             {
-                 TempData["ErrorMessage"] = $"Template version with ID {versionId} not found.";
-                 return RedirectToAction(nameof(Index), "Home");
-             }
-
-             string templateName = versionEntity.Template?.Name ?? "";
-
-             var result = await _softDeleteTemplateVersionHandler.HandleAsync(versionId);
-
-             if (!result.IsCompleteSuccessfully)
-             {
-                 TempData["Error"] = result.ErrorMessages ?? ErrorMessageUserConst.ServerErrorNoMsg;
-             }
-             else
-             {
-                 TempData["Message"] = $"Template version {versionEntity.VersionNumber} for '{templateName}' soft-deleted successfully.";
-             }
-
-             if (!string.IsNullOrEmpty(templateName))
-             {
-                return RedirectToAction(nameof(History), new { templateName = templateName });
-             }
-             else
-             {
-                 return RedirectToAction(nameof(Index), "Home");
-             }
-         }
-    }
-}
+<!-- product-grid.js will handle fetching/displaying related products via loadRelatedProducts in products.js -->
 ```
 
----
+On `cart.html`, `checkout.html`, `orders.html`, `forgot-password.html`, `change-password.html`, include only the necessary scripts for modals, cart/order logic, and potentially the navbar/search if present:
 
-**Steps to complete the Fabric.js integration:**
+```html
+<!-- For cart.html/checkout.html/orders.html -->
+<!-- Assuming Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script> <!-- Only needed if using Bootstrap JS components -->
 
-1.  **UI for Fabric.js Design:** You'll need to build a UI component (likely a separate page or modal) where users can actually design templates using Fabric.js. This UI would allow:
-    *   Uploading background images.
-    *   Adding text elements, configuring their properties, and associating them with `<<PlaceholderName>>` values.
-    *   Saving the canvas state as Fabric.js JSON.
-    *   This JSON would then be saved into the `Template.FabricJson` or `TemplateVersion.FabricJson` field.
+<!-- Core/Shared Scripts -->
+<script src="auth.js"></script> <!-- Provides login status, user data, auth modal, profile modal, global updateCartIcon -->
+<!-- Include search-integration.js and popup.js ONLY if the navbar with search/visual search is present on the page -->
+<script src="search-integration.js"></script>
+<script src="popup.js"></script>
+<script src="transitions.js"></script> <!-- If used -->
 
-2.  **Update `TemplateCreateDto` and `TemplateUpdateDto`:** Ensure `FabricJson` is included in the `[Bind]` attributes for the `Create` and `Design` (POST) actions in `TemplateController`. (Done in the modified `TemplateController.cs` above).
+<!-- Page-Specific Scripts -->
+<script src="cart.js"></script> <!-- For cart page logic -->
+<script src="checkout.js"></script> <!-- For checkout page logic -->
+<script src="orders.js"></script> <!-- For orders page logic -->
 
-3.  **Update `TemplateRepository`:** The `CreateNewTemplateAsync` and `UpdateTemplateAsync` methods should correctly handle saving/updating the `FabricJson` field. The current modifications seem to handle this mapping.
+<!-- For forgot-password.html/change-password.html, primarily need auth.js for modals if applicable, and their specific scripts -->
+<!-- Assuming Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script> <!-- Only if Bootstrap JS components used -->
+<script src="auth.js"></script> <!-- If auth/profile modals are needed -->
+<script src="transitions.js"></script> <!-- If used -->
+<!-- Page-Specific Scripts -->
+<script src="change-password.js"></script>
+<!-- forgot-password.html doesn't have a specific JS based on provided files -->
+```
 
-4.  **Modify `GeneratePdfHandler.cs`:** As shown in the updated `GeneratePdfHandler.cs`, it now calls `_templateProcessingService.ProcessTemplate(templateDataAccessDto.HtmlContent, templateDataAccessDto.FabricJson, finalDataForHtmlProcessing)` passing the `FabricJson` along.
-
-5.  **Update `TemplateProcessingService.ProcessTemplate`:** This is the most critical part where the new hybrid logic resides, as demonstrated in the modified `TemplateProcessingService.cs` file above. This method is now responsible for:
-    *   Parsing the `FabricJson`.
-    *   Extracting images and text objects.
-    *   Generating HTML (`<img>` tags for images, styled `<div>` or `<span>` for text/placeholders).
-    *   Replacing `<<FieldName>>` placeholders within the Fabric.js text objects using the `jsonData`.
-    *   The logic in `ProcessTemplate` needs to correctly assemble the final HTML for WkHtmlToPdf.
-
-Let me know if you need further assistance with the `ProcessTemplate` method's intricate logic for parsing Fabric.js JSON and generating the overlay HTML!
+This setup consolidates the display logic, correctly routes API calls based on user actions (text search vs. visual search), and ensures shared components like the cart count are updated consistently using a global function. Remember to test thoroughly after applying these changes.
